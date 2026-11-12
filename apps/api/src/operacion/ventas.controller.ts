@@ -12,6 +12,7 @@ import { conflicto, ErrorNegocio, invalido, noEncontrado, prohibido } from '../c
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 import { cotizacionesVigentes, obtenerCaja, sesionAbierta } from './cajas.controller';
+import { devueltoPorLinea } from './devoluciones.controller';
 import { HttpStatus } from '@nestjs/common';
 
 function aCotizaciones(filas: { moneda: 'USD' | 'BRL'; compra: string; venta: string }[]): Cotizaciones {
@@ -36,6 +37,8 @@ export async function leerVenta(tx: Tx, id: string) {
     tx.selectFrom('venta_item').selectAll().where('venta_id', '=', id).orderBy('linea').execute(),
     tx.selectFrom('venta_pago').selectAll().where('venta_id', '=', id).orderBy('linea').execute(),
   ]);
+  const devuelto = await devueltoPorLinea(tx, id);
+  const devoluciones = await tx.selectFrom('devolucion').select(['id', 'numero', 'total', 'creado_en']).where('venta_id', '=', id).orderBy('numero').execute();
   const vuelto = await tx
     .selectFrom('movimiento_caja')
     .select(['moneda', 'monto'])
@@ -70,7 +73,9 @@ export async function leerVenta(tx: Tx, id: string) {
       descuento: i.descuento,
       total: i.total,
       tasaIva: Number(i.tasa_iva),
+      cantidadDevuelta: (devuelto.get(i.linea)?.cantidad ?? new Decimal(0)).toFixed(4),
     })),
+    devoluciones: devoluciones.map((d) => ({ id: d.id, numero: Number(d.numero), total: d.total, fecha: d.creado_en })),
     pagos: pagos.map((p) => ({ medio: p.medio, moneda: p.moneda, monto: p.monto, cotizacion: p.cotizacion, montoPyg: p.monto_pyg, referencia: p.referencia })),
     autorizadoPor: v.autorizado_por,
     anulacion: v.anulada_en ? { fecha: v.anulada_en, por: v.anulada_por_nombre, motivo: v.motivo_anulacion, autorizadaPor: v.anulacion_autorizada_por } : null,

@@ -231,3 +231,27 @@ export const anularVentaEntrada = z.object({ motivo: z.string().trim().min(3, 'I
 
 /** Booleano en query string: solo "true" es verdadero (z.coerce.boolean convierte "false" en true). */
 export const booleanoQuery = z.preprocess((v) => v === true || v === 'true' || v === '1', z.boolean()).default(false);
+
+export const transferenciaEntrada = z.object({
+  origenId: uuid,
+  destinoId: uuid,
+  /** true: sale y entra en el acto. false: queda en tránsito hasta que el destino confirme. */
+  directa: z.boolean().default(false),
+  nota: z.string().trim().max(300).nullable().optional(),
+  items: z.array(z.object({ varianteId: uuid, cantidad: z.coerce.number().positive().max(1e9) })).min(1, 'Agregue productos').max(1000),
+});
+
+export const recepcionEntrada = z.object({
+  items: z.array(z.object({ linea: z.number().int().positive(), cantidadRecibida: z.coerce.number().min(0).max(1e9) })).max(1000).default([]),
+});
+
+export const cancelarEntrada = z.object({ motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
+
+export const devolucionEntrada = z.object({
+  ventaId: uuid,
+  /** Caja abierta del usuario: de ahí sale el dinero y al depósito de esa caja vuelve la mercadería. */
+  cajaId: uuid,
+  medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro']).default('efectivo'),
+  motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
+  items: z.array(z.object({ linea: z.number().int().positive(), cantidad: z.coerce.number().positive().max(1e9) })).min(1, 'Elija qué se devuelve').max(500),
+});

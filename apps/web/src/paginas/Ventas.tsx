@@ -3,10 +3,10 @@ import { Printer } from 'lucide-react';
 import { useState } from 'react';
 import { DialogoAutorizacion } from '../componentes/Autorizacion';
 import { Ticket } from '../componentes/Ticket';
-import { Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
+import { Aviso, Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
 import { api } from '../lib/api';
 import { fechaHora } from '../lib/formato';
-import { dinero, type Venta } from '../lib/operacion';
+import { dinero, type CajaFila, type Venta } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 
 interface FilaVenta {
@@ -100,7 +100,7 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
   const { yo, puede } = useSesion();
   const qc = useQueryClient();
   const v = useQuery({ queryKey: ['venta', id], queryFn: () => api<Venta>(`/ventas/${id}`) });
-  const [modo, setModo] = useState<'ver' | 'autorizar' | 'anular'>('ver');
+  const [modo, setModo] = useState<'ver' | 'autorizar' | 'anular' | 'devolver'>('ver');
   const [token, setToken] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const anular = useMutation({
@@ -129,13 +129,24 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
           <button className="btn" onClick={() => window.print()}>
             <Printer size={16} /> Reimprimir
           </button>
-          {venta.estado === 'confirmada' && puede('venta.crear') && (
+          {venta.estado === 'confirmada' && puede('venta.crear') && venta.items.some((i) => Number(i.cantidadDevuelta) < Number(i.cantidad)) && (
+            <button className="btn" onClick={() => setModo('devolver')}>
+              Devolución
+            </button>
+          )}
+          {venta.estado === 'confirmada' && puede('venta.crear') && venta.devoluciones.length === 0 && (
             <button className="btn peligro" onClick={() => setModo(puede('venta.cancelar') ? 'anular' : 'autorizar')}>
               Anular venta
             </button>
           )}
         </div>
       )}
+      {venta.devoluciones.length > 0 && (
+        <p className="tenue peq" style={{ margin: 0 }}>
+          Devoluciones: {venta.devoluciones.map((d) => `N.º ${d.numero} (${dinero(d.total)}, ${fechaHora(d.fecha)})`).join(' · ')}
+        </p>
+      )}
+      {modo === 'devolver' && <Devolucion venta={venta} alTerminar={(r) => { qc.setQueryData(['venta', id], r); void qc.invalidateQueries({ queryKey: ['ventas'] }); setModo('ver'); }} alCancelar={() => setModo('ver')} />}
       {modo === 'autorizar' && (
         <DialogoAutorizacion permiso="venta.cancelar" titulo="Autorizar anulación" alAutorizar={(t) => { setToken(t); setModo('anular'); }} alCerrar={() => setModo('ver')} />
       )}
@@ -152,5 +163,82 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
         </form>
       )}
     </Cajon>
+  );
+}
+
+function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTerminar: (v: Venta) => void; alCancelar: () => void }) {
+  const { puede } = useSesion();
+  const cajas = useQuery({ queryKey: ['cajas'], queryFn: () => api<CajaFila[]>('/cajas') });
+  const propias = cajas.data?.filter((c) => c.sesion?.propia) ?? [];
+  const [cant, setCant] = useState<Record<number, string>>({});
+  const [medio, setMedio] = useState<'efectivo' | 'tarjeta' | 'transferencia' | 'otro'>('efectivo');
+  const [motivo, setMotivo] = useState('');
+  const [token, setToken] = useState<string | null>(null);
+  const [pidiendo, setPidiendo] = useState(false);
+  const items = Object.entries(cant).filter(([, v]) => Number(v) > 0).map(([l, v]) => ({ linea: Number(l), cantidad: Number(v) }));
+  const estimado = items.reduce((a, i) => {
+    const l = venta.items.find((x) => x.linea === i.linea)!;
+    return a + (Number(l.total) * i.cantidad) / Number(l.cantidad);
+  }, 0);
+  const devolver = useMutation({
+    mutationFn: async () => {
+      await api('/devoluciones', { metodo: 'POST', cuerpo: { ventaId: venta.id, cajaId: propias[0]!.id, medio, motivo, items }, encabezados: token ? { 'X-Autorizacion': token } : undefined });
+      return api<Venta>(`/ventas/${venta.id}`);
+    },
+    onSuccess: alTerminar,
+  });
+  if (pidiendo) {
+    return <DialogoAutorizacion permiso="devolucion.aprobar" titulo="Autorizar devolución" alAutorizar={(t) => { setToken(t); setPidiendo(false); }} alCerrar={() => setPidiendo(false)} />;
+  }
+  return (
+    <div className="form" style={{ borderTop: '1px solid var(--linea)', paddingTop: 16 }}>
+      <ErrorApi error={devolver.error} />
+      {propias.length === 0 ? (
+        <Aviso tipo="info">Para devolver dinero necesita su caja abierta. Abra la caja en "Cajas y PDV".</Aviso>
+      ) : (
+        <>
+          <table>
+            <thead><tr><th>Producto</th><th className="der">Vendido</th><th className="der">Devolver</th></tr></thead>
+            <tbody>
+              {venta.items.map((i) => {
+                const queda = Number(i.cantidad) - Number(i.cantidadDevuelta);
+                return (
+                  <tr key={i.linea}>
+                    <td>{i.descripcion}{Number(i.cantidadDevuelta) > 0 && <div className="tenue peq">ya devuelto {Number(i.cantidadDevuelta)}</div>}</td>
+                    <td className="der num">{Number(i.cantidad)}</td>
+                    <td className="der">
+                      {queda > 0 ? <input className="entrada num" style={{ width: 80, height: 32 }} inputMode="decimal" placeholder={`máx. ${queda}`} value={cant[i.linea] ?? ''} onChange={(e) => setCant({ ...cant, [i.linea]: e.target.value.replace(',', '.').replace(/[^0-9.]/g, '') })} /> : <span className="tenue">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="fila-campos">
+            <Campo etiqueta="Se reintegra en" id="dm">
+              <select id="dm" className="entrada" value={medio} onChange={(e) => setMedio(e.target.value as typeof medio)}>
+                <option value="efectivo">Efectivo (sale de {propias[0]!.nombre})</option>
+                <option value="tarjeta">Reverso en tarjeta</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="otro">Otro</option>
+              </select>
+            </Campo>
+            <Campo etiqueta="Motivo" id="dmo">
+              <input id="dmo" className="entrada" placeholder="Producto fallado, cambio de talle…" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+            </Campo>
+          </div>
+          <p style={{ margin: 0 }}>A reintegrar: <b>{dinero(Math.round(estimado))}</b> <span className="tenue peq">(proporcional al precio cobrado, con descuentos)</span></p>
+          {!puede('devolucion.crear') && !token && <Aviso tipo="info">La devolución requiere la autorización de un supervisor.</Aviso>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {!puede('devolucion.crear') && !token ? (
+              <button className="btn pri" disabled={!items.length} onClick={() => setPidiendo(true)}>Pedir autorización</button>
+            ) : (
+              <button className="btn pri" disabled={!items.length || motivo.trim().length < 3 || devolver.isPending} onClick={() => devolver.mutate()}>Registrar devolución</button>
+            )}
+            <button className="btn" onClick={alCancelar}>Volver</button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

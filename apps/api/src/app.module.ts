@@ -8,6 +8,8 @@ import { ImportacionController } from './catalogo/importacion.controller';
 import { StockController } from './catalogo/stock.controller';
 import { CajasController, CotizacionesController } from './operacion/cajas.controller';
 import { PdvController, VentasController } from './operacion/ventas.controller';
+import { DevolucionesController } from './operacion/devoluciones.controller';
+import { TransferenciasController } from './operacion/transferencias.controller';
 import { AuthController, CuentaController } from './auth/auth.controller';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthService } from './auth/auth.service';
@@ -51,6 +53,8 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     CotizacionesController,
     PdvController,
     VentasController,
+    TransferenciasController,
+    DevolucionesController,
   ],
   providers: [
     { provide: Tokens, useFactory: Tokens.empresas },

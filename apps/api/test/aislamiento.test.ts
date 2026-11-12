@@ -16,6 +16,8 @@ import { ImportacionController } from '../src/catalogo/importacion.controller';
 import { StockController } from '../src/catalogo/stock.controller';
 import { CajasController, CotizacionesController } from '../src/operacion/cajas.controller';
 import { PdvController, VentasController } from '../src/operacion/ventas.controller';
+import { DevolucionesController } from '../src/operacion/devoluciones.controller';
+import { TransferenciasController } from '../src/operacion/transferencias.controller';
 import { prepararVenta } from './ayudas';
 import { crearEmpresa, crearUsuario, http, iniciarApp, login, type EmpresaPrueba } from './ayudas';
 
@@ -42,6 +44,8 @@ const CONTROLADORES = [
   CotizacionesController,
   PdvController,
   VentasController,
+  TransferenciasController,
+  DevolucionesController,
 ];
 
 interface Ruta {
@@ -121,6 +125,15 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/ventas'] = vb.ventaId;
     const cl = await http(app).post('/api/clientes').set('Authorization', `Bearer ${b.propietario.token}`).send({ nombre: 'Cliente de B' }).expect(201);
     idsDeB['/api/clientes'] = cl.body.id;
+    // Transferencia en tránsito y devolución en B.
+    const hB = { Authorization: `Bearer ${b.propietario.token}` };
+    const suc2 = await http(app).post('/api/sucursales').set(hB).send({ nombre: 'Segunda B', codigo: '002' }).expect(201);
+    const deps = await http(app).get('/api/depositos').set(hB).expect(200);
+    const destino = deps.body.find((d: { sucursal: { id: string } }) => d.sucursal.id === suc2.body.id).id;
+    const tr = await http(app).post('/api/transferencias').set(hB).send({ origenId: vb.depositoId, destinoId: destino, items: [{ varianteId: vb.varianteId, cantidad: 1 }] }).expect(201);
+    idsDeB['/api/transferencias'] = tr.body.id;
+    const dv = await http(app).post('/api/devoluciones').set(hB).send({ ventaId: vb.ventaId, cajaId: vb.cajaId, motivo: 'Prueba B', items: [{ linea: 1, cantidad: 1 }] }).expect(201);
+    idsDeB['/api/devoluciones'] = dv.body.id;
   });
   afterAll(() => app.close());
 
@@ -183,6 +196,7 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/cajas/:id/movimientos': { tipo: 'ingreso', moneda: 'PYG', monto: 1, motivo: 'Intento ajeno' },
           'POST /api/cajas/:id/cerrar': { contado: [] },
           'POST /api/ventas/:id/anular': { motivo: 'Intento ajeno' },
+          'POST /api/transferencias/:id/cancelar': { motivo: 'Intento ajeno' },
         };
         const cuerpos: Record<string, object> = { patch: { nombre: 'Intento ajeno' }, put: { permisos: [] } };
         const cuerpo = porRuta[`${r.metodo.toUpperCase()} ${r.ruta}`] ?? cuerpos[r.metodo] ?? {};
@@ -200,7 +214,7 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
   });
 
   it('las listas de A no contienen nada de B', async () => {
-    for (const ruta of ['/api/usuarios', '/api/perfiles', '/api/sucursales', '/api/clientes', '/api/cajas', '/api/productos', '/api/ventas']) {
+    for (const ruta of ['/api/usuarios', '/api/perfiles', '/api/sucursales', '/api/clientes', '/api/cajas', '/api/productos', '/api/ventas', '/api/transferencias', '/api/devoluciones']) {
       const r = await http(app).get(ruta).set('Authorization', `Bearer ${a.propietario.token}`).expect(200);
       const ids = (Array.isArray(r.body) ? r.body : r.body.items).map((x: { id: string }) => x.id);
       for (const id of Object.values(idsDeB)) expect(ids).not.toContain(id);

@@ -62,13 +62,20 @@ Producto comercial de **Araújo Tech Sistemas**.
   ("no válido como factura"), venta atómica con idempotencia, bloqueo de stock y numeración por caja.
 - **Ventas**: listado del día, reimpresión, anulación con PIN (devuelve stock y dinero en la misma sesión).
 - **Clientes**: alta rápida desde el PDV, RUC o cédula.
-- **Pruebas**: 261 en total; incluye 20 cajas vendiendo el mismo producto a la vez con stock final exacto.
+- **Importación desde Excel / CSV**: productos (con stock inicial o conteo) y clientes; modelo descargable,
+  vista previa con errores por fila, todo o nada, actualización por código / SKU / nombre.
+- **Transferencias entre depósitos**: envío en tránsito o directo, recepción solo en la sucursal de destino
+  con registro de faltantes, cancelación que devuelve el stock al origen.
+- **Devoluciones de ventas**: parciales o totales, también de ventas de cajas ya cerradas; reintegro
+  proporcional al precio cobrado, en efectivo desde la caja abierta del cajero o por otro medio,
+  con PIN de supervisor si el usuario no tiene el permiso; el stock vuelve al depósito de la caja.
+- **Pruebas**: 306 en total (288 de API, 18 compartidas); incluye 20 cajas vendiendo el mismo producto
+  a la vez con stock final exacto.
 
 ### Fase 1 · pendiente
 - Venta sin internet (cola local cifrada con numeración reservada) y agente local para impresora, gaveta y balanza.
-- Importación de productos, clientes y stock desde Excel / CSV.
 - Listas de precios adicionales y precio por sucursal (la base ya lo soporta; falta la pantalla).
-- Transferencias entre depósitos, devoluciones de ventas de cajas ya cerradas, presupuestos y pedidos.
+- Presupuestos y pedidos.
 - Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
 
 ## Estructura

@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   Boxes,
   Package,
   Receipt,
@@ -26,6 +27,7 @@ export function Disposicion() {
     { a: '/ventas', icono: Receipt, texto: 'Ventas', visible: puede('venta.ver') },
     { a: '/productos', icono: Package, texto: 'Productos', visible: puede('producto.ver') },
     { a: '/stock', icono: Boxes, texto: 'Stock', visible: puede('stock.ver') },
+    { a: '/transferencias', icono: ArrowLeftRight, texto: 'Transferencias', visible: puede('transferencia.ver') },
     { a: '/clientes', icono: UsersRound, texto: 'Clientes', visible: puede('cliente.ver') },
   ];
   const enlaces = [

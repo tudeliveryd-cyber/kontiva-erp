@@ -100,7 +100,8 @@ export interface Venta {
   iva10: string;
   iva5: string;
   vuelto: { moneda: Moneda; monto: string }[];
-  items: { linea: number; descripcion: string; cantidad: string; precioUnitario: string; descuento: string; total: string; tasaIva: number }[];
+  items: { linea: number; descripcion: string; cantidad: string; precioUnitario: string; descuento: string; total: string; tasaIva: number; cantidadDevuelta: string }[];
+  devoluciones: { id: string; numero: number; total: string; fecha: string }[];
   pagos: { medio: Medio; moneda: Moneda; monto: string; cotizacion: string; montoPyg: string; referencia: string | null }[];
   anulacion: { fecha: string; por: string; motivo: string; autorizadaPor: string | null } | null;
 }

@@ -227,6 +227,10 @@ export interface BaseDatos {
   venta: VentaTabla;
   venta_item: VentaItemTabla;
   venta_pago: VentaPagoTabla;
+  transferencia: TransferenciaTabla;
+  transferencia_item: TransferenciaItemTabla;
+  devolucion: DevolucionTabla;
+  devolucion_item: DevolucionItemTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -371,7 +375,7 @@ export interface MovimientoStockTabla {
   id: Generated<string>;
   variante_id: string;
   deposito_id: string;
-  tipo: 'inicial' | 'ajuste' | 'venta' | 'anulacion_venta' | 'compra' | 'transferencia';
+  tipo: TipoMovimientoStock;
   cantidad: Num;
   saldo: Num;
   costo_unitario: Num | null;
@@ -432,7 +436,7 @@ export interface MovimientoCajaTabla {
   empresa_id: string;
   id: Generated<string>;
   sesion_id: string;
-  tipo: 'apertura' | 'venta' | 'vuelto' | 'anulacion' | 'retiro' | 'ingreso';
+  tipo: 'apertura' | 'venta' | 'vuelto' | 'anulacion' | 'devolucion' | 'retiro' | 'ingreso';
   medio: Medio;
   moneda: Moneda;
   monto: Num;
@@ -507,4 +511,56 @@ export interface VentaPagoTabla {
   cotizacion: NumGen;
   monto_pyg: Num;
   referencia: string | null;
+}
+
+export type TipoMovimientoStock = 'inicial' | 'ajuste' | 'venta' | 'anulacion_venta' | 'devolucion' | 'compra' | 'transferencia_salida' | 'transferencia_entrada' | 'transferencia';
+
+export interface TransferenciaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: ColumnType<string, number, never>;
+  origen_id: string;
+  destino_id: string;
+  estado: 'en_transito' | 'recibida' | 'cancelada';
+  nota: string | null;
+  creado_por: string;
+  creado_en: Creado;
+  recibida_por: string | null;
+  recibida_en: Date | null;
+  cancelada_por: string | null;
+  cancelada_en: Date | null;
+  motivo_cancelacion: string | null;
+}
+
+export interface TransferenciaItemTabla {
+  empresa_id: string;
+  transferencia_id: string;
+  linea: number;
+  variante_id: string;
+  cantidad: Num;
+  cantidad_recibida: Num | null;
+}
+
+export interface DevolucionTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: ColumnType<string, number, never>;
+  venta_id: string;
+  sesion_caja_id: string;
+  deposito_id: string;
+  medio: Medio;
+  total: Num;
+  motivo: string;
+  autorizado_por: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+
+export interface DevolucionItemTabla {
+  empresa_id: string;
+  devolucion_id: string;
+  linea_venta: number;
+  variante_id: string;
+  cantidad: Num;
+  total: Num;
 }
