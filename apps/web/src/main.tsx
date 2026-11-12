@@ -1,0 +1,64 @@
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/inter/800.css';
+import './estilos.css';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Disposicion } from './componentes/Disposicion';
+import { FalloApi } from './lib/api';
+import { ProveedorSesion, useSesion } from './lib/sesion';
+import { Acceso, Restablecer } from './paginas/Acceso';
+import { Auditoria } from './paginas/Auditoria';
+import { Cuenta } from './paginas/Cuenta';
+import { Empresa } from './paginas/Empresa';
+import { Inicio } from './paginas/Inicio';
+import { Perfiles } from './paginas/Perfiles';
+import { Sucursales } from './paginas/Sucursales';
+import { Usuarios } from './paginas/Usuarios';
+
+const qc = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (n, e) => !(e instanceof FalloApi && e.estado < 500) && n < 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+function Rutas() {
+  const { listo, yo, puede } = useSesion();
+  const { pathname } = useLocation();
+  if (pathname === '/restablecer') return <Restablecer />;
+  if (!listo) return null;
+  if (!yo) return <Acceso />;
+  return (
+    <Routes>
+      <Route element={<Disposicion />}>
+        <Route index element={<Inicio />} />
+        {puede('usuario.ver') && <Route path="usuarios" element={<Usuarios />} />}
+        {puede('perfil.ver') && <Route path="perfiles" element={<Perfiles />} />}
+        {puede('sucursal.ver') && <Route path="sucursales" element={<Sucursales />} />}
+        {puede('auditoria.ver') && <Route path="auditoria" element={<Auditoria />} />}
+        {puede('empresa.ver') && <Route path="empresa" element={<Empresa />} />}
+        <Route path="cuenta" element={<Cuenta />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
+  );
+}
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <QueryClientProvider client={qc}>
+      <BrowserRouter>
+        <ProveedorSesion>
+          <Rutas />
+        </ProveedorSesion>
+      </BrowserRouter>
+    </QueryClientProvider>
+  </StrictMode>,
+);

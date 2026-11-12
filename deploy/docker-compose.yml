@@ -1,0 +1,100 @@
+# KONTIVA ERP · producción en un servidor (VPS) con HTTPS automático.
+# Uso: ver deploy/INSTALACION.md
+name: kontiva
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD:?falta PG_SUPER_PASSWORD}
+      POSTGRES_DB: postgres
+      KONTIVA_OWNER_PASSWORD: ${PG_OWNER_PASSWORD:?falta PG_OWNER_PASSWORD}
+      KONTIVA_APP_PASSWORD: ${PG_APP_PASSWORD:?falta PG_APP_PASSWORD}
+      KONTIVA_MASTER_PASSWORD: ${PG_MASTER_PASSWORD:?falta PG_MASTER_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/01-kontiva.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kontiva"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Aplica las migraciones pendientes y termina. api y master esperan a que termine bien.
+  migrar:
+    image: ${KONTIVA_IMAGEN:-kontiva-erp:latest}
+    build: { context: .., dockerfile: Dockerfile }
+    command: ["node", "dist/cli.js", "migrar"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://kontiva_app:${PG_APP_PASSWORD}@postgres:5432/kontiva
+      DATABASE_OWNER_URL: postgresql://kontiva_owner:${PG_OWNER_PASSWORD}@postgres:5432/kontiva
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    image: ${KONTIVA_IMAGEN:-kontiva-erp:latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SERVICIO: erp
+      DATABASE_URL: postgresql://kontiva_app:${PG_APP_PASSWORD}@postgres:5432/kontiva
+      WEB_URL: https://${DOMINIO_APP}
+    depends_on:
+      migrar: { condition: service_completed_successfully }
+
+  master:
+    image: ${KONTIVA_IMAGEN:-kontiva-erp:latest}
+    restart: unless-stopped
+    command: ["node", "--enable-source-maps", "dist/main-master.js"]
+    env_file: .env
+    environment:
+      SERVICIO: master
+      DATABASE_URL: postgresql://kontiva_app:${PG_APP_PASSWORD}@postgres:5432/kontiva
+      DATABASE_MASTER_URL: postgresql://kontiva_master:${PG_MASTER_PASSWORD}@postgres:5432/kontiva
+      WEB_URL: https://${DOMINIO_APP}
+      MASTER_WEB_URL: https://${DOMINIO_MASTER}
+    depends_on:
+      migrar: { condition: service_completed_successfully }
+
+  # HTTPS con certificados automáticos (Let's Encrypt).
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMINIO_APP: ${DOMINIO_APP:?falta DOMINIO_APP}
+      DOMINIO_MASTER: ${DOMINIO_MASTER:?falta DOMINIO_MASTER}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api, master]
+
+  # Copia diaria comprimida; conserva 14 días. Copie la carpeta backups/ fuera del servidor.
+  respaldo:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${PG_SUPER_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/kontiva-$$(date +%Y%m%d-%H%M).dump
+          pg_dump -h postgres -U postgres -Fc kontiva -f "$$f" && echo "respaldo ok $$f" || echo "RESPALDO FALLÓ"
+          find /backups -name 'kontiva-*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+    depends_on:
+      postgres: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

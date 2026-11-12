@@ -1,0 +1,108 @@
+import { useQuery } from '@tanstack/react-query';
+import { Check, ChevronRight, Circle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Encabezado } from '../componentes/ui';
+import { api, type EmpresaDatos, type UsuarioFila } from '../lib/api';
+import { useSesion } from '../lib/sesion';
+
+function Uso({ etiqueta, uso, limite }: { etiqueta: string; uso: number; limite: number | null }) {
+  return (
+    <div className="cifra">
+      <span>{etiqueta}</span>
+      <b className="num">
+        {uso}
+        <span style={{ fontSize: 14, color: 'var(--t3)', fontWeight: 500 }}> / {limite ?? 'ilimitado'}</span>
+      </b>
+      {limite !== null && (
+        <div className="barra">
+          <i style={{ width: `${Math.min(100, (uso / limite) * 100)}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Inicio() {
+  const { yo, puede } = useSesion();
+  const empresa = useQuery({ queryKey: ['empresa'], queryFn: () => api<EmpresaDatos>('/empresa'), enabled: puede('empresa.ver') });
+  const usuarios = useQuery({ queryKey: ['usuarios'], queryFn: () => api<UsuarioFila[]>('/usuarios'), enabled: puede('usuario.ver') });
+  if (!yo) return null;
+
+  // Asistente de configuración inicial: se basa solo en datos reales de la empresa.
+  const pasos = [
+    puede('empresa.editar') && {
+      hecho: Boolean(empresa.data?.ruc),
+      titulo: 'Completar los datos de la empresa',
+      detalle: 'RUC, dirección y teléfono. Son necesarios para la facturación electrónica.',
+      a: '/empresa',
+    },
+    puede('sucursal.ver') && {
+      hecho: (empresa.data?.plan.uso.sucursales ?? 0) > 0,
+      titulo: 'Revisar sucursales',
+      detalle: 'Cada sucursal es un establecimiento con su código de 3 dígitos (001, 002…).',
+      a: '/sucursales',
+    },
+    puede('usuario.crear') && {
+      hecho: (usuarios.data?.length ?? 0) > 1,
+      titulo: 'Invitar a su equipo',
+      detalle: 'Cada persona entra con su propio usuario y perfil de acceso.',
+      a: '/usuarios',
+    },
+    {
+      hecho: yo.usuario.tienePin,
+      titulo: 'Definir su PIN de autorización',
+      detalle: 'Lo usará para autorizar cancelaciones y descuentos en la caja sin cerrar la sesión del cajero.',
+      a: '/cuenta',
+    },
+  ].filter(Boolean) as { hecho: boolean; titulo: string; detalle: string; a: string }[];
+  const pendientes = pasos.filter((p) => !p.hecho).length;
+
+  return (
+    <>
+      <Encabezado titulo={`Hola, ${yo.usuario.nombre.split(' ')[0]}`}>
+        <span className="insignia i-p">Plan {yo.empresa.plan}</span>
+      </Encabezado>
+      <div className="contenido">
+        {pasos.length > 0 && (
+          <section className="panel">
+            <div className="panel-cab">
+              <h2>Configuración inicial</h2>
+              <span className="sub">{pendientes === 0 ? 'Todo listo' : `${pendientes} paso${pendientes === 1 ? '' : 's'} pendiente${pendientes === 1 ? '' : 's'}`}</span>
+            </div>
+            <div className="pasos">
+              {pasos.map((p) => (
+                <Link key={p.titulo} to={p.a} className="paso" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className={`icono ${p.hecho ? 'hecho' : 'pend'}`}>{p.hecho ? <Check size={16} /> : <Circle size={14} strokeWidth={2} />}</div>
+                  <div className="texto">
+                    <b>{p.titulo}</b>
+                    <span>{p.detalle}</span>
+                  </div>
+                  <ChevronRight size={16} color="var(--t3)" />
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {empresa.data && (
+          <section className="panel">
+            <div className="panel-cab">
+              <h2>Uso del plan {empresa.data.plan.codigo}</h2>
+            </div>
+            <div className="cifras">
+              <Uso etiqueta="Usuarios activos" uso={empresa.data.plan.uso.usuarios} limite={empresa.data.plan.limites.usuarios} />
+              <Uso etiqueta="Sucursales activas" uso={empresa.data.plan.uso.sucursales} limite={empresa.data.plan.limites.sucursales} />
+            </div>
+          </section>
+        )}
+
+        <section className="panel">
+          <div className="vacio">
+            <b>Todavía no hay movimientos</b>
+            <span>Cuando su empresa empiece a vender, aquí verá las ventas del día, las cajas abiertas y las alertas.</span>
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}

@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Paquete compartido
+        run: pnpm --filter @kontiva/shared build
+      - name: Tipos
+        run: pnpm -r typecheck
+      - name: Pruebas (unidad, API, aislamiento, permisos)
+        run: pnpm -r test
+      - name: Build
+        run: pnpm build
+      - name: Dependencias con vulnerabilidades altas
+        run: pnpm audit --prod --audit-level high
+
+  imagen:
+    # Verifica que la imagen de producción se construye (no se publica).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen Docker
+        run: docker build -t kontiva-erp:ci .
+      - name: La imagen arranca y responde
+        run: |
+          docker network create k
+          docker run -d --name pg --network k -e POSTGRES_PASSWORD=postgres \
+            -e KONTIVA_OWNER_PASSWORD=o -e KONTIVA_APP_PASSWORD=a -e KONTIVA_MASTER_PASSWORD=m \
+            -v "$PWD/deploy/postgres-init.sh:/docker-entrypoint-initdb.d/01-kontiva.sh:ro" postgres:16
+          for i in $(seq 1 30); do docker exec pg pg_isready -U postgres -d kontiva && break; sleep 2; done
+          COMUN="-e JWT_SECRET=ci-0123456789abcdef0123456789abcdef -e JWT_MASTER_SECRET=ci-master-0123456789abcdef0123456789 -e CIFRADO_CLAVE=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= -e DATABASE_URL=postgresql://kontiva_app:a@pg:5432/kontiva"
+          docker run --rm --network k $COMUN -e DATABASE_OWNER_URL=postgresql://kontiva_owner:o@pg:5432/kontiva kontiva-erp:ci node dist/cli.js migrar
+          docker run -d --name api --network k -p 3000:3000 $COMUN kontiva-erp:ci
+          docker run -d --name master --network k -p 3001:3001 $COMUN -e DATABASE_MASTER_URL=postgresql://kontiva_master:m@pg:5432/kontiva kontiva-erp:ci node dist/main-master.js
+          sleep 5
+          curl -fsS localhost:3000/api/salud
+          curl -fsS localhost:3001/api/master/salud
+          curl -fsS localhost:3000/ | grep -q "KONTIVA ERP"
+          curl -fsS localhost:3001/ | grep -q "KONTIVA Master"

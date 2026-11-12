@@ -1,0 +1,9 @@
+{$DOMINIO_APP} {
+	encode zstd gzip
+	reverse_proxy api:3000
+}
+
+{$DOMINIO_MASTER} {
+	encode zstd gzip
+	reverse_proxy master:3001
+}
