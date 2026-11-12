@@ -10,6 +10,12 @@ import { PerfilesController } from '../src/perfiles/perfiles.controller';
 import { SaludController } from '../src/salud.controller';
 import { SucursalesController } from '../src/sucursales/sucursales.controller';
 import { UsuariosController } from '../src/usuarios/usuarios.controller';
+import { CategoriasController, MarcasController, ProductosController } from '../src/catalogo/catalogo.controller';
+import { ClientesController } from '../src/catalogo/clientes.controller';
+import { StockController } from '../src/catalogo/stock.controller';
+import { CajasController, CotizacionesController } from '../src/operacion/cajas.controller';
+import { PdvController, VentasController } from '../src/operacion/ventas.controller';
+import { prepararVenta } from './ayudas';
 import { crearEmpresa, crearUsuario, http, iniciarApp, login, type EmpresaPrueba } from './ayudas';
 
 /**
@@ -25,6 +31,15 @@ const CONTROLADORES = [
   PerfilesController,
   UsuariosController,
   AuditoriaController,
+  ProductosController,
+  CategoriasController,
+  MarcasController,
+  StockController,
+  ClientesController,
+  CajasController,
+  CotizacionesController,
+  PdvController,
+  VentasController,
 ];
 
 interface Ruta {
@@ -97,6 +112,13 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/usuarios'] = cajeroB.id;
     idsDeB['/api/perfiles'] = perfilesB.body.find((p: { clave: string }) => p.clave === 'cajero').id;
     idsDeB['/api/auth/sesiones'] = sesionesB.body[0].id;
+    // Catálogo, caja y una venta real en B.
+    const vb = await prepararVenta(app, b);
+    idsDeB['/api/productos'] = vb.productoId;
+    idsDeB['/api/cajas'] = vb.cajaId;
+    idsDeB['/api/ventas'] = vb.ventaId;
+    const cl = await http(app).post('/api/clientes').set('Authorization', `Bearer ${b.propietario.token}`).send({ nombre: 'Cliente de B' }).expect(201);
+    idsDeB['/api/clientes'] = cl.body.id;
   });
   afterAll(() => app.close());
 
@@ -154,11 +176,15 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
         expect(prefijo, `sin id de prueba para ${r.ruta}`).toBeDefined();
         const ruta = r.ruta.replace(':id', idsDeB[prefijo!]!);
         // Cuerpos válidos para que la validación no responda 400 antes de buscar el registro.
-        const cuerpos: Record<string, object> = {
-          patch: { nombre: 'Intento ajeno' },
-          put: { permisos: [] },
+        const porRuta: Record<string, object> = {
+          'PATCH /api/productos/:id': { nombre: 'Intento ajeno', variantes: [{ precio: 1, codigos: [] }] },
+          'POST /api/cajas/:id/movimientos': { tipo: 'ingreso', moneda: 'PYG', monto: 1, motivo: 'Intento ajeno' },
+          'POST /api/cajas/:id/cerrar': { contado: [] },
+          'POST /api/ventas/:id/anular': { motivo: 'Intento ajeno' },
         };
-        const res = await http(app)[r.metodo](ruta).set('Authorization', `Bearer ${a.propietario.token}`).send(cuerpos[r.metodo] ?? {});
+        const cuerpos: Record<string, object> = { patch: { nombre: 'Intento ajeno' }, put: { permisos: [] } };
+        const cuerpo = porRuta[`${r.metodo.toUpperCase()} ${r.ruta}`] ?? cuerpos[r.metodo] ?? {};
+        const res = await http(app)[r.metodo](ruta).set('Authorization', `Bearer ${a.propietario.token}`).send(cuerpo);
         expect(res.status).toBe(404);
       });
     }
@@ -172,9 +198,9 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
   });
 
   it('las listas de A no contienen nada de B', async () => {
-    for (const ruta of ['/api/usuarios', '/api/perfiles', '/api/sucursales']) {
+    for (const ruta of ['/api/usuarios', '/api/perfiles', '/api/sucursales', '/api/clientes', '/api/cajas', '/api/productos', '/api/ventas']) {
       const r = await http(app).get(ruta).set('Authorization', `Bearer ${a.propietario.token}`).expect(200);
-      const ids = r.body.map((x: { id: string }) => x.id);
+      const ids = (Array.isArray(r.body) ? r.body : r.body.items).map((x: { id: string }) => x.id);
       for (const id of Object.values(idsDeB)) expect(ids).not.toContain(id);
     }
     const aud = await http(app).get('/api/auditoria').set('Authorization', `Bearer ${a.propietario.token}`).expect(200);

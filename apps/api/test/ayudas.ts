@@ -90,3 +90,29 @@ export function rucValido(): string {
   const base = String(80000000 + Math.floor(Math.random() * 9999999));
   return `${base}-${calcularDvRuc(base)}`;
 }
+
+/**
+ * Deja una empresa lista para vender: producto con código de barras y stock, caja abierta
+ * por el propietario y una venta hecha. Devuelve los ids.
+ */
+export async function prepararVenta(app: INestApplication, e: EmpresaPrueba, stockInicial = 10) {
+  const h = { Authorization: `Bearer ${e.propietario.token}` };
+  const codigo = String(7840000000000 + Math.floor(Math.random() * 99999999));
+  const p = await http(app)
+    .post('/api/productos')
+    .set(h)
+    .send({ nombre: `Producto ${unico()}`, tasaIva: 10, variantes: [{ precio: 11000, costo: 7000, codigos: [codigo] }] })
+    .expect(201);
+  const varianteId = p.body.variantes[0].id as string;
+  const dep = await http(app).get('/api/depositos').set(h).expect(200);
+  const depositoId = dep.body[0].id as string;
+  await http(app).post('/api/stock/ajustes').set(h).send({ depositoId, motivo: 'Stock inicial', tipo: 'inicial', items: [{ varianteId, cantidadNueva: stockInicial }] }).expect(201);
+  const caja = await http(app).post('/api/cajas').set(h).send({ nombre: `Caja ${unico()}`, sucursalId: e.sucursalId, depositoId }).expect(201);
+  await http(app).post(`/api/cajas/${caja.body.id}/abrir`).set(h).send({ fondos: [{ moneda: 'PYG', monto: 100000 }] }).expect(201);
+  const v = await http(app)
+    .post('/api/ventas')
+    .set(h)
+    .send({ claveIdempotencia: unico('clave-'), cajaId: caja.body.id, items: [{ varianteId, cantidad: 1 }], pagos: [{ medio: 'efectivo', moneda: 'PYG', monto: 11000 }] })
+    .expect(201);
+  return { productoId: p.body.id as string, varianteId, codigo, depositoId, cajaId: caja.body.id as string, ventaId: v.body.id as string };
+}

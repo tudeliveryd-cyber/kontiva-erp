@@ -90,6 +90,9 @@ export class ProvisionService {
         .returning('id')
         .executeTakeFirstOrThrow();
 
+      await tx.insertInto('deposito').values({ empresa_id: empresaId, sucursal_id: sucursal.id, nombre: 'Depósito principal' }).execute();
+      await tx.insertInto('lista_precio').values({ empresa_id: empresaId, nombre: 'Precio de venta', predeterminada: true }).execute();
+
       let propietarioPerfilId = '';
       for (const p of PLANTILLAS_PERFIL) {
         const perfil = await tx

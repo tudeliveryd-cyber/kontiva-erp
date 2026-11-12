@@ -4,6 +4,7 @@ import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, type Ctx, type Origen } from '../comun/contexto';
 import { Requiere } from '../comun/decoradores';
 import { validar } from '../comun/validar';
+import { sql } from 'kysely';
 import { Db, type Tx } from '../db/database';
 
 async function leerEmpresa(tx: Tx) {
@@ -12,7 +13,7 @@ async function leerEmpresa(tx: Tx) {
     .innerJoin('plan as p', 'p.id', 'e.plan_id')
     .select([
       'e.id', 'e.razon_social', 'e.nombre_fantasia', 'e.ruc', 'e.rubro', 'e.estado', 'e.telefono', 'e.email',
-      'e.direccion', 'e.moneda_base', 'e.zona_horaria', 'e.creado_en',
+      'e.direccion', 'e.moneda_base', 'e.zona_horaria', 'e.creado_en', 'e.configuracion',
       'p.codigo as plan_codigo', 'p.max_usuarios', 'p.max_sucursales', 'p.max_cajas',
     ])
     .executeTakeFirstOrThrow();
@@ -33,6 +34,7 @@ async function leerEmpresa(tx: Tx) {
     monedaBase: e.moneda_base,
     zonaHoraria: e.zona_horaria,
     creadoEn: e.creado_en,
+    permiteStockNegativo: (e.configuracion as { permiteStockNegativo?: boolean }).permiteStockNegativo === true,
     plan: {
       codigo: e.plan_codigo,
       limites: { usuarios: e.max_usuarios, sucursales: e.max_sucursales, cajas: e.max_cajas },
@@ -66,6 +68,9 @@ export class EmpresaController {
           ...(d.telefono !== undefined && { telefono: d.telefono || null }),
           ...(d.direccion !== undefined && { direccion: d.direccion || null }),
           ...(d.email !== undefined && { email: d.email || null }),
+          ...(d.permiteStockNegativo !== undefined && {
+            configuracion: sql`configuracion || ${JSON.stringify({ permiteStockNegativo: d.permiteStockNegativo })}::jsonb`,
+          }),
         })
         .where('id', '=', ctx.empresaId)
         .execute();

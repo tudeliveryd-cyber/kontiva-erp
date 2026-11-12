@@ -208,6 +208,25 @@ export interface BaseDatos {
   intento_acceso: IntentoAccesoTabla;
   auditoria: AuditoriaTabla;
   codigo_respaldo: CodigoRespaldoTabla;
+  categoria: CategoriaTabla;
+  marca: MarcaTabla;
+  producto: ProductoTabla;
+  variante: VarianteTabla;
+  codigo_barras: CodigoBarrasTabla;
+  lista_precio: ListaPrecioTabla;
+  precio: PrecioTabla;
+  deposito: DepositoTabla;
+  stock: StockTabla;
+  movimiento_stock: MovimientoStockTabla;
+  cliente: ClienteTabla;
+  cotizacion: CotizacionTabla;
+  caja: CajaTabla;
+  sesion_caja: SesionCajaTabla;
+  movimiento_caja: MovimientoCajaTabla;
+  arqueo: ArqueoTabla;
+  venta: VentaTabla;
+  venta_item: VentaItemTabla;
+  venta_pago: VentaPagoTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -299,3 +318,193 @@ export type Empresa = Selectable<EmpresaTabla>;
 export type Cuenta = Selectable<CuentaTabla>;
 export type NuevaAuditoria = Insertable<AuditoriaTabla>;
 export type CambioEmpresa = Updateable<EmpresaTabla>;
+
+// ---------------------------------------------------------------------------
+// Fase 1 · operación central. numeric llega como string (exacto); se calcula con Decimal.
+// ---------------------------------------------------------------------------
+
+type Num = ColumnType<string, string | number, string | number>;
+type NumGen = ColumnType<string, string | number | undefined, string | number>;
+export type Moneda = 'PYG' | 'USD' | 'BRL';
+export type Medio = 'efectivo' | 'tarjeta' | 'transferencia' | 'otro';
+
+export interface CategoriaTabla { empresa_id: string; id: Generated<string>; nombre: string; activa: Generated<boolean>; creado_en: Creado }
+export interface MarcaTabla { empresa_id: string; id: Generated<string>; nombre: string; creado_en: Creado }
+
+export interface ProductoTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  nombre: string;
+  descripcion: string | null;
+  categoria_id: string | null;
+  marca_id: string | null;
+  tipo: Generated<'producto' | 'servicio'>;
+  unidad: Generated<string>;
+  tasa_iva: NumGen;
+  controla_stock: Generated<boolean>;
+  activo: Generated<boolean>;
+  creado_en: Creado;
+  creado_por: string | null;
+  actualizado_en: Actualizado;
+}
+
+export interface VarianteTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  producto_id: string;
+  nombre: string | null;
+  sku: string | null;
+  costo: NumGen;
+  activa: Generated<boolean>;
+  creado_en: Creado;
+  actualizado_en: Actualizado;
+}
+
+export interface CodigoBarrasTabla { empresa_id: string; codigo: string; variante_id: string }
+export interface ListaPrecioTabla { empresa_id: string; id: Generated<string>; nombre: string; predeterminada: Generated<boolean>; activa: Generated<boolean>; creado_en: Creado }
+export interface PrecioTabla { empresa_id: string; lista_id: string; variante_id: string; sucursal_id: string | null; precio: Num; actualizado_en: Generated<Date> }
+export interface DepositoTabla { empresa_id: string; id: Generated<string>; sucursal_id: string; nombre: string; activo: Generated<boolean>; creado_en: Creado }
+export interface StockTabla { empresa_id: string; variante_id: string; deposito_id: string; cantidad: NumGen; actualizado_en: Generated<Date> }
+
+export interface MovimientoStockTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  variante_id: string;
+  deposito_id: string;
+  tipo: 'inicial' | 'ajuste' | 'venta' | 'anulacion_venta' | 'compra' | 'transferencia';
+  cantidad: Num;
+  saldo: Num;
+  costo_unitario: Num | null;
+  origen_id: string | null;
+  motivo: string | null;
+  creado_por: string | null;
+  creado_en: Creado;
+}
+
+export interface ClienteTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  nombre: string;
+  documento: string | null;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  activo: Generated<boolean>;
+  creado_en: Creado;
+  creado_por: string | null;
+  actualizado_en: Actualizado;
+}
+
+export interface CotizacionTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  sucursal_id: string;
+  moneda: 'USD' | 'BRL';
+  compra: Num;
+  venta: Num;
+  creado_por: string | null;
+  creado_en: Creado;
+}
+
+export interface CajaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  sucursal_id: string;
+  deposito_id: string;
+  nombre: string;
+  ultimo_numero: ColumnType<string, number | undefined, number | string>;
+  activa: Generated<boolean>;
+  creado_en: Creado;
+}
+
+export interface SesionCajaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  caja_id: string;
+  usuario_id: string;
+  estado: Generated<'abierta' | 'cerrada'>;
+  abierta_en: Generated<Date>;
+  cerrada_en: Date | null;
+  cerrada_por: string | null;
+}
+
+export interface MovimientoCajaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  sesion_id: string;
+  tipo: 'apertura' | 'venta' | 'vuelto' | 'anulacion' | 'retiro' | 'ingreso';
+  medio: Medio;
+  moneda: Moneda;
+  monto: Num;
+  venta_id: string | null;
+  motivo: string | null;
+  autorizado_por: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+
+export interface ArqueoTabla {
+  empresa_id: string;
+  sesion_id: string;
+  moneda: Moneda;
+  medio: Medio;
+  esperado: Num;
+  contado: Num;
+  diferencia: ColumnType<string, never, never>;
+}
+
+export interface VentaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  sucursal_id: string;
+  caja_id: string;
+  sesion_caja_id: string;
+  numero: ColumnType<string, number | string, never>;
+  clave_idempotencia: string;
+  cliente_id: string | null;
+  estado: Generated<'confirmada' | 'anulada'>;
+  comprobante: Generated<'interno'>;
+  subtotal: Num;
+  descuento: NumGen;
+  total: Num;
+  gravado10: NumGen;
+  gravado5: NumGen;
+  exento: NumGen;
+  iva10: NumGen;
+  iva5: NumGen;
+  vuelto: NumGen;
+  vuelto_moneda: Generated<Moneda>;
+  autorizado_por: string | null;
+  creado_por: string;
+  creado_en: Creado;
+  anulada_en: Date | null;
+  anulada_por: string | null;
+  anulacion_autorizada_por: string | null;
+  motivo_anulacion: string | null;
+}
+
+export interface VentaItemTabla {
+  empresa_id: string;
+  venta_id: string;
+  linea: number;
+  variante_id: string;
+  descripcion: string;
+  cantidad: Num;
+  precio_unitario: Num;
+  descuento: NumGen;
+  total: Num;
+  tasa_iva: Num;
+  costo_unitario: NumGen;
+}
+
+export interface VentaPagoTabla {
+  empresa_id: string;
+  venta_id: string;
+  linea: number;
+  medio: Medio;
+  moneda: Moneda;
+  monto: Num;
+  cotizacion: NumGen;
+  monto_pyg: Num;
+  referencia: string | null;
+}

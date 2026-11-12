@@ -2,6 +2,11 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditoriaController } from './auditoria/auditoria.controller';
+import { CategoriasController, MarcasController, ProductosController } from './catalogo/catalogo.controller';
+import { ClientesController } from './catalogo/clientes.controller';
+import { StockController } from './catalogo/stock.controller';
+import { CajasController, CotizacionesController } from './operacion/cajas.controller';
+import { PdvController, VentasController } from './operacion/ventas.controller';
 import { AuthController, CuentaController } from './auth/auth.controller';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthService } from './auth/auth.service';
@@ -35,6 +40,15 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     PerfilesController,
     UsuariosController,
     AuditoriaController,
+    ProductosController,
+    CategoriasController,
+    MarcasController,
+    StockController,
+    ClientesController,
+    CajasController,
+    CotizacionesController,
+    PdvController,
+    VentasController,
   ],
   providers: [
     { provide: Tokens, useFactory: Tokens.empresas },
