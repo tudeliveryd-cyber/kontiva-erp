@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   PERMISOS,
   RECURSOS,
   autorizarEntrada,
+  codigoPermiso as codigoPermisoEsquema,
   cambiarContrasenaEntrada,
   cambiarEmpresaEntrada,
   elegirEmpresaEntrada,
@@ -20,6 +21,7 @@ import { noAutenticado, prohibido } from '../comun/errores';
 import { validar } from '../comun/validar';
 import { config } from '../config';
 import { Db } from '../db/database';
+import { cargarPermisos } from './permisos';
 import { AuthService, DURACION_SESION_DIAS, type RespuestaLogin, type SesionEmitida } from './auth.service';
 
 export const COOKIE_RENOVACION = 'kontiva_rt';
@@ -297,6 +299,22 @@ export class CuentaController {
       })),
       permisos: PERMISOS,
     };
+  }
+
+  /** Quiénes pueden autorizar una acción con su PIN (solo nombres), para el diálogo del PDV. */
+  @SoloSesion()
+  @Get('autorizadores')
+  async autorizadores(@Contexto() ctx: Ctx, @Query('permiso') permiso: string) {
+    validar(codigoPermisoEsquema, permiso);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const candidatos = await tx.selectFrom('usuario').select(['id', 'nombre']).where('activo', '=', true).where('hash_pin', 'is not', null).where('id', '!=', ctx.usuarioId).orderBy('nombre').execute();
+      const out: { id: string; nombre: string }[] = [];
+      for (const c of candidatos) {
+        const p = await cargarPermisos(tx, c.id);
+        if (p?.permisos.has(permiso)) out.push(c);
+      }
+      return out;
+    });
   }
 
   @SoloSesion()

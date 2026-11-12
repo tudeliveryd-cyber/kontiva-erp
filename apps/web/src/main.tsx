@@ -19,6 +19,12 @@ import { Inicio } from './paginas/Inicio';
 import { Perfiles } from './paginas/Perfiles';
 import { Sucursales } from './paginas/Sucursales';
 import { Usuarios } from './paginas/Usuarios';
+import { Cajas } from './paginas/Cajas';
+import { Clientes } from './paginas/Clientes';
+import { Pdv } from './paginas/Pdv';
+import { Productos } from './paginas/Productos';
+import { Stock } from './paginas/Stock';
+import { Ventas } from './paginas/Ventas';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -37,8 +43,14 @@ function Rutas() {
   if (!yo) return <Acceso />;
   return (
     <Routes>
+      {puede('venta.crear') && <Route path="pdv/:cajaId" element={<Pdv />} />}
       <Route element={<Disposicion />}>
         <Route index element={<Inicio />} />
+        {puede('caja.ver') && <Route path="cajas" element={<Cajas />} />}
+        {puede('venta.ver') && <Route path="ventas" element={<Ventas />} />}
+        {puede('producto.ver') && <Route path="productos" element={<Productos />} />}
+        {puede('stock.ver') && <Route path="stock" element={<Stock />} />}
+        {puede('cliente.ver') && <Route path="clientes" element={<Clientes />} />}
         {puede('usuario.ver') && <Route path="usuarios" element={<Usuarios />} />}
         {puede('perfil.ver') && <Route path="perfiles" element={<Perfiles />} />}
         {puede('sucursal.ver') && <Route path="sucursales" element={<Sucursales />} />}

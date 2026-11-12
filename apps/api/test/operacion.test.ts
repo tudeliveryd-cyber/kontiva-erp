@@ -97,6 +97,11 @@ describe('Operación central: catálogo, stock, caja y PDV', () => {
       const m = await http(app).get(`/api/stock/movimientos?varianteId=${p.varianteId}&depositoId=${depositoId}`).set(h).expect(200);
       expect(m.body.map((x: { cantidad: string; saldo: string }) => [Number(x.cantidad), Number(x.saldo)])).toEqual([[-3, 9], [12, 12]]);
       expect(await saldo(p.varianteId)).toBe(9);
+      // soloBajo=false no filtra (regresión: "false" se interpretaba como verdadero).
+      const todos = await http(app).get(`/api/stock?depositoId=${depositoId}&soloBajo=false`).set(h).expect(200);
+      expect(todos.body.some((x: { varianteId: string }) => x.varianteId === p.varianteId)).toBe(true);
+      const bajos = await http(app).get(`/api/stock?depositoId=${depositoId}&soloBajo=true`).set(h).expect(200);
+      expect(bajos.body.some((x: { varianteId: string }) => x.varianteId === p.varianteId)).toBe(false);
     });
   });
 

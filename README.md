@@ -12,7 +12,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | Fase | Contenido | Estado |
 | --- | --- | --- |
 | 0 | Cimientos: autenticación, multiempresa con RLS, permisos, auditoría, Panel Master | Lista · ver pendientes menores abajo |
-| 1 | Operación central: productos, inventario, PDV, caja | Pendiente |
+| 1 | Operación central: productos, inventario, PDV, caja | Circuito central listo · ver pendientes abajo |
 | 2 | Compras y finanzas | Pendiente |
 | 3 | Facturación electrónica SIFEN | Pendiente |
 | 4 | RRHH, informes, dashboard, app del dueño | Pendiente |
@@ -49,6 +49,27 @@ Producto comercial de **Araújo Tech Sistemas**.
 - Documentación OpenAPI de la API.
 - Exportación completa de los datos de una empresa (para empresas suspendidas o que se van).
 - Monitoreo y alertas externas (depende del proveedor de hosting elegido).
+
+### Fase 1 · hecho (circuito central)
+- **Catálogo**: productos y servicios con variantes (talle, color, presentación), varios códigos de barras,
+  SKU, categorías, IVA 10 % / 5 % / exento, unidad de venta (unidad, kg, metro…), costo confidencial.
+- **Stock**: depósito por sucursal, saldo materializado + movimientos (fuente de verdad, solo inserción),
+  carga de stock inicial y ajustes por conteo con motivo, historial por producto, opción de vender sin stock.
+- **Cajas multimoneda**: cotización del día por sucursal (compra / venta), apertura con fondo en guaraníes,
+  dólares y reales, retiros e ingresos con autorización, cierre con arqueo por moneda y medio, diferencias registradas.
+- **PDV**: pantalla completa operada con teclado y lector (F2 cobrar, F4 cliente, F8 descuento), cobro mixto en
+  varias monedas y medios, vuelto en otra moneda, descuentos con PIN de supervisor, comprobante interno de 80 mm
+  ("no válido como factura"), venta atómica con idempotencia, bloqueo de stock y numeración por caja.
+- **Ventas**: listado del día, reimpresión, anulación con PIN (devuelve stock y dinero en la misma sesión).
+- **Clientes**: alta rápida desde el PDV, RUC o cédula.
+- **Pruebas**: 261 en total; incluye 20 cajas vendiendo el mismo producto a la vez con stock final exacto.
+
+### Fase 1 · pendiente
+- Venta sin internet (cola local cifrada con numeración reservada) y agente local para impresora, gaveta y balanza.
+- Importación de productos, clientes y stock desde Excel / CSV.
+- Listas de precios adicionales y precio por sucursal (la base ya lo soporta; falta la pantalla).
+- Transferencias entre depósitos, devoluciones de ventas de cajas ya cerradas, presupuestos y pedidos.
+- Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
 
 ## Estructura
 

@@ -39,8 +39,16 @@ async function leerError(r: Response): Promise<FalloApi> {
 /** Rutas de ingreso: un 401 ahí es la respuesta, no una sesión vencida. */
 const SIN_REINTENTO = ['/auth/login', '/auth/empresa', '/auth/2fa/verificar', '/auth/2fa/enrolar', '/auth/renovar', '/auth/recuperar', '/auth/restablecer'];
 
+export interface OpcionesApi {
+  metodo?: string;
+  cuerpo?: unknown;
+  reintento?: boolean;
+  /** Encabezados extra, ej. X-Autorizacion con el token del PIN de un supervisor. */
+  encabezados?: Record<string, string>;
+}
+
 export interface Cliente {
-  api: <T = unknown>(ruta: string, opciones?: { metodo?: string; cuerpo?: unknown; reintento?: boolean }) => Promise<T>;
+  api: <T = unknown>(ruta: string, opciones?: OpcionesApi) => Promise<T>;
   renovarSesion: () => Promise<boolean>;
   fijarToken: (t: string | null) => void;
   alPerderSesion: (fn: () => void) => void;
@@ -71,9 +79,9 @@ export function crearCliente(base: string): Cliente {
     return renovando;
   };
 
-  const api = async <T = unknown>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown; reintento?: boolean } = {}): Promise<T> => {
+  const api = async <T = unknown>(ruta: string, opciones: OpcionesApi = {}): Promise<T> => {
     const { metodo = 'GET', cuerpo, reintento = true } = opciones;
-    const headers: Record<string, string> = { 'X-Kontiva': '1' };
+    const headers: Record<string, string> = { 'X-Kontiva': '1', ...opciones.encabezados };
     if (cuerpo !== undefined) headers['Content-Type'] = 'application/json';
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     const r = await fetch(`${base}${ruta}`, {
@@ -160,6 +168,7 @@ export interface EmpresaDatos {
   telefono: string | null;
   email: string | null;
   direccion: string | null;
+  permiteStockNegativo: boolean;
   plan: { codigo: string; limites: { usuarios: number | null; sucursales: number | null; cajas: number | null }; uso: { usuarios: number; sucursales: number } };
 }
 

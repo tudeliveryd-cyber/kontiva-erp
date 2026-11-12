@@ -31,7 +31,7 @@ export function Empresa() {
   }, [q.data, f]);
 
   const guardar = useMutation({
-    mutationFn: (d: Datos) => api<EmpresaDatos>('/empresa', { metodo: 'PATCH', cuerpo: { ...d, email: d.email || null, ruc: d.ruc || undefined } }),
+    mutationFn: (d: Datos) => api<EmpresaDatos>('/empresa', { metodo: 'PATCH', cuerpo: 'permiteStockNegativo' in d && Object.keys(d).length === 1 ? d : { ...d, email: d.email || null, ruc: d.ruc || undefined } }),
     onSuccess: () => {
       setOk(true);
       void qc.invalidateQueries({ queryKey: ['empresa'] });
@@ -83,6 +83,23 @@ export function Empresa() {
             <Campo etiqueta="Dirección" id="dir">
               <input id="dir" className="entrada" disabled={!editable} {...f.register('direccion')} />
             </Campo>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-cab">
+            <h2>Venta</h2>
+          </div>
+          <div className="panel-cuerpo">
+            <label className="casilla">
+              <input
+                type="checkbox"
+                disabled={!editable || guardar.isPending}
+                checked={q.data.permiteStockNegativo}
+                onChange={(e) => guardar.mutate({ permiteStockNegativo: e.target.checked })}
+              />
+              Permitir vender sin stock (el saldo queda negativo hasta el próximo conteo)
+            </label>
           </div>
         </section>
 

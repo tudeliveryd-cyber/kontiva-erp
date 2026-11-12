@@ -228,3 +228,6 @@ export const ventaEntrada = z.object({
 export type VentaEntrada = z.infer<typeof ventaEntrada>;
 
 export const anularVentaEntrada = z.object({ motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
+
+/** Booleano en query string: solo "true" es verdadero (z.coerce.boolean convierte "false" en true). */
+export const booleanoQuery = z.preprocess((v) => v === true || v === 'true' || v === '1', z.boolean()).default(false);

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, P
 import { nombreSimple, productoEntrada, type ProductoEntrada } from '@kontiva/shared';
 import { sql } from 'kysely';
 import { z } from 'zod';
+import { booleanoQuery } from '@kontiva/shared';
 import { listaPredeterminada } from '../comun/alcance';
 import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, tiene, type Ctx, type Origen } from '../comun/contexto';
@@ -70,7 +71,7 @@ export class ProductosController {
       z.object({
         q: z.string().trim().max(100).optional(),
         categoriaId: z.string().uuid().optional(),
-        inactivos: z.coerce.boolean().default(false),
+        inactivos: booleanoQuery,
         pagina: z.coerce.number().int().min(1).default(1),
         limite: z.coerce.number().int().min(1).max(200).default(50),
       }),

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ajusteStockEntrada } from '@kontiva/shared';
 import Decimal from 'decimal.js';
 import { z } from 'zod';
+import { booleanoQuery } from '@kontiva/shared';
 import { enSucursal, exigirSucursal } from '../comun/alcance';
 import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, tiene, type Ctx, type Origen } from '../comun/contexto';
@@ -45,7 +46,7 @@ export class StockController {
       z.object({
         depositoId: z.string().uuid(),
         q: z.string().trim().max(100).optional(),
-        soloBajo: z.coerce.boolean().default(false),
+        soloBajo: booleanoQuery,
         pagina: z.coerce.number().int().min(1).default(1),
         limite: z.coerce.number().int().min(1).max(500).default(100),
       }),

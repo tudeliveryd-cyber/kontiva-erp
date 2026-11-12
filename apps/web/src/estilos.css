@@ -203,3 +203,44 @@ select.entrada { padding-right: 8px; }
   .contenido { padding: 16px; }
   .superior { padding: 12px 16px; }
 }
+
+/* ----- Comprobante 80 mm ----- */
+.ticket { width: 72mm; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.35; color: #000; background: #fff; padding: 4mm; margin: 0 auto; }
+.t-centro { text-align: center; }
+.t-fuerte { font-weight: 700; }
+.t-fila { display: flex; justify-content: space-between; gap: 8px; }
+.t-linea { border-top: 1px dashed #000; margin: 6px 0; }
+@media print {
+  @page { size: 80mm auto; margin: 0; }
+  body * { visibility: hidden; }
+  .ticket, .ticket * { visibility: visible; }
+  .ticket { position: absolute; left: 0; top: 0; padding: 2mm; }
+}
+
+/* ----- PDV ----- */
+.pdv { height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+.pdv-cab { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--p9); color: #fff; }
+.pdv-cab .cot { margin-left: auto; display: flex; gap: 16px; font-size: 13px; color: #d9cce6; }
+.pdv-cuerpo { flex: 1; display: flex; min-height: 0; }
+.pdv-izq { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #fff; border-right: 1px solid var(--linea); }
+.pdv-buscar { padding: 14px 18px; border-bottom: 1px solid var(--linea); position: relative; }
+.pdv-buscar input { height: 48px; font-size: 18px; padding-left: 44px; }
+.pdv-buscar svg.lupa { position: absolute; left: 32px; top: 28px; color: var(--t3); }
+.pdv-resultados { position: absolute; left: 18px; right: 18px; top: 66px; background: #fff; border: 1px solid var(--linea); border-radius: 8px; z-index: 5; max-height: 360px; overflow-y: auto; box-shadow: 0 8px 24px rgba(24,24,27,.12); }
+.pdv-resultados button { display: flex; width: 100%; gap: 12px; padding: 10px 14px; border: 0; background: none; text-align: left; align-items: center; }
+.pdv-resultados button.sel, .pdv-resultados button:hover { background: var(--p1); }
+.pdv-items { flex: 1; overflow-y: auto; }
+.pdv-items td { padding: 10px 16px; }
+.pdv-der { width: 380px; flex: none; display: flex; flex-direction: column; padding: 20px; gap: 16px; }
+.pdv-total { background: #fff; border: 1px solid var(--linea); border-radius: 8px; padding: 20px; }
+.pdv-total .grande { font-size: 40px; font-weight: 800; letter-spacing: -.02em; }
+.pdv-total .equiv { display: flex; gap: 14px; color: var(--t3); font-size: 13px; margin-top: 4px; }
+.btn.cobrar { height: 64px; font-size: 20px; background: var(--y); border-color: var(--y); color: var(--p9); font-weight: 800; }
+.btn.cobrar:hover { background: #f0b400; }
+.tecla { display: inline-block; font-size: 11px; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; margin-left: 6px; opacity: .7; }
+.cant { display: inline-flex; align-items: center; gap: 4px; }
+.cant button { width: 26px; height: 26px; border: 1px solid var(--linea); background: #fff; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
+.cant input { width: 64px; height: 28px; text-align: center; border: 1px solid var(--linea); border-radius: 4px; }
+.pagos-rapidos { display: flex; gap: 6px; flex-wrap: wrap; }
+.resumen-cobro { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 15px; }
+.resumen-cobro b { text-align: right; }
