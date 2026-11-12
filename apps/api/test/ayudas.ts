@@ -1,7 +1,9 @@
 import type { INestApplication } from '@nestjs/common';
 import { calcularDvRuc } from '@kontiva/shared';
 import request from 'supertest';
+import { codigoActual } from '../src/auth/segundo-factor';
 import { crearApp } from '../src/bootstrap';
+import { Db } from '../src/db/database';
 import { Correo } from '../src/comun/correo';
 import { ProvisionService } from '../src/provision/provision.service';
 
@@ -32,8 +34,24 @@ export interface EmpresaPrueba {
   propietario: { email: string; usuarioId: string; token: string };
 }
 
+/**
+ * Inicia sesión como lo haría una persona: si el plan exige segundo factor, lo configura;
+ * si la cuenta lo tiene, ingresa el código (calculado desde el secreto, como el teléfono).
+ */
 export async function login(app: INestApplication, email: string, contrasena = CONTRASENA, empresaId?: string) {
-  const r = await http(app).post('/api/auth/login').send({ email, contrasena, empresaId });
+  let r = await http(app).post('/api/auth/login').send({ email, contrasena, empresaId });
+  const db = app.get(Db);
+  if (r.body.tipo === 'configurar_segundo_factor') {
+    await http(app).post('/api/auth/2fa/enrolar').send({ ticket: r.body.ticket }).expect(200);
+    const c = await db.k.selectFrom('cuenta').select('totp_pendiente').where('email', '=', email).executeTakeFirstOrThrow();
+    const fin = await http(app).post('/api/auth/2fa/enrolar/confirmar').send({ ticket: r.body.ticket, codigo: codigoActual(c.totp_pendiente!) }).expect(200);
+    r = { ...r, body: fin.body.siguiente, headers: fin.headers } as typeof r;
+  } else if (r.body.tipo === 'segundo_factor') {
+    // Varios ingresos en los mismos 30 s: las pruebas liberan el último paso usado.
+    await db.k.updateTable('cuenta').set({ totp_ultimo_paso: null }).where('email', '=', email).execute();
+    const c = await db.k.selectFrom('cuenta').select('totp_secreto').where('email', '=', email).executeTakeFirstOrThrow();
+    r = await http(app).post('/api/auth/2fa/verificar').send({ ticket: r.body.ticket, codigo: codigoActual(c.totp_secreto!) });
+  }
   if (r.status !== 200 || r.body.tipo !== 'sesion') throw new Error(`Login falló ${r.status}: ${JSON.stringify(r.body)}`);
   const cookie = ([] as string[]).concat(r.headers['set-cookie'] ?? []).find((c) => c.startsWith('kontiva_rt='))!;
   return { token: r.body.accessToken as string, cookie: cookie.split(';')[0]! };

@@ -20,6 +20,9 @@ export default defineConfig({
       PG_ADMIN_URL: process.env.PG_ADMIN_URL ?? `postgresql://postgres:postgres@${HOST}/postgres`,
       JWT_SECRET: 'secreto-de-pruebas-solo-para-tests-0123456789abcdef',
       WEB_URL: 'http://localhost:5173',
+      CIFRADO_CLAVE: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
+      DATABASE_MASTER_URL: `postgresql://kontiva_master:kontiva_master@${HOST}/kontiva_test`,
+      JWT_MASTER_SECRET: 'secreto-master-de-pruebas-distinto-0123456789abcdef',
     },
   },
 });

@@ -5,11 +5,15 @@ import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 import { z } from 'zod';
 import { email, loginEntrada } from '@kontiva/shared';
+import { CodigosRespaldo, QrSecreto } from '../componentes/SegundoFactor';
 import { Aviso, Campo, ErrorApi, Marca } from '../componentes/ui';
 import { api } from '../lib/api';
 import { useSesion } from '../lib/sesion';
 
-type Respuesta = { tipo: 'sesion'; accessToken: string } | { tipo: 'elegir_empresa'; ticket: string; empresas: { id: string; nombre: string }[] };
+type Respuesta =
+  | { tipo: 'sesion'; accessToken: string }
+  | { tipo: 'elegir_empresa'; ticket: string; empresas: { id: string; nombre: string }[] }
+  | { tipo: 'segundo_factor' | 'configurar_segundo_factor'; ticket: string };
 
 function PanelMarca() {
   return (
@@ -29,14 +33,20 @@ export function Acceso() {
   const [error, setError] = useState<unknown>(null);
   const [eleccion, setEleccion] = useState<Extract<Respuesta, { tipo: 'elegir_empresa' }> | null>(null);
   const [recuperar, setRecuperar] = useState(false);
+  const [paso2fa, setPaso2fa] = useState<Extract<Respuesta, { tipo: 'segundo_factor' | 'configurar_segundo_factor' }> | null>(null);
   const f = useForm<z.infer<typeof loginEntrada>>({ resolver: zodResolver(loginEntrada) });
+
+  const seguir = async (r: Respuesta) => {
+    setPaso2fa(null);
+    if (r.tipo === 'sesion') await entrar(r.accessToken);
+    else if (r.tipo === 'elegir_empresa') setEleccion(r);
+    else setPaso2fa(r);
+  };
 
   const enviar = f.handleSubmit(async (d) => {
     setError(null);
     try {
-      const r = await api<Respuesta>('/auth/login', { metodo: 'POST', cuerpo: { email: d.email, contrasena: d.contrasena } });
-      if (r.tipo === 'sesion') await entrar(r.accessToken);
-      else setEleccion(r);
+      await seguir(await api<Respuesta>('/auth/login', { metodo: 'POST', cuerpo: { email: d.email, contrasena: d.contrasena } }));
     } catch (e) {
       setError(e);
     }
@@ -59,6 +69,10 @@ export function Acceso() {
       <div className="acceso-form">
         {recuperar ? (
           <Recuperar alVolver={() => setRecuperar(false)} />
+        ) : paso2fa?.tipo === 'segundo_factor' ? (
+          <CodigoSegundoFactor ticket={paso2fa.ticket} alSeguir={seguir} alVolver={() => setPaso2fa(null)} />
+        ) : paso2fa?.tipo === 'configurar_segundo_factor' ? (
+          <ConfigurarSegundoFactor ticket={paso2fa.ticket} alSeguir={seguir} alVolver={() => setPaso2fa(null)} />
         ) : eleccion ? (
           <div className="acceso-caja">
             <div>
@@ -101,6 +115,125 @@ export function Acceso() {
         )}
       </div>
     </div>
+  );
+}
+
+function CodigoSegundoFactor(props: { ticket: string; alSeguir: (r: Respuesta) => Promise<void>; alVolver: () => void }) {
+  const [codigo, setCodigo] = useState('');
+  const [error, setError] = useState<unknown>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [respaldo, setRespaldo] = useState(false);
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setEnviando(true);
+    try {
+      await props.alSeguir(await api<Respuesta>('/auth/2fa/verificar', { metodo: 'POST', cuerpo: { ticket: props.ticket, codigo } }));
+    } catch (err) {
+      setError(err);
+      setCodigo('');
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return (
+    <form className="acceso-caja" onSubmit={enviar} noValidate>
+      <div>
+        <h1>Verificación en dos pasos</h1>
+        <p className="sub">{respaldo ? 'Ingrese uno de sus códigos de respaldo (XXXXX-XXXXX).' : 'Ingrese el código de 6 dígitos de su aplicación de autenticación.'}</p>
+      </div>
+      <ErrorApi error={error} />
+      <Campo etiqueta={respaldo ? 'Código de respaldo' : 'Código'} id="codigo2fa">
+        <input
+          id="codigo2fa"
+          className="entrada num"
+          style={{ fontSize: 20, letterSpacing: respaldo ? '.08em' : '.3em', textAlign: 'center' }}
+          inputMode={respaldo ? 'text' : 'numeric'}
+          autoComplete="one-time-code"
+          maxLength={respaldo ? 11 : 6}
+          autoFocus
+          value={codigo}
+          onChange={(e) => setCodigo(respaldo ? e.target.value.toUpperCase() : e.target.value.replace(/[^0-9]/g, ''))}
+        />
+      </Campo>
+      <button className="btn pri bloque" disabled={enviando || codigo.length < 6}>
+        Verificar
+      </button>
+      <button type="button" className="enlace" onClick={() => { setRespaldo(!respaldo); setCodigo(''); }}>
+        {respaldo ? 'Usar la aplicación de autenticación' : 'No tengo el teléfono: usar un código de respaldo'}
+      </button>
+      <button type="button" className="enlace" onClick={props.alVolver}>
+        Volver
+      </button>
+    </form>
+  );
+}
+
+function ConfigurarSegundoFactor(props: { ticket: string; alSeguir: (r: Respuesta) => Promise<void>; alVolver: () => void }) {
+  const [datos, setDatos] = useState<{ qr: string; secreto: string } | null>(null);
+  const [codigo, setCodigo] = useState('');
+  const [error, setError] = useState<unknown>(null);
+  const [final, setFinal] = useState<{ codigosRespaldo: string[]; siguiente: Respuesta } | null>(null);
+
+  const generar = async () => {
+    setError(null);
+    try {
+      setDatos(await api('/auth/2fa/enrolar', { metodo: 'POST', cuerpo: { ticket: props.ticket } }));
+    } catch (e) {
+      setError(e);
+    }
+  };
+  const confirmar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      setFinal(await api('/auth/2fa/enrolar/confirmar', { metodo: 'POST', cuerpo: { ticket: props.ticket, codigo } }));
+    } catch (err) {
+      setError(err);
+    }
+  };
+
+  if (final) {
+    return (
+      <div className="acceso-caja">
+        <div>
+          <h1>Guarde sus códigos de respaldo</h1>
+          <p className="sub">Sirven para entrar si pierde el teléfono. Cada uno se usa una sola vez. No se volverán a mostrar.</p>
+        </div>
+        <CodigosRespaldo codigos={final.codigosRespaldo} />
+        <button className="btn pri bloque" onClick={() => void props.alSeguir(final.siguiente)}>
+          Ya los guardé, continuar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="acceso-caja" onSubmit={confirmar} noValidate>
+      <div>
+        <h1>Active la verificación en dos pasos</h1>
+        <p className="sub">Su plan la exige para el Propietario. Necesita una aplicación de autenticación en el teléfono (Google Authenticator, Microsoft Authenticator u otra).</p>
+      </div>
+      <ErrorApi error={error} />
+      {!datos ? (
+        <button type="button" className="btn pri bloque" onClick={() => void generar()}>
+          Generar código QR
+        </button>
+      ) : (
+        <>
+          <QrSecreto qr={datos.qr} secreto={datos.secreto} />
+          <Campo etiqueta="Código de 6 dígitos que muestra la aplicación" id="cod-enrolar">
+            <input id="cod-enrolar" className="entrada num" inputMode="numeric" maxLength={6} autoComplete="one-time-code" value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/[^0-9]/g, ''))} />
+          </Campo>
+          <button className="btn pri bloque" disabled={codigo.length !== 6}>
+            Activar
+          </button>
+        </>
+      )}
+      <button type="button" className="enlace" onClick={props.alVolver}>
+        Volver
+      </button>
+    </form>
   );
 }
 

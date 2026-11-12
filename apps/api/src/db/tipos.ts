@@ -17,6 +17,9 @@ export interface PlanTabla {
   max_cajas: number | null;
   modulos: Json<string[]>;
   activo: Generated<boolean>;
+  exige_2fa_propietario: Generated<boolean>;
+  precio_mensual: string | null;
+  precio_anual: string | null;
   creado_en: Creado;
   actualizado_en: Actualizado;
 }
@@ -69,8 +72,22 @@ export interface CuentaTabla {
   intentos_fallidos: Generated<number>;
   bloqueada_hasta: Date | null;
   totp_secreto: string | null;
+  totp_activo: Generated<boolean>;
+  totp_pendiente: string | null;
+  totp_ultimo_paso: Paso;
   creado_en: Creado;
   actualizado_en: Actualizado;
+}
+
+/** int8: se lee como string (sin pérdida de precisión). */
+type Paso = ColumnType<string | null, number | null | undefined, number | null>;
+
+export interface CodigoRespaldoTabla {
+  id: Generated<string>;
+  cuenta_id: string;
+  hash: string;
+  usado_en: Date | null;
+  creado_en: Creado;
 }
 
 export interface PerfilTabla {
@@ -190,6 +207,89 @@ export interface BaseDatos {
   token_cuenta: TokenCuentaTabla;
   intento_acceso: IntentoAccesoTabla;
   auditoria: AuditoriaTabla;
+  codigo_respaldo: CodigoRespaldoTabla;
+  'master.usuario': MasterUsuarioTabla;
+  'master.sesion': MasterSesionTabla;
+  'master.suscripcion': MasterSuscripcionTabla;
+  'master.pago': MasterPagoTabla;
+  'master.auditoria': MasterAuditoriaTabla;
+}
+
+// ---------------------------------------------------------------------------
+// Esquema master (solo accesible con el rol kontiva_master)
+// ---------------------------------------------------------------------------
+
+export interface MasterUsuarioTabla {
+  id: Generated<string>;
+  email: string;
+  nombre: string;
+  hash_contrasena: string;
+  totp_secreto: string | null;
+  totp_pendiente: string | null;
+  totp_activo: Generated<boolean>;
+  totp_ultimo_paso: Paso;
+  intentos_fallidos: Generated<number>;
+  bloqueada_hasta: Date | null;
+  activo: Generated<boolean>;
+  creado_en: Creado;
+  actualizado_en: Actualizado;
+}
+
+export interface MasterSesionTabla {
+  id: Generated<string>;
+  usuario_id: string;
+  hash_token: string;
+  hash_token_anterior: string | null;
+  ip: string | null;
+  agente: string | null;
+  creado_en: Creado;
+  ultimo_uso_en: Generated<Date>;
+  expira_en: Date;
+  revocada_en: Date | null;
+}
+
+export interface MasterSuscripcionTabla {
+  empresa_id: string;
+  ciclo: Generated<'mensual' | 'anual'>;
+  precio: Generated<string>;
+  moneda: Generated<'PYG' | 'USD' | 'BRL'>;
+  vence_en: string;
+  dias_gracia: Generated<number>;
+  suspension_automatica: Generated<boolean>;
+  motivo_suspension: 'falta_pago' | 'manual' | null;
+  notas: string | null;
+  creado_en: Creado;
+  actualizado_en: Actualizado;
+}
+
+export interface MasterPagoTabla {
+  id: Generated<string>;
+  empresa_id: string;
+  monto: string;
+  moneda: 'PYG' | 'USD' | 'BRL';
+  fecha: ColumnType<string, string, never>;
+  periodo_desde: ColumnType<string, string, never>;
+  periodo_hasta: ColumnType<string, string, never>;
+  metodo: 'transferencia' | 'efectivo' | 'tarjeta' | 'otro';
+  referencia: string | null;
+  registrado_por: string;
+  anulado_en: Date | null;
+  anulado_por: string | null;
+  motivo_anulacion: string | null;
+  creado_en: Creado;
+}
+
+export interface MasterAuditoriaTabla {
+  id: Generated<string>;
+  usuario_id: string | null;
+  accion: string;
+  entidad: string;
+  entidad_id: string | null;
+  antes: Json | null;
+  despues: Json | null;
+  ip: string | null;
+  agente: string | null;
+  creado_en: Creado;
 }
 
 export type Usuario = Selectable<UsuarioTabla>;

@@ -3,11 +3,12 @@ import { sql } from 'kysely';
 import { auditar } from '../comun/auditoria';
 import type { Ctx, Origen } from '../comun/contexto';
 import { Correo } from '../comun/correo';
-import { ErrorNegocio, invalido, noAutenticado, prohibido } from '../comun/errores';
+import { ErrorNegocio, conflicto as conflictoNegocio, invalido, noAutenticado, prohibido } from '../comun/errores';
 import { config } from '../config';
 import { Db } from '../db/database';
 import { cargarPermisos } from './permisos';
 import { hashear, requiereRehash, sha256, tokenAleatorio, verificar, verificarSenuelo } from './cripto';
+import { hashRespaldo, nuevoSecreto, nuevosCodigosRespaldo, pareceCodigoRespaldo, verificarTotp } from './segundo-factor';
 import { DURACION_ACCESO_S, Tokens } from './tokens';
 
 export const DURACION_SESION_DIAS = 30;
@@ -33,6 +34,13 @@ export interface SesionEmitida {
   empresaId: string;
 }
 
+export interface PasoSegundoFactor {
+  tipo: 'segundo_factor' | 'configurar_segundo_factor';
+  ticket: string;
+}
+
+export type RespuestaLogin = SesionEmitida | EleccionEmpresa | PasoSegundoFactor;
+
 export interface EleccionEmpresa {
   tipo: 'elegir_empresa';
   ticket: string;
@@ -54,7 +62,7 @@ export class AuthService {
   // Inicio de sesión
   // -------------------------------------------------------------------------
 
-  async login(email: string, contrasena: string, empresaId: string | undefined, o: Origen): Promise<SesionEmitida | EleccionEmpresa> {
+  async login(email: string, contrasena: string, empresaId: string | undefined, o: Origen): Promise<RespuestaLogin> {
     const cuenta = await this.db.k.selectFrom('cuenta').selectAll().where('email', '=', email).executeTakeFirst();
 
     if (!cuenta || !cuenta.hash_contrasena) {
@@ -104,7 +112,27 @@ export class AuthService {
       await this.registrarIntento(email, cuenta.id, false, 'sin_empresa', o);
       throw prohibido('Su usuario no tiene acceso a ninguna empresa activa');
     }
+    if (empresaId && !membresias.some((m) => m.empresa_id === empresaId)) throw prohibido('No tiene acceso a esa empresa');
 
+    // Segundo factor: si la cuenta lo tiene, se pide el código; si su plan lo exige y no
+    // lo configuró, debe configurarlo antes de entrar.
+    if (cuenta.totp_activo) {
+      await this.registrarIntento(email, cuenta.id, true, 'contrasena_ok_falta_2fa', o);
+      return { tipo: 'segundo_factor', ticket: await this.tokens.firmarPreauth({ cta: cuenta.id, fase: 'mfa', emp: empresaId }) };
+    }
+    if (await this.requiere2fa(cuenta.id)) {
+      await this.registrarIntento(email, cuenta.id, true, 'contrasena_ok_debe_configurar_2fa', o);
+      return { tipo: 'configurar_segundo_factor', ticket: await this.tokens.firmarPreauth({ cta: cuenta.id, fase: 'enrolar', emp: empresaId }) };
+    }
+
+    await this.registrarIntento(email, cuenta.id, true, 'ok', o);
+    return this.continuarLogin(cuenta.id, empresaId, o);
+  }
+
+  /** Credenciales completas: abre la sesión o pide elegir empresa. */
+  private async continuarLogin(cuentaId: string, empresaId: string | undefined, o: Origen): Promise<SesionEmitida | EleccionEmpresa> {
+    const membresias = (await this.membresias(cuentaId)).filter((m) => m.empresa_estado === 'activa');
+    if (membresias.length === 0) throw prohibido('Su usuario no tiene acceso a ninguna empresa activa');
     let elegida: Membresia | undefined;
     if (empresaId) {
       elegida = membresias.find((m) => m.empresa_id === empresaId);
@@ -112,23 +140,193 @@ export class AuthService {
     } else if (membresias.length === 1) {
       elegida = membresias[0];
     }
-
-    await this.registrarIntento(email, cuenta.id, true, 'ok', o);
-
     if (!elegida) {
       return {
         tipo: 'elegir_empresa',
-        ticket: await this.tokens.firmarPreauth({ cta: cuenta.id }),
+        ticket: await this.tokens.firmarPreauth({ cta: cuentaId, fase: 'empresa' }),
         empresas: membresias.map((m) => ({ id: m.empresa_id, nombre: m.empresa_nombre })),
       };
     }
-    return this.crearSesion(cuenta.id, elegida, o);
+    return this.crearSesion(cuentaId, elegida, o);
+  }
+
+  async requiere2fa(cuentaId: string): Promise<boolean> {
+    const { rows } = await sql<{ r: boolean }>`SELECT auth_requiere_2fa(${cuentaId}::uuid) AS r`.execute(this.db.k);
+    return rows[0]?.r === true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Segundo factor durante el inicio de sesión
+  // -------------------------------------------------------------------------
+
+  private async leerTicket(ticket: string, fase: 'mfa' | 'enrolar' | 'empresa') {
+    const c = await this.tokens.leerPreauth(ticket);
+    if (!c || c.fase !== fase) throw noAutenticado('El tiempo para completar el ingreso venció. Inicie sesión de nuevo.');
+    return c;
+  }
+
+  async verificarSegundoFactor(ticket: string, codigo: string, o: Origen): Promise<SesionEmitida | EleccionEmpresa> {
+    const c = await this.leerTicket(ticket, 'mfa');
+    const cuenta = await this.db.k
+      .selectFrom('cuenta')
+      .select(['id', 'email', 'totp_secreto', 'totp_activo', 'totp_ultimo_paso', 'intentos_fallidos', 'bloqueada_hasta'])
+      .where('id', '=', c.cta)
+      .executeTakeFirstOrThrow();
+    if (cuenta.bloqueada_hasta && cuenta.bloqueada_hasta > new Date()) {
+      throw new ErrorNegocio(HttpStatus.TOO_MANY_REQUESTS, 'CUENTA_BLOQUEADA', 'Demasiados intentos fallidos. Intente más tarde.');
+    }
+    if (!(await this.comprobarCodigo(cuenta, codigo))) {
+      await this.registrarFallo(cuenta.id, cuenta.intentos_fallidos);
+      await this.registrarIntento(cuenta.email, cuenta.id, false, 'codigo_2fa_incorrecto', o);
+      throw new ErrorNegocio(HttpStatus.UNAUTHORIZED, 'CODIGO_INCORRECTO', 'Código incorrecto o vencido');
+    }
+    await this.db.k.updateTable('cuenta').set({ intentos_fallidos: 0, bloqueada_hasta: null }).where('id', '=', cuenta.id).execute();
+    await this.registrarIntento(cuenta.email, cuenta.id, true, 'ok_2fa', o);
+    return this.continuarLogin(cuenta.id, c.emp, o);
+  }
+
+  /** Alta del segundo factor obligatorio durante el inicio de sesión. */
+  async iniciarEnrolamiento(ticket: string) {
+    const c = await this.leerTicket(ticket, 'enrolar');
+    return this.prepararSecreto(c.cta);
+  }
+
+  async confirmarEnrolamiento(ticket: string, codigo: string, o: Origen) {
+    const c = await this.leerTicket(ticket, 'enrolar');
+    const codigosRespaldo = await this.activarSecreto(c.cta, codigo);
+    await this.registrarIntento(null, c.cta, true, 'ok_2fa_configurado', o);
+    return { codigosRespaldo, siguiente: await this.continuarLogin(c.cta, c.emp, o) };
+  }
+
+  private async prepararSecreto(cuentaId: string) {
+    const cuenta = await this.db.k.selectFrom('cuenta').select(['email', 'totp_activo']).where('id', '=', cuentaId).executeTakeFirstOrThrow();
+    if (cuenta.totp_activo) throw conflictoNegocio('2FA_ACTIVO', 'El segundo factor ya está activo');
+    const s = await nuevoSecreto(cuenta.email);
+    await this.db.k.updateTable('cuenta').set({ totp_pendiente: s.cifrado }).where('id', '=', cuentaId).execute();
+    return { secreto: s.secreto, uri: s.uri, qr: s.qr };
+  }
+
+  private async activarSecreto(cuentaId: string, codigo: string): Promise<string[]> {
+    const cuenta = await this.db.k.selectFrom('cuenta').select(['totp_pendiente', 'totp_activo']).where('id', '=', cuentaId).executeTakeFirstOrThrow();
+    if (cuenta.totp_activo) throw conflictoNegocio('2FA_ACTIVO', 'El segundo factor ya está activo');
+    if (!cuenta.totp_pendiente) throw invalido('Primero genere el código QR');
+    const paso = verificarTotp(cuenta.totp_pendiente, codigo, null);
+    if (paso === null) throw invalido('Código incorrecto. Revise que la hora del teléfono sea automática.');
+    await this.db.k
+      .updateTable('cuenta')
+      .set({ totp_secreto: cuenta.totp_pendiente, totp_pendiente: null, totp_activo: true, totp_ultimo_paso: paso })
+      .where('id', '=', cuentaId)
+      .execute();
+    return this.reemplazarCodigosRespaldo(cuentaId);
+  }
+
+  private async reemplazarCodigosRespaldo(cuentaId: string): Promise<string[]> {
+    await this.db.k.updateTable('codigo_respaldo').set({ usado_en: new Date() }).where('cuenta_id', '=', cuentaId).where('usado_en', 'is', null).execute();
+    const { codigos, hashes } = nuevosCodigosRespaldo();
+    await this.db.k.insertInto('codigo_respaldo').values(hashes.map((hash) => ({ cuenta_id: cuentaId, hash }))).execute();
+    return codigos;
+  }
+
+  /** Acepta un código TOTP (no reutilizable) o un código de respaldo (de un solo uso). */
+  private async comprobarCodigo(
+    cuenta: { id: string; totp_secreto: string | null; totp_activo: boolean; totp_ultimo_paso: string | null },
+    codigo: string,
+  ): Promise<boolean> {
+    if (!cuenta.totp_activo || !cuenta.totp_secreto) return false;
+    if (pareceCodigoRespaldo(codigo)) {
+      const usado = await this.db.k
+        .updateTable('codigo_respaldo')
+        .set({ usado_en: new Date() })
+        .where('cuenta_id', '=', cuenta.id)
+        .where('hash', '=', hashRespaldo(codigo))
+        .where('usado_en', 'is', null)
+        .returning('id')
+        .executeTakeFirst();
+      return Boolean(usado);
+    }
+    const paso = verificarTotp(cuenta.totp_secreto, codigo, cuenta.totp_ultimo_paso === null ? null : Number(cuenta.totp_ultimo_paso));
+    if (paso === null) return false;
+    // Condición en el UPDATE: dos peticiones simultáneas con el mismo código no pasan ambas.
+    const r = await this.db.k
+      .updateTable('cuenta')
+      .set({ totp_ultimo_paso: paso })
+      .where('id', '=', cuenta.id)
+      .where((eb) => eb.or([eb('totp_ultimo_paso', 'is', null), eb('totp_ultimo_paso', '<', paso as unknown as string)]))
+      .returning('id')
+      .executeTakeFirst();
+    return Boolean(r);
+  }
+
+  private async registrarFallo(cuentaId: string, previos: number) {
+    const intentos = previos + 1;
+    const bloqueo =
+      intentos >= INTENTOS_ANTES_DE_BLOQUEO
+        ? new Date(Date.now() + Math.min(2 ** (intentos - INTENTOS_ANTES_DE_BLOQUEO), BLOQUEO_MAX_MIN) * 60000)
+        : null;
+    await this.db.k.updateTable('cuenta').set({ intentos_fallidos: intentos, bloqueada_hasta: bloqueo }).where('id', '=', cuentaId).execute();
+  }
+
+  // -------------------------------------------------------------------------
+  // Segundo factor con la sesión iniciada (Mi cuenta)
+  // -------------------------------------------------------------------------
+
+  async estado2fa(ctx: Ctx) {
+    const c = await this.db.k.selectFrom('cuenta').select(['totp_activo']).where('id', '=', ctx.cuentaId).executeTakeFirstOrThrow();
+    const restantes = await this.db.k
+      .selectFrom('codigo_respaldo')
+      .select((eb) => eb.fn.countAll<string>().as('n'))
+      .where('cuenta_id', '=', ctx.cuentaId)
+      .where('usado_en', 'is', null)
+      .executeTakeFirstOrThrow();
+    return { activo: c.totp_activo, obligatorio: await this.requiere2fa(ctx.cuentaId), codigosRestantes: c.totp_activo ? Number(restantes.n) : 0 };
+  }
+
+  private async exigirContrasena(cuentaId: string, contrasena: string) {
+    const c = await this.db.k.selectFrom('cuenta').select('hash_contrasena').where('id', '=', cuentaId).executeTakeFirstOrThrow();
+    if (!c.hash_contrasena || !(await verificar(c.hash_contrasena, contrasena))) throw invalido('La contraseña no es correcta');
+  }
+
+  async iniciar2fa(ctx: Ctx, contrasena: string) {
+    await this.exigirContrasena(ctx.cuentaId, contrasena);
+    return this.prepararSecreto(ctx.cuentaId);
+  }
+
+  async activar2fa(ctx: Ctx, codigo: string, o: Origen) {
+    const codigos = await this.activarSecreto(ctx.cuentaId, codigo);
+    await this.db.enEmpresa(ctx.empresaId, (tx) => auditar(tx, { ...ctx, ...o }, { accion: 'activar_2fa', entidad: 'cuenta', entidadId: ctx.cuentaId }));
+    return { codigosRespaldo: codigos };
+  }
+
+  async desactivar2fa(ctx: Ctx, contrasena: string, codigo: string, o: Origen) {
+    await this.exigirContrasena(ctx.cuentaId, contrasena);
+    if (await this.requiere2fa(ctx.cuentaId)) throw prohibido('Su plan exige el segundo factor para el Propietario');
+    const cuenta = await this.db.k
+      .selectFrom('cuenta')
+      .select(['id', 'totp_secreto', 'totp_activo', 'totp_ultimo_paso'])
+      .where('id', '=', ctx.cuentaId)
+      .executeTakeFirstOrThrow();
+    if (!(await this.comprobarCodigo(cuenta, codigo))) throw invalido('Código incorrecto');
+    await this.db.k
+      .updateTable('cuenta')
+      .set({ totp_activo: false, totp_secreto: null, totp_pendiente: null, totp_ultimo_paso: null })
+      .where('id', '=', ctx.cuentaId)
+      .execute();
+    await this.db.k.updateTable('codigo_respaldo').set({ usado_en: new Date() }).where('cuenta_id', '=', ctx.cuentaId).where('usado_en', 'is', null).execute();
+    await this.db.enEmpresa(ctx.empresaId, (tx) => auditar(tx, { ...ctx, ...o }, { accion: 'desactivar_2fa', entidad: 'cuenta', entidadId: ctx.cuentaId }));
+  }
+
+  async regenerarCodigos(ctx: Ctx, contrasena: string, o: Origen) {
+    await this.exigirContrasena(ctx.cuentaId, contrasena);
+    const c = await this.db.k.selectFrom('cuenta').select('totp_activo').where('id', '=', ctx.cuentaId).executeTakeFirstOrThrow();
+    if (!c.totp_activo) throw invalido('El segundo factor no está activo');
+    const codigos = await this.reemplazarCodigosRespaldo(ctx.cuentaId);
+    await this.db.enEmpresa(ctx.empresaId, (tx) => auditar(tx, { ...ctx, ...o }, { accion: 'regenerar_codigos_2fa', entidad: 'cuenta', entidadId: ctx.cuentaId }));
+    return { codigosRespaldo: codigos };
   }
 
   /** Segundo paso cuando la cuenta pertenece a varias empresas. */
   async elegirEmpresa(ticket: string, empresaId: string, o: Origen): Promise<SesionEmitida> {
-    const claims = await this.tokens.leerPreauth(ticket);
-    if (!claims) throw noAutenticado('El tiempo para elegir empresa venció. Inicie sesión de nuevo.');
+    const claims = await this.leerTicket(ticket, 'empresa');
     const m = (await this.membresias(claims.cta)).find((x) => x.empresa_id === empresaId && x.empresa_estado === 'activa');
     if (!m) throw prohibido('No tiene acceso a esa empresa');
     return this.crearSesion(claims.cta, m, o);

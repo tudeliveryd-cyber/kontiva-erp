@@ -37,7 +37,7 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     AuditoriaController,
   ],
   providers: [
-    Tokens,
+    { provide: Tokens, useFactory: Tokens.empresas },
     Correo,
     AuthService,
     ProvisionService,

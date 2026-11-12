@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Monitor } from 'lucide-react';
+import { Monitor, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { contrasena } from '@kontiva/shared';
+import { CodigosRespaldo, QrSecreto } from '../componentes/SegundoFactor';
 import { Aviso, Campo, Encabezado, ErrorApi } from '../componentes/ui';
 import { api, type SesionFila } from '../lib/api';
 import { dispositivo, fechaHora } from '../lib/formato';
@@ -51,6 +52,8 @@ export function Cuenta() {
             </div>
           )}
         </section>
+
+        <SegundoFactorCuenta />
 
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <CambiarContrasena />
@@ -174,6 +177,158 @@ function DefinirPin({ tienePin }: { tienePin: boolean }) {
           </button>
         </div>
       </form>
+    </section>
+  );
+}
+
+interface Estado2fa {
+  activo: boolean;
+  obligatorio: boolean;
+  codigosRestantes: number;
+}
+
+function SegundoFactorCuenta() {
+  const qc = useQueryClient();
+  const estado = useQuery({ queryKey: ['2fa'], queryFn: () => api<Estado2fa>('/auth/2fa') });
+  const [modo, setModo] = useState<'nada' | 'activar' | 'desactivar' | 'codigos'>('nada');
+  const [contrasenaActual, setContrasenaActual] = useState('');
+  const [codigo, setCodigo] = useState('');
+  const [qr, setQr] = useState<{ qr: string; secreto: string } | null>(null);
+  const [codigos, setCodigos] = useState<string[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  const reiniciar = () => {
+    setModo('nada');
+    setContrasenaActual('');
+    setCodigo('');
+    setQr(null);
+    setError(null);
+  };
+  const correr = async (fn: () => Promise<void>) => {
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(e);
+    }
+  };
+  const e = estado.data;
+
+  return (
+    <section className="panel">
+      <div className="panel-cab">
+        <ShieldCheck size={18} color="var(--p7)" />
+        <h2>Verificación en dos pasos</h2>
+        {e && <span className={`insignia ${e.activo ? 'i-ok' : 'i-n'}`}>{e.activo ? 'Activa' : 'Desactivada'}</span>}
+        {e?.obligatorio && <span className="insignia i-p">Exigida por su plan</span>}
+      </div>
+      <div className="panel-cuerpo form" style={{ maxWidth: 560 }}>
+        <p className="tenue peq" style={{ margin: 0 }}>
+          Además de la contraseña, al entrar se pide un código de la aplicación de autenticación de su teléfono. Si alguien obtiene su contraseña, igual no puede entrar.
+        </p>
+        <ErrorApi error={error} />
+        {codigos && (
+          <>
+            <Aviso tipo="ok">Guarde estos códigos de respaldo. No se volverán a mostrar.</Aviso>
+            <CodigosRespaldo codigos={codigos} />
+            <div>
+              <button className="btn" onClick={() => setCodigos(null)}>
+                Listo
+              </button>
+            </div>
+          </>
+        )}
+        {!codigos && e && !e.activo && modo === 'nada' && (
+          <div>
+            <button className="btn pri" onClick={() => setModo('activar')}>
+              Activar
+            </button>
+          </div>
+        )}
+        {!codigos && e?.activo && modo === 'nada' && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="tenue peq">{e.codigosRestantes} códigos de respaldo disponibles.</span>
+            <button className="btn chico" onClick={() => setModo('codigos')}>
+              Generar códigos nuevos
+            </button>
+            {!e.obligatorio && (
+              <button className="btn chico peligro" onClick={() => setModo('desactivar')}>
+                Desactivar
+              </button>
+            )}
+          </div>
+        )}
+
+        {modo === 'activar' && !qr && (
+          <form className="form" onSubmit={(ev) => { ev.preventDefault(); void correr(async () => setQr(await api('/auth/2fa/iniciar', { metodo: 'POST', cuerpo: { contrasena: contrasenaActual } }))); }}>
+            <Campo etiqueta="Confirme con su contraseña" id="c2fa">
+              <input id="c2fa" type="password" className="entrada" autoComplete="current-password" value={contrasenaActual} onChange={(ev) => setContrasenaActual(ev.target.value)} />
+            </Campo>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn pri" disabled={!contrasenaActual}>Continuar</button>
+              <button type="button" className="btn" onClick={reiniciar}>Cancelar</button>
+            </div>
+          </form>
+        )}
+        {modo === 'activar' && qr && (
+          <form
+            className="form"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              void correr(async () => {
+                const r = await api<{ codigosRespaldo: string[] }>('/auth/2fa/activar', { metodo: 'POST', cuerpo: { codigo } });
+                reiniciar();
+                setCodigos(r.codigosRespaldo);
+                await qc.invalidateQueries({ queryKey: ['2fa'] });
+              });
+            }}
+          >
+            <QrSecreto qr={qr.qr} secreto={qr.secreto} />
+            <Campo etiqueta="Código de 6 dígitos" id="cod2fa">
+              <input id="cod2fa" className="entrada num" inputMode="numeric" maxLength={6} value={codigo} onChange={(ev) => setCodigo(ev.target.value.replace(/[^0-9]/g, ''))} />
+            </Campo>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn pri" disabled={codigo.length !== 6}>Activar</button>
+              <button type="button" className="btn" onClick={reiniciar}>Cancelar</button>
+            </div>
+          </form>
+        )}
+        {(modo === 'desactivar' || modo === 'codigos') && (
+          <form
+            className="form"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              void correr(async () => {
+                if (modo === 'desactivar') {
+                  await api('/auth/2fa/desactivar', { metodo: 'POST', cuerpo: { contrasena: contrasenaActual, codigo } });
+                  reiniciar();
+                } else {
+                  const r = await api<{ codigosRespaldo: string[] }>('/auth/2fa/codigos', { metodo: 'POST', cuerpo: { contrasena: contrasenaActual } });
+                  reiniciar();
+                  setCodigos(r.codigosRespaldo);
+                }
+                await qc.invalidateQueries({ queryKey: ['2fa'] });
+              });
+            }}
+          >
+            <Campo etiqueta="Contraseña" id="c2fa-b">
+              <input id="c2fa-b" type="password" className="entrada" autoComplete="current-password" value={contrasenaActual} onChange={(ev) => setContrasenaActual(ev.target.value)} />
+            </Campo>
+            {modo === 'desactivar' && (
+              <Campo etiqueta="Código actual o de respaldo" id="cod2fa-b">
+                <input id="cod2fa-b" className="entrada num" maxLength={11} value={codigo} onChange={(ev) => setCodigo(ev.target.value.toUpperCase())} />
+              </Campo>
+            )}
+            {modo === 'codigos' && <Aviso tipo="info">Los códigos anteriores dejarán de servir.</Aviso>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className={`btn ${modo === 'desactivar' ? 'peligro' : 'pri'}`} disabled={!contrasenaActual || (modo === 'desactivar' && codigo.length < 6)}>
+                {modo === 'desactivar' ? 'Desactivar' : 'Generar'}
+              </button>
+              <button type="button" className="btn" onClick={reiniciar}>Cancelar</button>
+            </div>
+          </form>
+        )}
+      </div>
     </section>
   );
 }

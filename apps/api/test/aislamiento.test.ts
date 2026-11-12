@@ -120,6 +120,9 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
         'POST /api/auth/recuperar',
         'POST /api/auth/renovar',
         'POST /api/auth/restablecer',
+        'POST /api/auth/2fa/verificar',
+        'POST /api/auth/2fa/enrolar',
+        'POST /api/auth/2fa/enrolar/confirmar',
       ].sort(),
     );
   });

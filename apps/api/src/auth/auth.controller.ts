@@ -20,7 +20,7 @@ import { noAutenticado, prohibido } from '../comun/errores';
 import { validar } from '../comun/validar';
 import { config } from '../config';
 import { Db } from '../db/database';
-import { AuthService, DURACION_SESION_DIAS, type EleccionEmpresa, type SesionEmitida } from './auth.service';
+import { AuthService, DURACION_SESION_DIAS, type RespuestaLogin, type SesionEmitida } from './auth.service';
 
 export const COOKIE_RENOVACION = 'kontiva_rt';
 const RUTA_COOKIE = '/api/auth';
@@ -59,8 +59,79 @@ export class AuthController {
   @HttpCode(200)
   async login(@Body() body: unknown, @OrigenPeticion() o: Origen, @Res({ passthrough: true }) res: Response) {
     const d = validar(loginEntrada, body);
-    const r: SesionEmitida | EleccionEmpresa = await this.auth.login(d.email, d.contrasena, d.empresaId, o);
+    const r: RespuestaLogin = await this.auth.login(d.email, d.contrasena, d.empresaId, o);
     return r.tipo === 'sesion' ? responderSesion(res, r) : r;
+  }
+
+  // ----- Segundo factor durante el inicio de sesión -----
+
+  @Publico()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/verificar')
+  @HttpCode(200)
+  async verificar2fa(@Body() body: unknown, @OrigenPeticion() o: Origen, @Res({ passthrough: true }) res: Response) {
+    const d = validar(z.object({ ticket: z.string().min(1), codigo: z.string().trim().min(6).max(20) }), body);
+    const r = await this.auth.verificarSegundoFactor(d.ticket, d.codigo, o);
+    return r.tipo === 'sesion' ? responderSesion(res, r) : r;
+  }
+
+  @Publico()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/enrolar')
+  @HttpCode(200)
+  enrolar(@Body() body: unknown) {
+    return this.auth.iniciarEnrolamiento(validar(z.object({ ticket: z.string().min(1) }), body).ticket);
+  }
+
+  @Publico()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/enrolar/confirmar')
+  @HttpCode(200)
+  async confirmarEnrolamiento(@Body() body: unknown, @OrigenPeticion() o: Origen, @Res({ passthrough: true }) res: Response) {
+    const d = validar(z.object({ ticket: z.string().min(1), codigo: z.string().trim().min(6).max(10) }), body);
+    const r = await this.auth.confirmarEnrolamiento(d.ticket, d.codigo, o);
+    return { codigosRespaldo: r.codigosRespaldo, siguiente: r.siguiente.tipo === 'sesion' ? responderSesion(res, r.siguiente) : r.siguiente };
+  }
+
+  // ----- Segundo factor con la sesión iniciada -----
+
+  @SoloSesion()
+  @Get('2fa')
+  estado2fa(@Contexto() ctx: Ctx) {
+    return this.auth.estado2fa(ctx);
+  }
+
+  @SoloSesion()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/iniciar')
+  @HttpCode(200)
+  iniciar2fa(@Contexto() ctx: Ctx, @Body() body: unknown) {
+    return this.auth.iniciar2fa(ctx, validar(z.object({ contrasena: z.string().min(1).max(200) }), body).contrasena);
+  }
+
+  @SoloSesion()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/activar')
+  @HttpCode(200)
+  activar2fa(@Contexto() ctx: Ctx, @Body() body: unknown, @OrigenPeticion() o: Origen) {
+    return this.auth.activar2fa(ctx, validar(z.object({ codigo: z.string().trim().min(6).max(10) }), body).codigo, o);
+  }
+
+  @SoloSesion()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/desactivar')
+  @HttpCode(204)
+  async desactivar2fa(@Contexto() ctx: Ctx, @Body() body: unknown, @OrigenPeticion() o: Origen) {
+    const d = validar(z.object({ contrasena: z.string().min(1).max(200), codigo: z.string().trim().min(6).max(20) }), body);
+    await this.auth.desactivar2fa(ctx, d.contrasena, d.codigo, o);
+  }
+
+  @SoloSesion()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/codigos')
+  @HttpCode(200)
+  regenerarCodigos(@Contexto() ctx: Ctx, @Body() body: unknown, @OrigenPeticion() o: Origen) {
+    return this.auth.regenerarCodigos(ctx, validar(z.object({ contrasena: z.string().min(1).max(200) }), body).contrasena, o);
   }
 
   @Publico()

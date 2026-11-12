@@ -16,6 +16,9 @@ Estado por fase: tabla del README.
 - Permisos nuevos: solo en `packages/shared/src/permisos.ts` (el migrador los sincroniza).
 - Al asignar perfiles o permisos: `verificarSinEscalada` (nadie da lo que no tiene).
 - Las migraciones aplicadas no se editan (checksum). Cambios = nueva migración `NNNN_nombre.up.sql` + `.down.sql`.
+- Panel Master: módulo `src/master`, rol `kontiva_master`, esquema `master`. Nunca lee datos de negocio:
+  solo funciones de resumen (`master.resumen_empresas`). La API de empresas no tiene acceso al esquema master.
+- Segundos factores y certificados: siempre cifrados con `cifrar()` (CIFRADO_CLAVE), nunca en claro.
 - Interfaz: español, íconos de línea (lucide), sin emojis, sin datos de ejemplo.
   Pie: "KONTIVA ERP · Desarrollado por Araújo Tech Sistemas".
 

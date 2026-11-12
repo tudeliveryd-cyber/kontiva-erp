@@ -26,17 +26,6 @@ export class FalloApi extends Error implements ErrorApi {
   }
 }
 
-let accessToken: string | null = null;
-let renovando: Promise<boolean> | null = null;
-let alExpirar: (() => void) | null = null;
-
-export function fijarToken(t: string | null) {
-  accessToken = t;
-}
-export function alPerderSesion(fn: () => void) {
-  alExpirar = fn;
-}
-
 async function leerError(r: Response): Promise<FalloApi> {
   let cuerpo: { codigo?: string; mensaje?: string; detalle?: unknown } = {};
   try {
@@ -47,46 +36,74 @@ async function leerError(r: Response): Promise<FalloApi> {
   return new FalloApi(r.status, cuerpo.codigo ?? 'ERROR', cuerpo.mensaje ?? `Error ${r.status}`, cuerpo.detalle);
 }
 
-export async function renovarSesion(): Promise<boolean> {
-  renovando ??= (async () => {
-    try {
-      const r = await fetch('/api/auth/renovar', { method: 'POST', credentials: 'same-origin', headers: { 'X-Kontiva': '1' } });
-      if (!r.ok) {
-        accessToken = null;
+/** Rutas de ingreso: un 401 ahí es la respuesta, no una sesión vencida. */
+const SIN_REINTENTO = ['/auth/login', '/auth/empresa', '/auth/2fa/verificar', '/auth/2fa/enrolar', '/auth/renovar', '/auth/recuperar', '/auth/restablecer'];
+
+export interface Cliente {
+  api: <T = unknown>(ruta: string, opciones?: { metodo?: string; cuerpo?: unknown; reintento?: boolean }) => Promise<T>;
+  renovarSesion: () => Promise<boolean>;
+  fijarToken: (t: string | null) => void;
+  alPerderSesion: (fn: () => void) => void;
+}
+
+/** Un cliente por servicio: la API de empresas (/api) y el Panel Master (/api/master). */
+export function crearCliente(base: string): Cliente {
+  let accessToken: string | null = null;
+  let renovando: Promise<boolean> | null = null;
+  let alExpirar: (() => void) | null = null;
+
+  const renovarSesion = (): Promise<boolean> => {
+    renovando ??= (async () => {
+      try {
+        const r = await fetch(`${base}/auth/renovar`, { method: 'POST', credentials: 'same-origin', headers: { 'X-Kontiva': '1' } });
+        if (!r.ok) {
+          accessToken = null;
+          return false;
+        }
+        accessToken = (await r.json()).accessToken;
+        return true;
+      } catch {
         return false;
+      } finally {
+        setTimeout(() => (renovando = null), 0);
       }
-      accessToken = (await r.json()).accessToken;
-      return true;
-    } catch {
-      return false;
-    } finally {
-      setTimeout(() => (renovando = null), 0);
+    })();
+    return renovando;
+  };
+
+  const api = async <T = unknown>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown; reintento?: boolean } = {}): Promise<T> => {
+    const { metodo = 'GET', cuerpo, reintento = true } = opciones;
+    const headers: Record<string, string> = { 'X-Kontiva': '1' };
+    if (cuerpo !== undefined) headers['Content-Type'] = 'application/json';
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    const r = await fetch(`${base}${ruta}`, {
+      method: metodo,
+      headers,
+      credentials: 'same-origin',
+      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+    });
+    if (r.status === 401 && reintento && !SIN_REINTENTO.some((p) => ruta.startsWith(p))) {
+      if (await renovarSesion()) return api<T>(ruta, { ...opciones, reintento: false });
+      alExpirar?.();
     }
-  })();
-  return renovando;
+    if (!r.ok) throw await leerError(r);
+    if (r.status === 204) return undefined as T;
+    return (await r.json()) as T;
+  };
+
+  return {
+    api,
+    renovarSesion,
+    fijarToken: (t) => (accessToken = t),
+    alPerderSesion: (fn) => (alExpirar = fn),
+  };
 }
 
-export async function api<T = unknown>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown; reintento?: boolean } = {}): Promise<T> {
-  const { metodo = 'GET', cuerpo, reintento = true } = opciones;
-  const headers: Record<string, string> = { 'X-Kontiva': '1' };
-  if (cuerpo !== undefined) headers['Content-Type'] = 'application/json';
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-
-  const r = await fetch(`/api${ruta}`, {
-    method: metodo,
-    headers,
-    credentials: 'same-origin',
-    body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
-  });
-
-  if (r.status === 401 && reintento && !ruta.startsWith('/auth/login')) {
-    if (await renovarSesion()) return api<T>(ruta, { ...opciones, reintento: false });
-    alExpirar?.();
-  }
-  if (!r.ok) throw await leerError(r);
-  if (r.status === 204) return undefined as T;
-  return (await r.json()) as T;
-}
+const empresas = crearCliente('/api');
+export const api = empresas.api;
+export const renovarSesion = empresas.renovarSesion;
+export const fijarToken = empresas.fijarToken;
+export const alPerderSesion = empresas.alPerderSesion;
 
 /** Tipos de respuesta usados por la interfaz. */
 export type Alcance = 'propia' | 'sucursal' | 'empresa';
