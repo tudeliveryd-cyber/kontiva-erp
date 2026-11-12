@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditoriaController } from './auditoria/auditoria.controller';
 import { CategoriasController, MarcasController, ProductosController } from './catalogo/catalogo.controller';
 import { ClientesController } from './catalogo/clientes.controller';
+import { ImportacionController } from './catalogo/importacion.controller';
 import { StockController } from './catalogo/stock.controller';
 import { CajasController, CotizacionesController } from './operacion/cajas.controller';
 import { PdvController, VentasController } from './operacion/ventas.controller';
@@ -45,6 +46,7 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     MarcasController,
     StockController,
     ClientesController,
+    ImportacionController,
     CajasController,
     CotizacionesController,
     PdvController,

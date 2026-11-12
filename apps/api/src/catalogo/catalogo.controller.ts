@@ -31,6 +31,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
     .select(['v.id', 'v.nombre', 'v.sku', 'v.costo', 'v.activa', 'pr.precio'])
     .where('v.producto_id', '=', id)
     .orderBy('v.creado_en')
+    .orderBy('v.id')
     .execute();
   const codigos = variantes.length
     ? await tx.selectFrom('codigo_barras').select(['codigo', 'variante_id']).where('variante_id', 'in', variantes.map((v) => v.id)).execute()

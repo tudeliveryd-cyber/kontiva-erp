@@ -12,6 +12,7 @@ import { SucursalesController } from '../src/sucursales/sucursales.controller';
 import { UsuariosController } from '../src/usuarios/usuarios.controller';
 import { CategoriasController, MarcasController, ProductosController } from '../src/catalogo/catalogo.controller';
 import { ClientesController } from '../src/catalogo/clientes.controller';
+import { ImportacionController } from '../src/catalogo/importacion.controller';
 import { StockController } from '../src/catalogo/stock.controller';
 import { CajasController, CotizacionesController } from '../src/operacion/cajas.controller';
 import { PdvController, VentasController } from '../src/operacion/ventas.controller';
@@ -36,6 +37,7 @@ const CONTROLADORES = [
   MarcasController,
   StockController,
   ClientesController,
+  ImportacionController,
   CajasController,
   CotizacionesController,
   PdvController,

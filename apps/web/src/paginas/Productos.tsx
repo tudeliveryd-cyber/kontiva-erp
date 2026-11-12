@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { Plus, Search, Upload, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
 import { api } from '../lib/api';
 import { dinero, UNIDADES, type Producto } from '../lib/operacion';
@@ -21,6 +22,11 @@ export function Productos() {
   return (
     <>
       <Encabezado titulo="Productos">
+        {puede('producto.crear') && (
+          <Link className="btn" to="/importar/productos">
+            <Upload size={16} /> Importar desde Excel
+          </Link>
+        )}
         {puede('producto.crear') && (
           <button className="btn pri" onClick={() => setAbierto('nuevo')}>
             <Plus size={16} /> Nuevo producto

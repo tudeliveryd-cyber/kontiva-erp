@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Upload } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
 import { api } from '../lib/api';
 import type { Cliente } from '../lib/operacion';
@@ -14,6 +15,11 @@ export function Clientes() {
   return (
     <>
       <Encabezado titulo="Clientes">
+        {puede('cliente.crear') && (
+          <Link className="btn" to="/importar/clientes">
+            <Upload size={16} /> Importar desde Excel
+          </Link>
+        )}
         {puede('cliente.crear') && (
           <button className="btn pri" onClick={() => setAbierto('nuevo')}>
             <Plus size={16} /> Nuevo cliente

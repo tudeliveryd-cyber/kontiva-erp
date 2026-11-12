@@ -26,7 +26,8 @@ export async function crearApp(op: Opciones = { modulo: AppModule, prefijo: 'api
   });
   app.set('trust proxy', c.TRUST_PROXY);
   app.disable('x-powered-by');
-  app.useBodyParser('json', { limit: '1mb' });
+  // 4 MB: importaciones de hasta 5.000 filas.
+  app.useBodyParser('json', { limit: '4mb' });
   app.use(
     helmet({
       contentSecurityPolicy: {

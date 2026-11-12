@@ -25,6 +25,7 @@ import { Pdv } from './paginas/Pdv';
 import { Productos } from './paginas/Productos';
 import { Stock } from './paginas/Stock';
 import { Ventas } from './paginas/Ventas';
+import { Importar } from './paginas/Importar';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -51,6 +52,7 @@ function Rutas() {
         {puede('producto.ver') && <Route path="productos" element={<Productos />} />}
         {puede('stock.ver') && <Route path="stock" element={<Stock />} />}
         {puede('cliente.ver') && <Route path="clientes" element={<Clientes />} />}
+        {(puede('producto.crear') || puede('cliente.crear')) && <Route path="importar/:tipo" element={<Importar />} />}
         {puede('usuario.ver') && <Route path="usuarios" element={<Usuarios />} />}
         {puede('perfil.ver') && <Route path="perfiles" element={<Perfiles />} />}
         {puede('sucursal.ver') && <Route path="sucursales" element={<Sucursales />} />}
