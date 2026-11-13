@@ -314,3 +314,37 @@ export type PedidoEntrada = z.infer<typeof pedidoEntrada>;
 
 export const cerrarPedidoEntrada = z.object({ motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
 export const estadoPedidoEntrada = z.object({ estado: z.enum(['pendiente', 'preparado']) });
+
+// ---------------------------------------------------------------------------
+// Facturación electrónica (SIFEN)
+// ---------------------------------------------------------------------------
+
+export const feConfiguracionEntrada = z.object({
+  ambiente: z.enum(['test', 'produccion']),
+  tipoContribuyente: z.coerce.number().refine((v) => v === 1 || v === 2, 'Persona física o jurídica'),
+  tipoRegimen: z.coerce.number().int().min(1).max(99).nullable().optional(),
+  actividadCodigo: z.string().trim().regex(/^[0-9]{3,8}$/, 'Código de actividad económica (números)'),
+  actividadDescripcion: z.string().trim().min(3, 'Describa la actividad').max(300),
+  timbradoNumero: z.string().trim().regex(/^[0-9]{8}$/, 'El timbrado tiene 8 dígitos'),
+  timbradoFecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de inicio de vigencia'),
+  cscId: z.string().trim().regex(/^[0-9]{1,4}$/, 'Identificador del CSC (ej. 0001)'),
+  /** Vacío = conservar el CSC cargado. */
+  csc: z.string().trim().max(64).optional().transform((v) => (v ? v : undefined)),
+});
+
+export const feCertificadoEntrada = z.object({
+  archivo: z.string().min(100, 'Seleccione el archivo .p12 / .pfx').max(40000),
+  clave: z.string().min(1, 'Ingrese la contraseña del certificado').max(200),
+});
+
+export const feEstablecimientoEntrada = z.object({
+  direccion: z.string().trim().min(3, 'Ingrese la dirección').max(255),
+  numeroCasa: z.string().trim().max(10).optional().transform((v) => (v ? v : null)),
+  departamento: z.coerce.number().int().positive('Elija el departamento'),
+  distrito: z.coerce.number().int().positive('Elija el distrito'),
+  ciudad: z.coerce.number().int().positive('Elija la ciudad'),
+  telefono: z.string().trim().min(6, 'Teléfono (mínimo 6 dígitos)').max(20),
+  email: email.nullable().optional().or(z.literal('').transform(() => null)),
+});
+
+export const fePuntoEntrada = z.object({ punto: z.string().regex(/^[0-9]{3}$/, 'Tres dígitos: 001').nullable() });

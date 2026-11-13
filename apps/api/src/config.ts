@@ -22,6 +22,14 @@ const esquema = z.object({
   MAIL_FROM: z.string().default('KONTIVA ERP <no-responder@kontiva.com.py>'),
   /** Detrás de un proxy (Nginx, balanceador): confiar en X-Forwarded-For. */
   TRUST_PROXY: z.coerce.number().int().min(0).default(1),
+  // Facturación electrónica (SIFEN)
+  /** Emisor en segundo plano (envío de lotes y consulta de resultados). */
+  SIFEN_EMISOR: z.enum(['activo', 'inactivo']).default('activo'),
+  SIFEN_INTERVALO_MS: z.coerce.number().int().min(1000).default(15000),
+  SIFEN_URL_TEST: z.string().url().default('https://sifen-test.set.gov.py'),
+  SIFEN_URL_PRODUCCION: z.string().url().default('https://sifen.set.gov.py'),
+  /** Certificados raíz adicionales (PEM) para validar el servidor de la DNIT, si hiciera falta. */
+  SIFEN_CA: z.string().optional(),
 });
 
 export type Config = z.infer<typeof esquema>;

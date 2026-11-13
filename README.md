@@ -14,7 +14,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 0 | Cimientos: autenticación, multiempresa con RLS, permisos, auditoría, Panel Master | Lista · ver pendientes menores abajo |
 | 1 | Operación central: productos, inventario, PDV, caja | Circuito central listo · ver pendientes abajo |
 | 2 | Compras y finanzas | Pendiente |
-| 3 | Facturación electrónica SIFEN | Pendiente |
+| 3 | Facturación electrónica SIFEN | Factura electrónica lista (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Pendiente |
 | 5 | Verticales por rubro e integraciones | Pendiente |
 
@@ -82,6 +82,26 @@ Producto comercial de **Araújo Tech Sistemas**.
 ### Fase 1 · pendiente
 - Venta sin internet (cola local cifrada con numeración reservada) y agente local para impresora, gaveta y balanza.
 - Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
+
+### Fase 3 · hecho (factura electrónica)
+- **Configuración fiscal**: ambiente (prueba / producción), timbrado, actividad económica, CSC y certificado
+  digital .p12 (validado contra el RUC de la empresa; certificado, contraseña y CSC cifrados con CIFRADO_CLAVE).
+  Dirección fiscal de cada sucursal con la codificación de la DNIT y punto de expedición por caja.
+- **Emisión**: cada venta en una caja con punto de expedición genera, en la misma transacción, el DE del
+  Manual Técnico v150 (XML con `facturacionelectronicapy-xmlgen`), con numeración correlativa por
+  establecimiento + punto + timbrado, firma XMLDSig RSA-SHA256 y QR con hash del CSC. Receptor según el
+  documento del cliente: RUC (B2B), cédula o innominado.
+- **Envío**: emisor en segundo plano por lotes asíncronos de hasta 50 DE (TLS mutuo con el certificado),
+  consulta de resultados, reintentos con espera creciente si SIFEN no responde; la red nunca se usa dentro de
+  una transacción. Pantalla de documentos con estado, mensaje de la DNIT, XML y reenvío.
+- **KuDE** en formato ticket de 80 mm con QR, CDC y leyendas.
+- **Cancelación**: anular una venta con factura aprobada envía el evento de cancelación firmado (hasta 48 h).
+- **Pruebas** contra un simulador de SIFEN que verifica la firma de cada documento.
+
+### Fase 3 · pendiente
+- Nota de crédito electrónica para devoluciones e inutilización de números.
+- KuDE en A4 y envío por correo; consulta de RUC en la DNIT al cargar clientes.
+- Homologación con el ambiente de prueba real de la DNIT (requiere el certificado y el timbrado de la empresa).
 
 ## Estructura
 

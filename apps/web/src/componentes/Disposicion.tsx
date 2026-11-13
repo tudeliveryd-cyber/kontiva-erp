@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  FileCheck2,
   ClipboardCheck,
   FileText,
   Tags,
@@ -41,6 +42,7 @@ export function Disposicion() {
     { a: '/perfiles', icono: ShieldCheck, texto: 'Perfiles de acceso', visible: puede('perfil.ver') },
     { a: '/sucursales', icono: MapPin, texto: 'Sucursales', visible: puede('sucursal.ver') },
     { a: '/auditoria', icono: ClipboardList, texto: 'Auditoría', visible: puede('auditoria.ver') },
+    { a: '/facturacion', icono: FileCheck2, texto: 'Facturación electrónica', visible: puede('config_fiscal.ver') || puede('documento_fiscal.ver') },
     { a: '/empresa', icono: Building2, texto: 'Empresa', visible: puede('empresa.ver') },
   ];
 

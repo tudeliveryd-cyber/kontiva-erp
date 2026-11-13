@@ -270,3 +270,11 @@ select.entrada { padding-right: 8px; }
 .menu-flotante button:hover { background: var(--p1); }
 .btn-icono { background: none; border: 0; color: var(--t3); display: inline-flex; padding: 6px; border-radius: 6px; cursor: pointer; }
 .btn-icono:hover { color: var(--bad); background: var(--badb); }
+
+/* ----- Pestañas y lista de datos ----- */
+.pestanas { display: flex; gap: 4px; border-bottom: 1px solid var(--linea); margin-bottom: 16px; }
+.pestanas button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; font: inherit; font-weight: 600; color: var(--t2); cursor: pointer; margin-bottom: -1px; }
+.pestanas button.activa { color: var(--p7); border-bottom-color: var(--p7); }
+dl.datos { display: grid; grid-template-columns: 150px 1fr; gap: 8px 14px; margin: 0; font-size: 14px; }
+dl.datos dt { color: var(--t3); }
+dl.datos dd { margin: 0; }

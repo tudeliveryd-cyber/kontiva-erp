@@ -58,6 +58,11 @@ export interface SucursalTabla {
   nombre: string;
   direccion: string | null;
   telefono: string | null;
+  fe_numero_casa: string | null;
+  fe_departamento: number | null;
+  fe_distrito: number | null;
+  fe_ciudad: number | null;
+  fe_email: string | null;
   activa: Generated<boolean>;
   creado_en: Creado;
   creado_por: string | null;
@@ -233,6 +238,9 @@ export interface BaseDatos {
   devolucion_item: DevolucionItemTabla;
   pedido: PedidoTabla;
   pedido_item: PedidoItemTabla;
+  fe_configuracion: FeConfiguracionTabla;
+  fe_numeracion: FeNumeracionTabla;
+  documento_electronico: DocumentoElectronicoTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -420,6 +428,7 @@ export interface CajaTabla {
   deposito_id: string;
   nombre: string;
   ultimo_numero: ColumnType<string, number | undefined, number | string>;
+  punto_expedicion: string | null;
   activa: Generated<boolean>;
   creado_en: Creado;
 }
@@ -472,7 +481,7 @@ export interface VentaTabla {
   lista_precio_id: string | null;
   pedido_id: string | null;
   estado: Generated<'confirmada' | 'anulada'>;
-  comprobante: Generated<'interno'>;
+  comprobante: Generated<'interno' | 'factura'>;
   subtotal: Num;
   descuento: NumGen;
   total: Num;
@@ -611,4 +620,73 @@ export interface PedidoItemTabla {
   descuento: NumGen;
   total: Num;
   tasa_iva: number;
+}
+
+export interface FeConfiguracionTabla {
+  empresa_id: string;
+  activa: Generated<boolean>;
+  ambiente: Generated<'test' | 'produccion'>;
+  tipo_contribuyente: Generated<number>;
+  tipo_regimen: number | null;
+  actividad_codigo: string | null;
+  actividad_descripcion: string | null;
+  timbrado_numero: string | null;
+  timbrado_fecha: ColumnType<string | null, string | null | undefined, string | null>;
+  csc_id: string | null;
+  csc_cifrado: string | null;
+  certificado_cifrado: string | null;
+  certificado_clave: string | null;
+  certificado_titular: string | null;
+  certificado_ruc: string | null;
+  certificado_vence: Date | null;
+  actualizado_por: string | null;
+  actualizado_en: Actualizado;
+}
+
+export interface FeNumeracionTabla {
+  empresa_id: string;
+  establecimiento: string;
+  punto: string;
+  tipo_documento: number;
+  timbrado: string;
+  ultimo: Generated<number>;
+}
+
+export type EstadoDocumentoElectronico = 'pendiente' | 'enviado' | 'aprobado' | 'aprobado_obs' | 'rechazado' | 'cancelado';
+
+export interface DocumentoElectronicoTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  tipo_documento: number;
+  cdc: string;
+  ambiente: 'test' | 'produccion';
+  timbrado: string;
+  establecimiento: string;
+  punto: string;
+  numero: number;
+  fecha_emision: Date;
+  sucursal_id: string;
+  venta_id: string | null;
+  devolucion_id: string | null;
+  documento_asociado_id: string | null;
+  receptor_nombre: string;
+  receptor_documento: string | null;
+  total: Num;
+  total_iva: Num;
+  estado: Generated<EstadoDocumentoElectronico>;
+  xml_firmado: string;
+  qr_url: string;
+  lote_protocolo: string | null;
+  enviado_en: Date | null;
+  intentos: Generated<number>;
+  proximo_intento: Generated<Date>;
+  respuesta_codigo: string | null;
+  respuesta_mensaje: string | null;
+  protocolo_autorizacion: string | null;
+  procesado_en: Date | null;
+  cancelado_en: Date | null;
+  cancelado_por: string | null;
+  motivo_cancelacion: string | null;
+  creado_por: string;
+  creado_en: Creado;
 }

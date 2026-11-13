@@ -86,8 +86,21 @@ export interface Venta {
   id: string;
   numero: number;
   estado: 'confirmada' | 'anulada';
-  comprobante: 'interno';
+  comprobante: 'interno' | 'factura';
   fecha: string;
+  documentoElectronico: {
+    id: string;
+    cdc: string;
+    numero: string;
+    timbrado: string;
+    timbradoInicio: string | null;
+    estado: 'pendiente' | 'enviado' | 'aprobado' | 'aprobado_obs' | 'rechazado' | 'cancelado';
+    qr: string;
+    qrImagen: string;
+    ambiente: 'test' | 'produccion';
+    totalIva: string;
+    mensaje: string | null;
+  } | null;
   caja: { id: string; nombre: string };
   sucursal: { id: string; nombre: string; codigo: string; direccion: string | null };
   vendedor: { id: string; nombre: string };

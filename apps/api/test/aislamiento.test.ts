@@ -18,6 +18,7 @@ import { CajasController, CotizacionesController } from '../src/operacion/cajas.
 import { PdvController, PdvPreciosController, VentasController } from '../src/operacion/ventas.controller';
 import { ListasPrecioController } from '../src/catalogo/listas.controller';
 import { PedidosController, PresupuestosController } from '../src/operacion/pedidos.controller';
+import { FacturacionController } from '../src/sifen/facturacion.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
 import { prepararVenta } from './ayudas';
@@ -52,6 +53,7 @@ const CONTROLADORES = [
   VentasController,
   TransferenciasController,
   DevolucionesController,
+  FacturacionController,
 ];
 
 interface Ruta {
@@ -146,6 +148,10 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/presupuestos'] = pr.body.id;
     const pe = await http(app).post('/api/pedidos').set(hB).send({ sucursalId: b.sucursalId, clienteNombre: 'Cliente B', items: [{ varianteId: vb.varianteId, cantidad: 1 }] }).expect(201);
     idsDeB['/api/pedidos'] = pe.body.id;
+    // Facturación: registros de B (la empresa A nunca los ve).
+    idsDeB['/api/facturacion/establecimientos'] = b.sucursalId;
+    idsDeB['/api/facturacion/puntos'] = vb.cajaId;
+    idsDeB['/api/facturacion/documentos'] = vb.ventaId;
   });
   afterAll(() => app.close());
 
@@ -218,6 +224,8 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/presupuestos/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/pedidos/:id/cancelar': { motivo: 'Intento ajeno' },
           'POST /api/pedidos/:id/estado': { estado: 'preparado' },
+          'PUT /api/facturacion/establecimientos/:id': { direccion: 'Calle ajena', departamento: 11, distrito: 145, ciudad: 3432, telefono: '061500000' },
+          'PUT /api/facturacion/puntos/:id': { punto: '009' },
         };
         const cuerpos: Record<string, object> = { patch: { nombre: 'Intento ajeno' }, put: { permisos: [] } };
         const cuerpo = porRuta[`${r.metodo.toUpperCase()} ${r.ruta}`] ?? cuerpos[r.metodo] ?? {};

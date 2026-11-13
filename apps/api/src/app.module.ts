@@ -10,6 +10,8 @@ import { CajasController, CotizacionesController } from './operacion/cajas.contr
 import { PdvController, PdvPreciosController, VentasController } from './operacion/ventas.controller';
 import { ListasPrecioController } from './catalogo/listas.controller';
 import { PedidosController, PresupuestosController } from './operacion/pedidos.controller';
+import { FacturacionController } from './sifen/facturacion.controller';
+import { EmisorSifen } from './sifen/emisor.service';
 import { DevolucionesController } from './operacion/devoluciones.controller';
 import { TransferenciasController } from './operacion/transferencias.controller';
 import { AuthController, CuentaController } from './auth/auth.controller';
@@ -58,6 +60,7 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     ListasPrecioController,
     PresupuestosController,
     PedidosController,
+    FacturacionController,
     VentasController,
     TransferenciasController,
     DevolucionesController,
@@ -67,6 +70,7 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     Correo,
     AuthService,
     ProvisionService,
+    EmisorSifen,
     // Orden: primero el límite de peticiones, después la autenticación y permisos.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },

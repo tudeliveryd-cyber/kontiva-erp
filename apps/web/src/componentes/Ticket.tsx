@@ -2,10 +2,12 @@ import { fechaHora } from '../lib/formato';
 import { cantidad, dinero, NOMBRE_MEDIO, numero, type Venta } from '../lib/operacion';
 
 /**
- * Comprobante interno para impresora térmica de 80 mm.
- * No es una factura: sin certificado digital y CSC no se emiten documentos fiscales.
+ * Comprobante para impresora térmica de 80 mm.
+ * Con factura electrónica: KuDE en formato ticket (representación gráfica del DE, con QR y CDC).
+ * Sin ella: comprobante interno, no válido como factura.
  */
 export function Ticket({ venta, empresa }: { venta: Venta; empresa: { nombre: string; razonSocial: string; ruc: string | null } }) {
+  const de = venta.documentoElectronico;
   return (
     <div className="ticket">
       <div className="t-centro">
@@ -18,19 +20,34 @@ export function Ticket({ venta, empresa }: { venta: Venta; empresa: { nombre: st
         </div>
       </div>
       <div className="t-linea" />
-      <div className="t-centro t-fuerte">COMPROBANTE INTERNO</div>
-      <div className="t-centro">NO VÁLIDO COMO FACTURA</div>
-      <div className="t-linea" />
-      <div>
-        N.º {venta.sucursal.codigo}-{venta.caja.nombre}-{String(venta.numero).padStart(7, '0')}
-      </div>
+      {de ? (
+        <>
+          <div>Timbrado N.º {de.timbrado}</div>
+          {de.timbradoInicio && <div>Inicio de vigencia: {de.timbradoInicio.split('-').reverse().join('/')}</div>}
+          <div className="t-centro t-fuerte" style={{ marginTop: 4 }}>FACTURA ELECTRÓNICA</div>
+          <div className="t-centro t-fuerte">N.º {de.numero}</div>
+          <div>Condición de venta: Contado</div>
+          {de.ambiente === 'test' && <div className="t-centro t-fuerte">AMBIENTE DE PRUEBA · SIN VALOR FISCAL</div>}
+        </>
+      ) : (
+        <>
+          <div className="t-centro t-fuerte">COMPROBANTE INTERNO</div>
+          <div className="t-centro">NO VÁLIDO COMO FACTURA</div>
+          <div className="t-linea" />
+          <div>
+            N.º {venta.sucursal.codigo}-{venta.caja.nombre}-{String(venta.numero).padStart(7, '0')}
+          </div>
+        </>
+      )}
       <div>{fechaHora(venta.fecha)}</div>
       <div>Atendió: {venta.vendedor.nombre}</div>
-      {venta.cliente && (
+      {venta.cliente ? (
         <div>
           Cliente: {venta.cliente.nombre}
-          {venta.cliente.documento ? ` · ${venta.cliente.documento}` : ''}
+          {venta.cliente.documento ? ` · ${venta.cliente.documento.includes('-') ? 'RUC' : 'CI'} ${venta.cliente.documento}` : ''}
         </div>
+      ) : (
+        de && <div>Cliente: Sin nombre</div>
       )}
       {venta.estado === 'anulada' && <div className="t-centro t-fuerte">*** ANULADA ***</div>}
       <div className="t-linea" />
@@ -72,7 +89,21 @@ export function Ticket({ venta, empresa }: { venta: Venta; empresa: { nombre: st
       {Number(venta.gravado5) > 0 && <div className="t-fila"><span>Gravado 5 %</span><span>{numero(venta.gravado5)}</span></div>}
       {Number(venta.gravado5) > 0 && <div className="t-fila"><span>IVA 5 %</span><span>{numero(venta.iva5)}</span></div>}
       {Number(venta.exento) > 0 && <div className="t-fila"><span>Exento</span><span>{numero(venta.exento)}</span></div>}
+      {de && <div className="t-fila t-fuerte"><span>Total IVA</span><span>{numero(de.totalIva)}</span></div>}
       <div className="t-linea" />
+      {de && (
+        <>
+          <div className="t-centro">
+            <img src={de.qrImagen} alt="Código QR de consulta" style={{ width: '34mm', height: '34mm', margin: '4px auto', display: 'block' }} />
+          </div>
+          <div className="t-centro" style={{ fontSize: 11 }}>Consulte la validez de esta factura electrónica con el número de CDC en</div>
+          <div className="t-centro" style={{ fontSize: 11 }}>https://ekuatia.set.gov.py/consultas{de.ambiente === 'test' ? '-test' : ''}</div>
+          <div className="t-centro t-fuerte" style={{ fontSize: 11, marginTop: 4 }}>CDC: {de.cdc.match(/.{1,4}/g)!.join(' ')}</div>
+          <div className="t-centro" style={{ fontSize: 10, marginTop: 4 }}>ESTE DOCUMENTO ES UNA REPRESENTACIÓN GRÁFICA DE UN DOCUMENTO ELECTRÓNICO (XML)</div>
+          {de.estado === 'cancelado' && <div className="t-centro t-fuerte">*** FACTURA CANCELADA ***</div>}
+          <div className="t-linea" />
+        </>
+      )}
       <div className="t-centro">Gracias por su compra</div>
       <div className="t-centro" style={{ fontSize: 10, marginTop: 4 }}>KONTIVA ERP · Araújo Tech Sistemas</div>
     </div>

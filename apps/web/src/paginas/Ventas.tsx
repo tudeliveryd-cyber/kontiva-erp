@@ -129,7 +129,7 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
           <button className="btn" onClick={() => window.print()}>
             <Printer size={16} /> Reimprimir
           </button>
-          {venta.estado === 'confirmada' && puede('venta.crear') && venta.items.some((i) => Number(i.cantidadDevuelta) < Number(i.cantidad)) && (
+          {venta.estado === 'confirmada' && venta.comprobante !== 'factura' && puede('venta.crear') && venta.items.some((i) => Number(i.cantidadDevuelta) < Number(i.cantidad)) && (
             <button className="btn" onClick={() => setModo('devolver')}>
               Devolución
             </button>

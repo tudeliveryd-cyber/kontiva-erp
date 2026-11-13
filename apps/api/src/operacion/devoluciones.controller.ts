@@ -102,9 +102,10 @@ export class DevolucionesController {
         autorizadoPor = await this.auth.verificarAutorizacion(ctx, autorizacion, 'devolucion.aprobar');
         if (!autorizadoPor) throw prohibido('La devolución requiere autorización de un supervisor');
       }
-      const venta = await tx.selectFrom('venta').select(['id', 'numero', 'estado', 'sucursal_id']).where('id', '=', d.ventaId).forUpdate().executeTakeFirst();
+      const venta = await tx.selectFrom('venta').select(['id', 'numero', 'estado', 'sucursal_id', 'comprobante']).where('id', '=', d.ventaId).forUpdate().executeTakeFirst();
       if (!venta || !enSucursal(ctx, venta.sucursal_id)) throw noEncontrado('Venta');
       if (venta.estado === 'anulada') throw conflicto('VENTA_ANULADA', 'La venta está anulada: no hay nada que devolver');
+      if (venta.comprobante === 'factura') throw conflicto('NOTA_CREDITO_PENDIENTE', 'La venta tiene factura electrónica: la devolución se registra con nota de crédito electrónica (próxima versión). Mientras tanto, si la caja sigue abierta, anule la venta.');
 
       const caja = await obtenerCaja(tx, ctx, d.cajaId, true);
       const sesion = await sesionAbierta(tx, caja.id);

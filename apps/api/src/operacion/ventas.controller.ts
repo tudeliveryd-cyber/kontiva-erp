@@ -14,7 +14,10 @@ import { Db, type Tx } from '../db/database';
 import { cotizacionesVigentes, obtenerCaja, sesionAbierta } from './cajas.controller';
 import { devueltoPorLinea } from './devoluciones.controller';
 import { leerPedido } from './pedidos.controller';
+import { cargarFe, emitirFactura, numeroComprobante } from '../sifen/emision';
+import { cancelarEnSifen } from '../sifen/emisor.service';
 import { HttpStatus } from '@nestjs/common';
+import QRCode from 'qrcode';
 
 function aCotizaciones(filas: { moneda: 'USD' | 'BRL'; compra: string; venta: string }[]): Cotizaciones {
   return Object.fromEntries(filas.map((c) => [c.moneda, { compra: c.compra, venta: c.venta }]));
@@ -39,6 +42,14 @@ export async function leerVenta(tx: Tx, id: string) {
     tx.selectFrom('venta_pago').selectAll().where('venta_id', '=', id).orderBy('linea').execute(),
   ]);
   const devuelto = await devueltoPorLinea(tx, id);
+  const de = await tx
+    .selectFrom('documento_electronico')
+    .select(['id', 'cdc', 'establecimiento', 'punto', 'numero', 'timbrado', 'estado', 'qr_url', 'ambiente', 'total_iva', 'respuesta_mensaje'])
+    .where('venta_id', '=', id)
+    .where('tipo_documento', '=', 1)
+    .executeTakeFirst();
+  const feConf = de ? await tx.selectFrom('fe_configuracion').select('timbrado_fecha').executeTakeFirst() : undefined;
+  const qrImagen = de ? `data:image/svg+xml;base64,${Buffer.from(await QRCode.toString(de.qr_url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })).toString('base64')}` : null;
   const devoluciones = await tx.selectFrom('devolucion').select(['id', 'numero', 'total', 'creado_en']).where('venta_id', '=', id).orderBy('numero').execute();
   const vuelto = await tx
     .selectFrom('movimiento_caja')
@@ -57,6 +68,9 @@ export async function leerVenta(tx: Tx, id: string) {
     vendedor: { id: v.creado_por, nombre: v.vendedor },
     cliente: v.cliente_id ? { id: v.cliente_id, nombre: v.cliente_nombre, documento: v.cliente_documento } : null,
     pedidoId: v.pedido_id,
+    documentoElectronico: de
+      ? { id: de.id, cdc: de.cdc, numero: numeroComprobante(de), timbrado: de.timbrado, timbradoInicio: feConf?.timbrado_fecha ?? null, estado: de.estado, qr: de.qr_url, qrImagen, ambiente: de.ambiente, totalIva: de.total_iva, mensaje: de.respuesta_mensaje }
+      : null,
     subtotal: v.subtotal,
     descuento: v.descuento,
     total: v.total,
@@ -418,6 +432,10 @@ export class VentasController {
           .values(movCaja.map((m) => ({ empresa_id: ctx.empresaId, sesion_id: sesion.id, tipo: m.tipo, medio: m.medio, moneda: m.moneda, monto: m.monto.toFixed(2), venta_id: venta.id, motivo: null, autorizado_por: null, creado_por: ctx.usuarioId })))
           .execute();
 
+        // Factura electrónica: con la configuración activa y la caja con punto de expedición.
+        const fe = caja.punto_expedicion ? await cargarFe(tx) : null;
+        if (fe) await emitirFactura(tx, ctx, fe, venta.id);
+
         await auditar(tx, { ...ctx, ...o }, {
           accion: 'venta',
           entidad: 'venta',
@@ -507,8 +525,37 @@ export class VentasController {
   @Requiere('venta', 'crear')
   @Post(':id/anular')
   @HttpCode(200)
-  anular(@Contexto() ctx: Ctx, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown, @Headers('x-autorizacion') autorizacion: string | undefined, @OrigenPeticion() o: Origen) {
+  async anular(@Contexto() ctx: Ctx, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown, @Headers('x-autorizacion') autorizacion: string | undefined, @OrigenPeticion() o: Origen) {
     const d = validar(anularVentaEntrada, body);
+    // Con factura electrónica aprobada: primero el evento de cancelación en SIFEN (fuera de la transacción).
+    const previo = await this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const v = await tx.selectFrom('venta').select(['estado', 'sucursal_id', 'sesion_caja_id']).where('id', '=', id).executeTakeFirst();
+      if (!v) throw noEncontrado('Venta');
+      exigirSucursal(ctx, v.sucursal_id, 'Venta');
+      const de = await tx.selectFrom('documento_electronico').select(['id', 'cdc', 'estado', 'procesado_en']).where('venta_id', '=', id).where('tipo_documento', '=', 1).executeTakeFirst();
+      if (!de || de.estado === 'rechazado' || de.estado === 'cancelado' || v.estado === 'anulada') return null;
+      if (!tiene(ctx, 'venta.cancelar') && !(await this.auth.verificarAutorizacion(ctx, autorizacion, 'venta.cancelar'))) return null; // el error sale abajo
+      const sesion = await tx.selectFrom('sesion_caja').select(['estado']).where('id', '=', v.sesion_caja_id).executeTakeFirstOrThrow();
+      if (sesion.estado !== 'abierta') return null;
+      if (de.estado === 'pendiente' || de.estado === 'enviado') throw conflicto('FE_EN_PROCESO', 'La factura electrónica todavía está en proceso en SIFEN: intente anular en unos minutos');
+      if (de.procesado_en && Date.now() - de.procesado_en.getTime() > 48 * 3600_000) throw conflicto('FE_PLAZO_VENCIDO', 'Pasaron más de 48 horas desde la aprobación de la factura: corresponde una devolución con nota de crédito');
+      const fe = await cargarFe(tx, true);
+      const emp = await tx.selectFrom('empresa').select(['ruc', 'razon_social']).executeTakeFirstOrThrow();
+      if (!fe || !emp.ruc) throw conflicto('FE_SIN_CONFIGURACION', 'Falta la configuración de facturación electrónica para cancelar la factura');
+      return { de, fe, emp: { ruc: emp.ruc, razonSocial: emp.razon_social } };
+    });
+    let cancelacion: { id: string; protocolo: string | null } | null = null;
+    if (previo) {
+      const motivo = d.motivo.length >= 5 ? d.motivo : `${d.motivo} (anulación)`;
+      let r: Awaited<ReturnType<typeof cancelarEnSifen>>;
+      try {
+        r = await cancelarEnSifen(previo.fe, previo.emp, previo.de.cdc, motivo);
+      } catch (e) {
+        throw conflicto('SIFEN_SIN_CONEXION', `No se pudo cancelar la factura en SIFEN: ${(e as Error).message}`);
+      }
+      if (r.estado !== 'Aprobado') throw conflicto('CANCELACION_RECHAZADA', `SIFEN no aceptó la cancelación: ${r.mensajes.map((m) => `${m.codigo} ${m.mensaje}`).join(' · ')}`);
+      cancelacion = { id: previo.de.id, protocolo: r.protocolo };
+    }
     return this.db.enEmpresa(ctx.empresaId, async (tx) => {
       const v = await tx.selectFrom('venta').selectAll().where('id', '=', id).forUpdate().executeTakeFirst();
       if (!v) throw noEncontrado('Venta');
@@ -552,6 +599,14 @@ export class VentasController {
         .execute();
       await tx.updateTable('venta').set({ estado: 'anulada', anulada_en: new Date(), anulada_por: ctx.usuarioId, anulacion_autorizada_por: autorizadaPor, motivo_anulacion: d.motivo }).where('id', '=', id).execute();
       await auditar(tx, { ...ctx, ...o }, { accion: 'anular_venta', entidad: 'venta', entidadId: id, autorizadoPor: autorizadaPor, despues: { numero: Number(v.numero), total: v.total, motivo: d.motivo } });
+      if (cancelacion) {
+        await tx
+          .updateTable('documento_electronico')
+          .set({ estado: 'cancelado', cancelado_en: new Date(), cancelado_por: ctx.usuarioId, motivo_cancelacion: d.motivo, respuesta_mensaje: `Cancelación aprobada${cancelacion.protocolo ? ` · protocolo ${cancelacion.protocolo}` : ''}` })
+          .where('id', '=', cancelacion.id)
+          .execute();
+        await auditar(tx, { ...ctx, ...o }, { accion: 'cancelar', entidad: 'documento_electronico', entidadId: cancelacion.id, despues: { motivo: d.motivo, protocolo: cancelacion.protocolo } });
+      }
       // El pedido entregado con esta venta vuelve a quedar pendiente.
       if (v.pedido_id) {
         await tx.updateTable('pedido').set({ estado: 'pendiente', venta_id: null, cerrado_por: null, cerrado_en: null }).where('id', '=', v.pedido_id).execute();

@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "description": "KONTIVA ERP · Gestión inteligente para tu empresa · Araújo Tech Sistemas",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
@@ -12,5 +14,10 @@
     "db:migrate": "pnpm --filter @kontiva/api db:migrate",
     "dev:api": "pnpm --filter @kontiva/api dev",
     "dev:web": "pnpm --filter @kontiva/web dev"
+  },
+  "pnpm": {
+    "overrides": {
+      "facturacionelectronicapy-xmlgen>xml2js": "^0.6.2"
+    }
   }
 }

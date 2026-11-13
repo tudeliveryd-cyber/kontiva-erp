@@ -8,3 +8,6 @@ for (const archivo of [path.resolve(process.cwd(), '.env'), path.resolve(__dirna
     break;
   }
 }
+
+// Fechas de los documentos electrónicos (SIFEN) en hora de Paraguay, aunque el servidor esté en UTC.
+process.env.TZ ??= 'America/Asuncion';
