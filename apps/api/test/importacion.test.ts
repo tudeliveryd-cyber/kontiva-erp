@@ -41,7 +41,8 @@ describe('Importación desde planilla', () => {
     const lista = await http(app).get('/api/productos').set(h).expect(200);
     expect(lista.body.total).toBe(4); // la remera con 2 variantes es un solo producto
     const remera = lista.body.items.find((p: { nombre: string }) => p.nombre === 'Remera');
-    expect(remera.variantes.map((v: { nombre: string; precio: string }) => [v.nombre, v.precio])).toEqual([['Talle M', '65000.00'], ['Talle L', '65000.00']]);
+    // Variantes creadas en el mismo milisegundo: uuid v7 no garantiza el orden entre ellas.
+    expect(remera.variantes.map((v: { nombre: string; precio: string }) => [v.nombre, v.precio]).sort()).toEqual([['Talle L', '65000.00'], ['Talle M', '65000.00']]);
     const queso = lista.body.items.find((p: { nombre: string }) => p.nombre === 'Queso Paraguay');
     expect(queso).toMatchObject({ unidad: 'kg', tasaIva: 5 });
     const stock = await http(app).get(`/api/stock?depositoId=${depositoId}`).set(h).expect(200);

@@ -7,7 +7,7 @@ import { fechaHora } from '../lib/formato';
 import { cantidad, type Deposito, type FilaStock } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 
-const TIPOS: Record<string, string> = { inicial: 'Stock inicial', ajuste: 'Ajuste', venta: 'Venta', anulacion_venta: 'Venta anulada', devolucion: 'Devolución', compra: 'Compra', transferencia: 'Transferencia', transferencia_salida: 'Transferencia (salida)', transferencia_entrada: 'Transferencia (entrada)' };
+const TIPOS: Record<string, string> = { inicial: 'Stock inicial', ajuste: 'Ajuste', venta: 'Venta', anulacion_venta: 'Venta anulada', devolucion: 'Devolución', compra: 'Compra', anulacion_compra: 'Compra anulada', transferencia: 'Transferencia', transferencia_salida: 'Transferencia (salida)', transferencia_entrada: 'Transferencia (entrada)' };
 
 export function Stock() {
   const { puede } = useSesion();

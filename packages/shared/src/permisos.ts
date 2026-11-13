@@ -69,8 +69,8 @@ export const RECURSOS = {
   // Compras y finanzas (Fase 2)
   proveedor: { nombre: 'Proveedores', modulo: 'compras', acciones: ['ver', 'crear', 'editar', 'eliminar'] },
   orden_compra: { nombre: 'Órdenes de compra', modulo: 'compras', acciones: ['ver', 'crear', 'editar', 'aprobar', 'cancelar'] },
-  recepcion: { nombre: 'Recepciones de mercadería', modulo: 'compras', acciones: ['ver', 'crear'] },
-  cuenta_pagar: { nombre: 'Cuentas a pagar', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'aprobar', 'exportar'] },
+  recepcion: { nombre: 'Compras y recepciones de mercadería', modulo: 'compras', acciones: ['ver', 'crear', 'cancelar'] },
+  cuenta_pagar: { nombre: 'Cuentas a pagar y pagos a proveedores', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'aprobar', 'cancelar', 'exportar'] },
   cuenta_cobrar: { nombre: 'Cuentas a cobrar', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'exportar'] },
   banco: { nombre: 'Bancos y conciliación', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar'] },
   contabilidad: { nombre: 'Asientos y cierres', modulo: 'finanzas', acciones: ['ver', 'crear', 'aprobar', 'exportar'] },

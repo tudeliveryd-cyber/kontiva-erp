@@ -30,6 +30,7 @@ import { Transferencias } from './paginas/Transferencias';
 import { Precios } from './paginas/Precios';
 import { Pedidos, Presupuestos } from './paginas/Pedidos';
 import { Facturacion } from './paginas/Facturacion';
+import { Compras, CuentasPagar, OrdenesCompra, Proveedores } from './paginas/Compras';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -60,6 +61,10 @@ function Rutas() {
         {puede('presupuesto.ver') && <Route path="presupuestos" element={<Presupuestos />} />}
         {puede('pedido.ver') && <Route path="pedidos" element={<Pedidos />} />}
         {(puede('config_fiscal.ver') || puede('documento_fiscal.ver')) && <Route path="facturacion" element={<Facturacion />} />}
+        {puede('proveedor.ver') && <Route path="proveedores" element={<Proveedores />} />}
+        {puede('orden_compra.ver') && <Route path="ordenes-compra" element={<OrdenesCompra />} />}
+        {puede('recepcion.ver') && <Route path="compras" element={<Compras />} />}
+        {puede('cuenta_pagar.ver') && <Route path="cuentas-pagar" element={<CuentasPagar />} />}
         {puede('cliente.ver') && <Route path="clientes" element={<Clientes />} />}
         {(puede('producto.crear') || puede('cliente.crear')) && <Route path="importar/:tipo" element={<Importar />} />}
         {puede('usuario.ver') && <Route path="usuarios" element={<Usuarios />} />}

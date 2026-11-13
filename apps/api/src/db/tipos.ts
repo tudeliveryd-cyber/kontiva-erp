@@ -241,6 +241,14 @@ export interface BaseDatos {
   fe_configuracion: FeConfiguracionTabla;
   fe_numeracion: FeNumeracionTabla;
   documento_electronico: DocumentoElectronicoTabla;
+  proveedor: ProveedorTabla;
+  orden_compra: OrdenCompraTabla;
+  orden_compra_item: OrdenCompraItemTabla;
+  compra: CompraTabla;
+  compra_item: CompraItemTabla;
+  cuenta_pagar: CuentaPagarTabla;
+  pago_proveedor: PagoProveedorTabla;
+  pago_aplicacion: PagoAplicacionTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -448,7 +456,7 @@ export interface MovimientoCajaTabla {
   empresa_id: string;
   id: Generated<string>;
   sesion_id: string;
-  tipo: 'apertura' | 'venta' | 'vuelto' | 'anulacion' | 'devolucion' | 'retiro' | 'ingreso';
+  tipo: 'apertura' | 'venta' | 'vuelto' | 'anulacion' | 'devolucion' | 'retiro' | 'ingreso' | 'pago_proveedor';
   medio: Medio;
   moneda: Moneda;
   monto: Num;
@@ -527,7 +535,7 @@ export interface VentaPagoTabla {
   referencia: string | null;
 }
 
-export type TipoMovimientoStock = 'inicial' | 'ajuste' | 'venta' | 'anulacion_venta' | 'devolucion' | 'compra' | 'transferencia_salida' | 'transferencia_entrada' | 'transferencia';
+export type TipoMovimientoStock = 'inicial' | 'ajuste' | 'venta' | 'anulacion_venta' | 'devolucion' | 'compra' | 'anulacion_compra' | 'transferencia_salida' | 'transferencia_entrada' | 'transferencia';
 
 export interface TransferenciaTabla {
   empresa_id: string;
@@ -689,4 +697,144 @@ export interface DocumentoElectronicoTabla {
   motivo_cancelacion: string | null;
   creado_por: string;
   creado_en: Creado;
+}
+
+type Fecha = ColumnType<string, string, string>;
+type FechaNula = ColumnType<string | null, string | null | undefined, string | null>;
+
+export interface ProveedorTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  nombre: string;
+  ruc: string | null;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  contacto: string | null;
+  plazo_pago_dias: Generated<number>;
+  nota: string | null;
+  activo: Generated<boolean>;
+  creado_por: string | null;
+  creado_en: Creado;
+  actualizado_en: Actualizado;
+}
+
+export type EstadoOrdenCompra = 'borrador' | 'enviada' | 'parcial' | 'recibida' | 'cancelada';
+
+export interface OrdenCompraTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: ColumnType<string, number, never>;
+  proveedor_id: string;
+  sucursal_id: string;
+  deposito_id: string;
+  estado: Generated<EstadoOrdenCompra>;
+  fecha_entrega: FechaNula;
+  nota: string | null;
+  total: NumGen;
+  aprobada_por: string | null;
+  aprobada_en: Date | null;
+  motivo_cancelacion: string | null;
+  creado_por: string;
+  creado_en: Creado;
+  actualizado_en: Actualizado;
+}
+
+export interface OrdenCompraItemTabla {
+  empresa_id: string;
+  orden_id: string;
+  linea: number;
+  variante_id: string;
+  descripcion: string;
+  cantidad: Num;
+  cantidad_recibida: NumGen;
+  costo_unitario: Num;
+  tasa_iva: number;
+  total: Num;
+}
+
+export interface CompraTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: ColumnType<string, number, never>;
+  proveedor_id: string;
+  orden_id: string | null;
+  sucursal_id: string;
+  deposito_id: string;
+  documento_tipo: 'factura' | 'factura_electronica' | 'remision' | 'otro';
+  timbrado: string | null;
+  documento_numero: string | null;
+  cdc: string | null;
+  fecha_documento: Fecha;
+  condicion: 'contado' | 'credito';
+  vencimiento: FechaNula;
+  subtotal: Num;
+  descuento: NumGen;
+  total: Num;
+  gravado10: NumGen;
+  gravado5: NumGen;
+  exento: NumGen;
+  iva10: NumGen;
+  iva5: NumGen;
+  estado: Generated<'confirmada' | 'anulada'>;
+  nota: string | null;
+  creado_por: string;
+  creado_en: Creado;
+  anulada_por: string | null;
+  anulada_en: Date | null;
+  motivo_anulacion: string | null;
+}
+
+export interface CompraItemTabla {
+  empresa_id: string;
+  compra_id: string;
+  linea: number;
+  variante_id: string;
+  descripcion: string;
+  cantidad: Num;
+  costo_unitario: Num;
+  descuento: NumGen;
+  tasa_iva: number;
+  total: Num;
+  orden_linea: number | null;
+}
+
+export interface CuentaPagarTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  proveedor_id: string;
+  compra_id: string | null;
+  descripcion: string;
+  fecha: Fecha;
+  vencimiento: Fecha;
+  monto: Num;
+  saldo: Num;
+  estado: Generated<'pendiente' | 'parcial' | 'pagada' | 'anulada'>;
+  creado_por: string;
+  creado_en: Creado;
+}
+
+export interface PagoProveedorTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: ColumnType<string, number, never>;
+  proveedor_id: string;
+  fecha: Fecha;
+  medio: 'efectivo' | 'transferencia' | 'cheque' | 'tarjeta' | 'otro';
+  sesion_caja_id: string | null;
+  monto: Num;
+  referencia: string | null;
+  nota: string | null;
+  estado: Generated<'confirmado' | 'anulado'>;
+  creado_por: string;
+  creado_en: Creado;
+  anulado_por: string | null;
+  anulado_en: Date | null;
+}
+
+export interface PagoAplicacionTabla {
+  empresa_id: string;
+  pago_id: string;
+  cuenta_pagar_id: string;
+  monto: Num;
 }

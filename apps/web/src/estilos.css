@@ -50,9 +50,10 @@ a { color: var(--p7); }
 }
 .marca b { display: block; font-size: 16px; letter-spacing: .04em; }
 .marca small { color: var(--y); font-size: 10.5px; font-weight: 600; letter-spacing: .18em; }
-.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav { display: flex; flex-direction: column; gap: 2px; flex: 1; min-height: 0; overflow-y: auto; margin-right: -6px; padding-right: 6px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
+.nav a { flex: none; }
 .nav a {
-  display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: var(--radio);
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: var(--radio);
   color: #d9cce6; text-decoration: none; font-weight: 500;
 }
 .nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
@@ -278,3 +279,8 @@ select.entrada { padding-right: 8px; }
 dl.datos { display: grid; grid-template-columns: 150px 1fr; gap: 8px 14px; margin: 0; font-size: 14px; }
 dl.datos dt { color: var(--t3); }
 dl.datos dd { margin: 0; }
+
+/* ----- Totales de compra ----- */
+.totales-compra { margin-left: auto; width: min(360px, 100%); display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.totales-compra div { display: flex; justify-content: space-between; gap: 12px; color: var(--t2); }
+.totales-compra .total { font-size: 16px; color: var(--t1); border-top: 1px solid var(--linea); padding-top: 6px; margin-top: 2px; }

@@ -348,3 +348,80 @@ export const feEstablecimientoEntrada = z.object({
 });
 
 export const fePuntoEntrada = z.object({ punto: z.string().regex(/^[0-9]{3}$/, 'Tres dígitos: 001').nullable() });
+
+// ---------------------------------------------------------------------------
+// Fase 2 · compras y cuentas a pagar
+// ---------------------------------------------------------------------------
+
+export const proveedorEntrada = z.object({
+  nombre: z.string().trim().min(2, 'Ingrese el nombre').max(200),
+  ruc: z.string().trim().max(20).regex(/^[0-9A-Za-z-]*$/, 'Solo números y guion').nullable().optional().transform((v) => (v ? v : null)),
+  telefono: textoOpcional(40),
+  email: email.nullable().optional().or(z.literal('').transform(() => null)),
+  direccion: textoOpcional(300),
+  contacto: textoOpcional(120),
+  plazoPagoDias: z.coerce.number().int().min(0).max(365).default(0),
+  nota: textoOpcional(1000),
+  activo: z.boolean().optional(),
+});
+
+const fechaObligatoria = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida');
+
+export const ordenCompraEntrada = z.object({
+  proveedorId: uuid,
+  depositoId: uuid,
+  fechaEntrega: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
+  nota: textoOpcional(1000),
+  items: z
+    .array(z.object({ varianteId: uuid, cantidad, costoUnitario: dinero }))
+    .min(1, 'Agregue al menos un producto')
+    .max(500),
+});
+
+export const compraEntrada = z
+  .object({
+    proveedorId: uuid,
+    depositoId: uuid,
+    ordenId: uuid.nullable().optional(),
+    documentoTipo: z.enum(['factura', 'factura_electronica', 'remision', 'otro']),
+    timbrado: z.string().trim().regex(/^[0-9]{8}$/, 'El timbrado tiene 8 dígitos').nullable().optional().or(z.literal('').transform(() => null)),
+    documentoNumero: z.string().trim().regex(/^[0-9]{3}-[0-9]{3}-[0-9]{7}$/, 'Número con formato 001-001-0000001').nullable().optional().or(z.literal('').transform(() => null)),
+    cdc: z.string().trim().regex(/^[0-9]{44}$/, 'El CDC tiene 44 dígitos').nullable().optional().or(z.literal('').transform(() => null)),
+    fechaDocumento: fechaObligatoria,
+    condicion: z.enum(['contado', 'credito']),
+    vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
+    /** Contado: cómo se pagó (efectivo desde la caja abierta o por otro medio). */
+    pago: z
+      .object({ medio: z.enum(['efectivo', 'transferencia', 'cheque', 'tarjeta', 'otro']), cajaId: uuid.nullable().optional(), referencia: textoOpcional(80) })
+      .nullable()
+      .optional(),
+    nota: textoOpcional(1000),
+    items: z
+      .array(z.object({ varianteId: uuid, cantidad, costoUnitario: dinero, descuento: dinero.optional(), ordenLinea: z.number().int().positive().optional() }))
+      .min(1, 'Agregue al menos un producto')
+      .max(1000),
+  })
+  .superRefine((d, c) => {
+    if ((d.documentoTipo === 'factura' || d.documentoTipo === 'factura_electronica') && !d.documentoNumero) c.addIssue({ code: 'custom', path: ['documentoNumero'], message: 'Ingrese el número de la factura' });
+    if (d.documentoTipo === 'factura' && !d.timbrado) c.addIssue({ code: 'custom', path: ['timbrado'], message: 'Ingrese el timbrado de la factura' });
+    if (d.documentoTipo === 'factura_electronica' && !d.cdc) c.addIssue({ code: 'custom', path: ['cdc'], message: 'Ingrese el CDC de la factura electrónica' });
+  });
+export type CompraEntrada = z.infer<typeof compraEntrada>;
+
+export const pagoProveedorEntrada = z.object({
+  proveedorId: uuid,
+  fecha: fechaObligatoria,
+  medio: z.enum(['efectivo', 'transferencia', 'cheque', 'tarjeta', 'otro']),
+  cajaId: uuid.nullable().optional(),
+  referencia: textoOpcional(80),
+  nota: textoOpcional(500),
+  aplicaciones: z.array(z.object({ cuentaId: uuid, monto: z.coerce.number().positive().max(1e13) })).min(1, 'Elija qué cuentas paga').max(200),
+});
+
+export const cuentaPagarEntrada = z.object({
+  proveedorId: uuid,
+  descripcion: z.string().trim().min(3).max(300),
+  fecha: fechaObligatoria,
+  vencimiento: fechaObligatoria,
+  monto: z.coerce.number().positive().max(1e13),
+});

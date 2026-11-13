@@ -13,7 +13,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | --- | --- | --- |
 | 0 | Cimientos: autenticación, multiempresa con RLS, permisos, auditoría, Panel Master | Lista · ver pendientes menores abajo |
 | 1 | Operación central: productos, inventario, PDV, caja | Circuito central listo · ver pendientes abajo |
-| 2 | Compras y finanzas | Pendiente |
+| 2 | Compras y finanzas | Compras y cuentas a pagar listas · en curso |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Pendiente |
 | 5 | Verticales por rubro e integraciones | Pendiente |
@@ -82,6 +82,22 @@ Producto comercial de **Araújo Tech Sistemas**.
 ### Fase 1 · pendiente
 - Venta sin internet (cola local cifrada con numeración reservada) y agente local para impresora, gaveta y balanza.
 - Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
+
+### Fase 2 · hecho (compras y cuentas a pagar)
+- **Proveedores** con RUC, contacto y plazo de pago; saldo a pagar por proveedor.
+- **Órdenes de compra**: borrador, aprobación y envío (orden_compra.aprobar), impresión A4, recepción parcial
+  o total, cancelación.
+- **Compras**: carga de la factura del proveedor (preimpresa con timbrado, electrónica con CDC, remisión),
+  la misma factura no entra dos veces; el stock ingresa al depósito, el costo pasa a ser el promedio
+  ponderado y se genera la cuenta a pagar (vencimiento por el plazo del proveedor). Al contado, el pago se
+  registra en el acto, también en efectivo desde la caja abierta. Anulación que revierte stock y orden.
+- **Cuentas a pagar**: resumen (a pagar, vencido, próximos 7 días), cuentas manuales (fletes, alquiler),
+  pagos parciales o de varias cuentas a la vez, en efectivo desde la caja o por otro medio, y anulación
+  de pagos con reintegro a la caja si sigue abierta.
+
+### Fase 2 · pendiente
+- Ventas a crédito y cuentas a cobrar (cobros, límite de crédito por cliente).
+- Cuentas bancarias, conciliación y flujo de caja; plan de cuentas y asientos automáticos.
 
 ### Fase 3 · hecho (factura electrónica)
 - **Configuración fiscal**: ambiente (prueba / producción), timbrado, actividad económica, CSC y certificado

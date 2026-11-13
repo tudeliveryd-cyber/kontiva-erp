@@ -1,5 +1,9 @@
 import {
   ArrowLeftRight,
+  ClipboardPen,
+  PackagePlus,
+  Truck,
+  Wallet,
   FileCheck2,
   ClipboardCheck,
   FileText,
@@ -37,6 +41,12 @@ export function Disposicion() {
     { a: '/transferencias', icono: ArrowLeftRight, texto: 'Transferencias', visible: puede('transferencia.ver') },
     { a: '/clientes', icono: UsersRound, texto: 'Clientes', visible: puede('cliente.ver') },
   ];
+  const compras = [
+    { a: '/proveedores', icono: Truck, texto: 'Proveedores', visible: puede('proveedor.ver') },
+    { a: '/ordenes-compra', icono: ClipboardPen, texto: 'Órdenes de compra', visible: puede('orden_compra.ver') },
+    { a: '/compras', icono: PackagePlus, texto: 'Compras', visible: puede('recepcion.ver') },
+    { a: '/cuentas-pagar', icono: Wallet, texto: 'Cuentas a pagar', visible: puede('cuenta_pagar.ver') },
+  ];
   const enlaces = [
     { a: '/usuarios', icono: Users, texto: 'Usuarios', visible: puede('usuario.ver') },
     { a: '/perfiles', icono: ShieldCheck, texto: 'Perfiles de acceso', visible: puede('perfil.ver') },
@@ -57,6 +67,15 @@ export function Disposicion() {
           </NavLink>
           {operacion.some((e) => e.visible) && <div className="nav-titulo">OPERACIÓN</div>}
           {operacion
+            .filter((e) => e.visible)
+            .map((e) => (
+              <NavLink key={e.a} to={e.a} className={({ isActive }) => (isActive ? 'activo' : undefined)}>
+                <e.icono size={18} strokeWidth={1.8} />
+                {e.texto}
+              </NavLink>
+            ))}
+          {compras.some((e) => e.visible) && <div className="nav-titulo">COMPRAS Y FINANZAS</div>}
+          {compras
             .filter((e) => e.visible)
             .map((e) => (
               <NavLink key={e.a} to={e.a} className={({ isActive }) => (isActive ? 'activo' : undefined)}>
