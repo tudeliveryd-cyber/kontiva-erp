@@ -94,11 +94,14 @@ export async function revertirAsiento(tx: Tx, ctx: Ctx, num: Numerador, cierre: 
   });
 }
 
+/** Conceptos de sueldos: solo se exigen cuando hay liquidaciones para contabilizar (planes creados antes de RRHH). */
+export const CONCEPTOS_RRHH: readonly ConceptoContable[] = ['sueldos', 'aportes_patronales', 'sueldos_pagar', 'ips_pagar', 'anticipos_personal'];
+
 export async function mapaConceptos(tx: Tx) {
   const filas = await tx.selectFrom('cuenta_concepto').select(['concepto', 'cuenta_id']).execute();
   const m = new Map(filas.map((f) => [f.concepto as ConceptoContable, f.cuenta_id]));
-  const faltan = (Object.keys(CONCEPTOS_CONTABLES) as ConceptoContable[]).filter((c) => !m.has(c));
-  return { m, faltan };
+  const todos = (Object.keys(CONCEPTOS_CONTABLES) as ConceptoContable[]).filter((c) => !m.has(c));
+  return { m, faltan: todos.filter((c) => !CONCEPTOS_RRHH.includes(c)), faltanRrhh: todos.filter((c) => CONCEPTOS_RRHH.includes(c)) };
 }
 
 const TIPOS_ORIGEN = {
@@ -109,8 +112,13 @@ const TIPOS_ORIGEN = {
   pago_proveedor: 'Pagos a proveedores',
   cobro: 'Cobros',
   movimiento_bancario: 'Movimientos bancarios',
+  liquidacion: 'Sueldos y aguinaldos',
 } as const;
 type Origen = keyof typeof TIPOS_ORIGEN;
+
+/** Fecha contable de una liquidación: el último día del mes liquidado; el aguinaldo, el día de su confirmación. */
+const fechaLiquidacion = (a: string) =>
+  sql.raw(`(CASE WHEN ${a}.tipo = 'mensual' THEN (${a}.periodo + interval '1 month' - interval '1 day')::date ELSE (${a}.confirmada_en AT TIME ZONE 'America/Asuncion')::date END)`);
 
 /** Cuántos documentos faltan contabilizar hasta la fecha, por tipo (originales y anulaciones). */
 export async function pendientes(tx: Tx, hasta: string) {
@@ -137,6 +145,13 @@ export async function pendientes(tx: Tx, hasta: string) {
       AND NOT EXISTS (SELECT 1 FROM asiento a WHERE a.origen_tipo = 'cobro' AND a.origen_id = c.id)
     UNION ALL SELECT 'cobro', count(*) FROM cobro_cliente c WHERE c.estado = 'anulado' AND (c.anulado_en AT TIME ZONE 'America/Asuncion')::date <= ${hasta}::date
       AND NOT EXISTS (SELECT 1 FROM asiento a WHERE a.origen_tipo = 'cobro_anulacion' AND a.origen_id = c.id)
+    UNION ALL SELECT 'liquidacion', count(*) FROM liquidacion l WHERE l.confirmada_en IS NOT NULL AND ${fechaLiquidacion('l')} <= ${hasta}::date
+      AND NOT EXISTS (SELECT 1 FROM asiento a WHERE a.origen_tipo = 'liquidacion' AND a.origen_id = l.id)
+    UNION ALL SELECT 'liquidacion', count(*) FROM liquidacion l WHERE l.estado = 'anulada' AND l.confirmada_en IS NOT NULL
+      AND greatest((l.anulada_en AT TIME ZONE 'America/Asuncion')::date, ${fechaLiquidacion('l')}) <= ${hasta}::date
+      AND NOT EXISTS (SELECT 1 FROM asiento a WHERE a.origen_tipo = 'liquidacion_anulacion' AND a.origen_id = l.id)
+    UNION ALL SELECT 'liquidacion', count(*) FROM liquidacion l WHERE l.pago_fecha IS NOT NULL AND l.pago_fecha <= ${hasta}::date
+      AND NOT EXISTS (SELECT 1 FROM asiento a WHERE a.origen_tipo = 'pago_liquidacion' AND a.origen_id = l.id)
     UNION ALL SELECT 'movimiento_bancario', count(*) FROM movimiento_bancario m WHERE m.origen_tipo IN ('manual', 'transferencia', 'caja') AND m.fecha <= ${hasta}::date
       AND NOT EXISTS (SELECT 1 FROM asiento a WHERE a.origen_tipo = 'movimiento_bancario' AND a.origen_id = m.id)`.execute(tx);
   const r = Object.fromEntries(Object.keys(TIPOS_ORIGEN).map((k) => [k, 0])) as Record<Origen, number>;
@@ -149,8 +164,12 @@ export async function pendientes(tx: Tx, hasta: string) {
  * Idempotente: cada documento genera un asiento (y otro inverso si se anuló).
  */
 export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
-  const { m, faltan } = await mapaConceptos(tx);
+  const { m, faltan, faltanRrhh } = await mapaConceptos(tx);
   if (faltan.length) throw conflicto('CONFIGURACION_INCOMPLETA', `Asigne una cuenta a: ${faltan.map((f) => CONCEPTOS_CONTABLES[f]).join(', ')}`);
+  if (faltanRrhh.length) {
+    const hay = await tx.selectFrom('liquidacion').select('id').where('confirmada_en', 'is not', null).limit(1).executeTakeFirst();
+    if (hay) throw conflicto('CONFIGURACION_INCOMPLETA', `Para contabilizar los sueldos, asigne una cuenta a: ${faltanRrhh.map((f) => CONCEPTOS_CONTABLES[f]).join(', ')}`);
+  }
   const c = (k: ConceptoContable) => m.get(k)!;
   const num = new Numerador();
   await num.iniciar(tx);
@@ -374,6 +393,53 @@ export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
     });
   }
 
+  // ── Sueldos y aguinaldos ──
+  const liqs = await sql<{ id: string; tipo: string; periodo: string; fecha: string; bruto: string; ips_obrero: string; ips_patronal: string; descuentos: string; neto: string }>`
+    SELECT x.id, x.tipo, x.periodo::text AS periodo, ${fechaLiquidacion('x')}::text AS fecha, x.bruto, x.ips_obrero, x.ips_patronal, x.descuentos, x.neto
+    FROM liquidacion x WHERE x.confirmada_en IS NOT NULL AND ${fechaLiquidacion('x')} <= ${hasta}::date AND ${noContabilizado('liquidacion')}`.execute(tx);
+  const nombreLiq = (l: { tipo: string; periodo: string }) =>
+    l.tipo === 'aguinaldo' ? `Aguinaldo ${l.periodo.slice(0, 4)}` : `Sueldos de ${new Intl.DateTimeFormat('es-PY', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${l.periodo}T12:00:00Z`))}`;
+  for (const l of liqs.rows) {
+    const ipsO = new Decimal(l.ips_obrero);
+    const ipsP = new Decimal(l.ips_patronal);
+    asiento({
+      fecha: l.fecha,
+      descripcion: `Liquidación: ${nombreLiq(l)}`,
+      origenTipo: 'liquidacion',
+      origenId: l.id,
+      lineas: [
+        { cuentaId: c('sueldos'), monto: new Decimal(l.bruto) },
+        { cuentaId: c('aportes_patronales'), monto: ipsP },
+        { cuentaId: c('ips_pagar'), monto: ipsO.plus(ipsP).neg() },
+        { cuentaId: c('anticipos_personal'), monto: new Decimal(l.descuentos).neg() },
+        { cuentaId: c('sueldos_pagar'), monto: new Decimal(l.neto).neg() },
+      ],
+    });
+  }
+  const pagosLiq = await sql<{ id: string; tipo: string; periodo: string; fecha: string; neto: string; pago_medio: string; pago_cuenta_id: string | null }>`
+    SELECT x.id, x.tipo, x.periodo::text AS periodo, x.pago_fecha::text AS fecha, x.neto, x.pago_medio, x.pago_cuenta_id
+    FROM liquidacion x WHERE x.pago_fecha IS NOT NULL AND x.pago_fecha <= ${hasta}::date AND ${noContabilizado('pago_liquidacion')}`.execute(tx);
+  for (const l of pagosLiq.rows) {
+    const neto = new Decimal(l.neto);
+    cola.push({
+      fecha: l.fecha,
+      orden: 0.5, // después de la liquidación del mismo día
+      correr: async () => {
+        const r = await registrarAsiento(tx, ctx, num, cierre, {
+          fecha: l.fecha,
+          descripcion: `Pago de ${nombreLiq(l).toLowerCase()}`,
+          origenTipo: 'pago_liquidacion',
+          origenId: l.id,
+          lineas: [
+            { cuentaId: c('sueldos_pagar'), monto: neto },
+            { cuentaId: l.pago_medio === 'banco' && l.pago_cuenta_id ? cuentaBanco(l.pago_cuenta_id) : c('caja'), monto: neto.neg() },
+          ],
+        });
+        if (r) contar('liquidacion');
+      },
+    });
+  }
+
   // ── Anulaciones: asiento inverso con la fecha de la anulación ──
   const hoy = hoyPy();
   const tope = hasta < hoy ? hasta : hoy;
@@ -392,6 +458,10 @@ export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
     UNION ALL
     SELECT 'cobro', x.id, (x.anulado_en AT TIME ZONE 'America/Asuncion')::date::text, 'Anulación del cobro N.º ' || x.numero
       FROM cobro_cliente x WHERE x.estado = 'anulado' AND (x.anulado_en AT TIME ZONE 'America/Asuncion')::date <= ${hasta}::date AND ${noContabilizado('cobro_anulacion')}
+    UNION ALL
+    SELECT 'liquidacion', x.id, greatest((x.anulada_en AT TIME ZONE 'America/Asuncion')::date, ${fechaLiquidacion('x')})::text, 'Anulación de la liquidación de ' || to_char(x.periodo, 'MM/YYYY') || coalesce(' · ' || x.motivo_anulacion, '')
+      FROM liquidacion x WHERE x.estado = 'anulada' AND x.confirmada_en IS NOT NULL
+        AND greatest((x.anulada_en AT TIME ZONE 'America/Asuncion')::date, ${fechaLiquidacion('x')}) <= ${hasta}::date AND ${noContabilizado('liquidacion_anulacion')}
     ORDER BY 3`.execute(tx);
   for (const a of anuladas.rows) cola.push({ fecha: a.fecha, orden: 1, correr: () => revertir(a.tipo, a.id, a.fecha, a.descripcion) });
 

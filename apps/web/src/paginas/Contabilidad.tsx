@@ -12,6 +12,7 @@ interface Plan { cuentas: Cuenta[]; conceptos: { concepto: string; nombre: strin
 interface Estado {
   tienePlan: boolean;
   faltanConceptos: string[];
+  faltanConceptosSueldos: string[];
   cerradoHasta: string | null;
   pendientes: { total: number; porTipo: { tipo: string; nombre: string; cantidad: number }[] };
   cierres: { accion: 'cierre' | 'reapertura'; hasta: string | null; motivo: string | null; fecha: string; usuario: string }[];
@@ -79,6 +80,10 @@ export function Contabilidad() {
     mutationFn: () => api<{ generados: number }>('/contabilidad/contabilizar', { metodo: 'POST', cuerpo: {} }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['contabilidad'] }),
   });
+  const completar = useMutation({
+    mutationFn: () => api('/contabilidad/cuentas/completar-sugerido', { metodo: 'POST' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['contabilidad'] }),
+  });
   const e = estado.data;
   return (
     <>
@@ -124,6 +129,13 @@ export function Contabilidad() {
               </div>
             </section>
             <ErrorApi error={contabilizar.error} />
+            {(e.faltanConceptos.length > 0 || e.faltanConceptosSueldos.length > 0) && puede('contabilidad.aprobar') && (
+              <div className="aviso info" style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+                <span>Faltan cuentas del plan sugerido para: {[...e.faltanConceptos, ...e.faltanConceptosSueldos].join(', ')}.</span>
+                <button className="btn" style={{ marginLeft: 'auto' }} disabled={completar.isPending} onClick={() => completar.mutate()}>Agregar las cuentas sugeridas</button>
+              </div>
+            )}
+            <ErrorApi error={completar.error} />
             {e.faltanConceptos.length > 0 && <Aviso tipo="info">Para los asientos automáticos falta asignar cuenta a: {e.faltanConceptos.join(', ')}. Hágalo en "Plan de cuentas".</Aviso>}
             <div className="pestanas">
               {(

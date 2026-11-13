@@ -110,6 +110,43 @@ export class ContabilidadController {
     });
   }
 
+  /** Agrega al plan las cuentas sugeridas que falten (por ejemplo, las de sueldos) y asigna los conceptos sin cuenta. No cambia lo existente. */
+  @Requiere('contabilidad', 'aprobar')
+  @Post('cuentas/completar-sugerido')
+  @HttpCode(200)
+  completarSugerido(@Contexto() ctx: Ctx, @OrigenPeticion() o: Origen) {
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const existentes = new Map((await cuentas(tx)).map((c) => [c.codigo, c]));
+      if (!existentes.size) throw invalido('Primero cree el plan de cuentas');
+      let creadas = 0;
+      for (const c of PLAN_SUGERIDO) {
+        if (existentes.has(c.codigo)) continue;
+        const padre = codigoPadre(c.codigo);
+        const p = padre ? existentes.get(padre) : null;
+        if (padre && (!p || p.imputable)) continue;
+        const r = await tx
+          .insertInto('cuenta_contable')
+          .values({ empresa_id: ctx.empresaId, codigo: c.codigo, nombre: c.nombre, tipo: tipoPorCodigo(c.codigo), imputable: c.imputable, padre_id: p?.id ?? null })
+          .returning(['id', 'codigo', 'nombre', 'tipo', 'imputable', 'padre_id', 'activa'])
+          .executeTakeFirstOrThrow();
+        existentes.set(c.codigo, r);
+        creadas++;
+      }
+      const { m } = await mapaConceptos(tx);
+      const asignados: string[] = [];
+      const sugeridos = [...PLAN_SUGERIDO.filter((c) => c.concepto).map((c) => [c.concepto!, c.codigo] as const), ...Object.entries(CONCEPTOS_EXTRA).map(([k, v]) => [k as ConceptoContable, v!] as const)];
+      for (const [concepto, codigo] of sugeridos) {
+        if (m.has(concepto)) continue;
+        const cta = existentes.get(codigo);
+        if (!cta || !cta.imputable || !cta.activa) continue;
+        await tx.insertInto('cuenta_concepto').values({ empresa_id: ctx.empresaId, concepto, cuenta_id: cta.id }).execute();
+        asignados.push(concepto);
+      }
+      await auditar(tx, { ...ctx, ...o }, { accion: 'completar_plan', entidad: 'cuenta_contable', entidadId: ctx.empresaId, despues: { creadas, asignados } });
+      return { creadas, asignados: asignados.length };
+    });
+  }
+
   @Requiere('contabilidad', 'aprobar')
   @Post('cuentas')
   crearCuenta(@Contexto() ctx: Ctx, @Body() body: unknown, @OrigenPeticion() o: Origen) {
@@ -190,7 +227,7 @@ export class ContabilidadController {
   @Get('estado')
   estado(@Contexto() ctx: Ctx) {
     return this.db.enEmpresa(ctx.empresaId, async (tx) => {
-      const { faltan } = await mapaConceptos(tx);
+      const { faltan, faltanRrhh } = await mapaConceptos(tx);
       const plan = await tx.selectFrom('cuenta_contable').select('id').limit(1).executeTakeFirst();
       const cierres = await tx
         .selectFrom('cierre_contable as c')
@@ -202,6 +239,7 @@ export class ContabilidadController {
       return {
         tienePlan: !!plan,
         faltanConceptos: faltan.map((f) => CONCEPTOS_CONTABLES[f]),
+        faltanConceptosSueldos: faltanRrhh.map((f) => CONCEPTOS_CONTABLES[f]),
         cerradoHasta: await cerradoHasta(tx),
         pendientes: await pendientes(tx, hoyPy()),
         cierres: cierres.map((c) => ({ accion: c.accion, hasta: c.hasta, motivo: c.motivo, fecha: c.creado_en, usuario: c.usuario })),

@@ -23,6 +23,7 @@ import { CobrosController, CuentasCobrarController } from '../src/finanzas/cobra
 import { CuentasBancariasController, MovimientosBancariosController } from '../src/finanzas/bancos.controller';
 import { FlujoCajaController } from '../src/finanzas/flujo.controller';
 import { ContabilidadController } from '../src/contabilidad/contabilidad.controller';
+import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from '../src/rrhh/rrhh.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
@@ -70,6 +71,9 @@ const CONTROLADORES = [
   MovimientosBancariosController,
   FlujoCajaController,
   ContabilidadController,
+  FuncionariosController,
+  RrhhConfiguracionController,
+  LiquidacionesController,
 ];
 
 interface Ruta {
@@ -197,6 +201,14 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
       .send({ fecha: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date()), descripcion: 'Aporte de capital', lineas: [{ cuentaId: cajaB, debe: 1000 }, { cuentaId: capitalB, haber: 1000 }] })
       .expect(201);
     idsDeB['/api/contabilidad/asientos'] = asB.body.id;
+    const fB = await http(app)
+      .post('/api/funcionarios')
+      .set(hB)
+      .send({ sucursalId: b.sucursalId, nombre: 'Funcionario de B', documento: '9998887', cargo: 'Vendedor', fechaIngreso: '2026-01-05', remuneracion: 'mensual', salario: 3044000 })
+      .expect(201);
+    idsDeB['/api/funcionarios'] = fB.body.id;
+    const lB = await http(app).post('/api/liquidaciones').set(hB).send({ tipo: 'mensual', periodo: '2026-10' }).expect(201);
+    idsDeB['/api/liquidaciones'] = lB.body.id;
   });
   afterAll(() => app.close());
 
@@ -278,6 +290,13 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/compras/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/pagos-proveedor/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/cobros/:id/anular': { motivo: 'Intento ajeno' },
+          'PATCH /api/funcionarios/:id': { sucursalId: '00000000-0000-7000-8000-000000000000', nombre: 'Intento ajeno', documento: '1112223', cargo: 'Cargo', fechaIngreso: '2026-01-01', remuneracion: 'mensual' },
+          'POST /api/funcionarios/:id/baja': { fechaEgreso: '2026-11-01', motivo: 'Intento ajeno' },
+          'POST /api/funcionarios/:id/reingreso': { fechaIngreso: '2026-11-01' },
+          'PATCH /api/liquidaciones/:id/items': { funcionarioId: '00000000-0000-7000-8000-000000000000', dias: 10 },
+          'POST /api/liquidaciones/:id/quitar': { funcionarioId: '00000000-0000-7000-8000-000000000000' },
+          'POST /api/liquidaciones/:id/pagar': { fecha: '2026-11-01', medio: 'banco', cuentaBancariaId: '00000000-0000-7000-8000-000000000000' },
+          'POST /api/liquidaciones/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/contabilidad/cuentas/:id': { codigo: '1.1.01', nombre: 'Intento ajeno', imputable: true },
           'POST /api/contabilidad/asientos/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/cuentas-bancarias/:id': { banco: 'Banco ajeno', nombre: 'Intento ajeno', fechaSaldoInicial: '2026-11-01' },

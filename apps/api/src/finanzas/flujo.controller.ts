@@ -9,7 +9,7 @@ import { validar } from '../comun/validar';
 import { Db } from '../db/database';
 
 const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const CONCEPTOS = ['ventas', 'cobros', 'ingresos', 'pagos', 'devoluciones', 'gastos'] as const;
+const CONCEPTOS = ['ventas', 'cobros', 'ingresos', 'pagos', 'devoluciones', 'gastos', 'sueldos'] as const;
 type Concepto = (typeof CONCEPTOS)[number];
 
 const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
@@ -17,7 +17,7 @@ const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion
 /**
  * Flujo de caja de la empresa.
  * Real: lo que entró y salió en el período (ventas al contado, cobros, pagos a proveedores,
- * reintegros de devoluciones, gastos e ingresos bancarios). Los traspasos internos
+ * reintegros de devoluciones, sueldos pagados, gastos e ingresos bancarios). Los traspasos internos
  * (depósitos de caja, transferencias entre cuentas) no son flujo y no se cuentan.
  * Proyectado: saldos pendientes de cuentas a cobrar y a pagar por fecha de vencimiento.
  */
@@ -51,6 +51,8 @@ export class FlujoCajaController {
           SELECT dev.fecha, 'devoluciones', -dev.reintegrado FROM dev WHERE dev.reintegrado > 0
           UNION ALL
           SELECT m.fecha, 'gastos', m.monto FROM movimiento_bancario m WHERE m.tipo = 'gasto'
+          UNION ALL
+          SELECT l.pago_fecha, 'sueldos', -l.neto FROM liquidacion l WHERE l.pago_fecha IS NOT NULL AND l.estado = 'confirmada'
         ) x
         WHERE fecha BETWEEN ${f.desde}::date AND ${f.hasta}::date
         GROUP BY fecha, concepto ORDER BY fecha`.execute(tx);
@@ -65,7 +67,7 @@ export class FlujoCajaController {
       }
       const resumir = (t: Record<Concepto, Decimal>) => {
         const entradas = t.ventas.plus(t.cobros).plus(t.ingresos);
-        const salidas = t.pagos.plus(t.devoluciones).plus(t.gastos).neg();
+        const salidas = t.pagos.plus(t.devoluciones).plus(t.gastos).plus(t.sueldos).neg();
         return { ...Object.fromEntries(CONCEPTOS.map((c) => [c, t[c].abs().toFixed(2)])), entradas: entradas.toFixed(2), salidas: salidas.toFixed(2), neto: entradas.minus(salidas).toFixed(2) };
       };
       const real = { totales: resumir(totales), dias: [...porDia.entries()].map(([fecha, t]) => ({ fecha, ...resumir(t) })) };

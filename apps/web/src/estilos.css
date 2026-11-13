@@ -216,6 +216,8 @@ select.entrada { padding-right: 8px; }
   @page a4 { size: A4; margin: 14mm; }
   body * { visibility: hidden; }
   .ticket, .ticket *, .doc-a4, .doc-a4 * { visibility: visible; }
+  .recibos-imprimir { position: absolute; left: 0; top: 0; width: 100%; }
+  .recibos-imprimir .doc-a4 { position: static; page-break-after: always; break-after: page; }
   .ticket { position: absolute; left: 0; top: 0; padding: 2mm; }
   .doc-a4 { page: a4; position: absolute; left: 0; top: 0; width: 100%; border: 0 !important; padding: 0 !important; box-shadow: none !important; }
 }
@@ -302,3 +304,10 @@ table.diario tbody + tbody .cab-asiento td { border-top: 2px solid var(--linea);
 tbody.anulado td { color: var(--t3); }
 tbody.anulado .cab-asiento b { text-decoration: line-through; }
 tr.total-fila td { font-weight: 700; border-top: 2px solid var(--linea); background: var(--fondo2, #f8fafc); }
+
+/* Sueldos */
+table.planilla td { vertical-align: middle; }
+table.planilla th { white-space: nowrap; }
+.recibos-imprimir { display: flex; flex-direction: column; gap: 18px; }
+.doc-a4.recibo .firmas { display: flex; justify-content: space-between; gap: 40px; margin-top: 64px; }
+.doc-a4.recibo .firmas div { flex: 1; border-top: 1px solid #111; padding-top: 6px; text-align: center; font-size: 12px; color: #444; }

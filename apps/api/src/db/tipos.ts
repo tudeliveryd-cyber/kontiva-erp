@@ -259,6 +259,10 @@ export interface BaseDatos {
   asiento: AsientoTabla;
   asiento_linea: AsientoLineaTabla;
   cierre_contable: CierreContableTabla;
+  rrhh_configuracion: RrhhConfiguracionTabla;
+  funcionario: FuncionarioTabla;
+  liquidacion: LiquidacionTabla;
+  liquidacion_item: LiquidacionItemTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -913,7 +917,7 @@ export interface CuentaBancariaTabla {
   creado_en: Creado;
 }
 
-export type TipoMovimientoBancario = 'deposito' | 'extraccion' | 'transferencia_entrada' | 'transferencia_salida' | 'pago_proveedor' | 'cobro' | 'deposito_caja' | 'gasto' | 'ingreso' | 'anulacion';
+export type TipoMovimientoBancario = 'deposito' | 'extraccion' | 'transferencia_entrada' | 'transferencia_salida' | 'pago_proveedor' | 'cobro' | 'deposito_caja' | 'gasto' | 'ingreso' | 'anulacion' | 'sueldos';
 
 export interface MovimientoBancarioTabla {
   empresa_id: string;
@@ -982,4 +986,87 @@ export interface CierreContableTabla {
   motivo: string | null;
   usuario_id: string;
   creado_en: Creado;
+}
+
+export interface RrhhConfiguracionTabla {
+  empresa_id: string;
+  salario_minimo: Num;
+  ips_obrero: Num;
+  ips_patronal: Num;
+  bonificacion_pct: Num;
+  bonificacion_tope: Num;
+  actualizado_por: string | null;
+  actualizado_en: Generated<Date>;
+}
+export interface FuncionarioTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  sucursal_id: string;
+  nombre: string;
+  documento: string;
+  fecha_nacimiento: FechaNula;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  cargo: string;
+  fecha_ingreso: Fecha;
+  fecha_egreso: FechaNula;
+  motivo_egreso: string | null;
+  remuneracion: 'mensual' | 'jornal';
+  salario: Num;
+  hijos: Generated<number>;
+  asegurado_ips: Generated<boolean>;
+  numero_ips: string | null;
+  banco: string | null;
+  cuenta_bancaria: string | null;
+  usuario_id: string | null;
+  nota: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+export interface LiquidacionTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  tipo: 'mensual' | 'aguinaldo';
+  periodo: Fecha;
+  estado: Generated<'borrador' | 'confirmada' | 'anulada'>;
+  salario_minimo: Num;
+  ips_obrero_pct: Num;
+  ips_patronal_pct: Num;
+  bruto: NumGen;
+  ips_obrero: NumGen;
+  ips_patronal: NumGen;
+  descuentos: NumGen;
+  neto: NumGen;
+  confirmada_por: string | null;
+  confirmada_en: Date | null;
+  pago_fecha: FechaNula;
+  pago_medio: 'banco' | 'efectivo' | null;
+  pago_cuenta_id: string | null;
+  pago_sesion_caja_id: string | null;
+  pagada_por: string | null;
+  anulada_por: string | null;
+  anulada_en: Date | null;
+  motivo_anulacion: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+export interface LiquidacionItemTabla {
+  empresa_id: string;
+  liquidacion_id: string;
+  funcionario_id: string;
+  dias: NumGen;
+  salario_base: NumGen;
+  horas_extra_50: NumGen;
+  horas_extra_100: NumGen;
+  monto_horas_extra: NumGen;
+  otros_ingresos: NumGen;
+  bonificacion: NumGen;
+  imponible: NumGen;
+  bruto: NumGen;
+  ips_obrero: NumGen;
+  ips_patronal: NumGen;
+  descuentos: NumGen;
+  detalle_descuentos: string | null;
+  neto: NumGen;
 }

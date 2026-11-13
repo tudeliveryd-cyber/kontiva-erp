@@ -52,15 +52,15 @@ describe('Contabilidad: plan de cuentas, asientos automáticos, libros y cierres
   });
 
   it('plan de cuentas: subcuentas bajo un grupo, sin duplicados ni hijas de cuentas imputables', async () => {
-    const r = await http(app).post('/api/contabilidad/cuentas').set(h).send({ codigo: '1.1.08', nombre: 'Fondo fijo', imputable: true }).expect(201);
-    cta['1.1.08'] = r.body.id;
-    await http(app).post('/api/contabilidad/cuentas').set(h).send({ codigo: '1.1.08', nombre: 'Otra', imputable: true }).expect(409);
+    const r = await http(app).post('/api/contabilidad/cuentas').set(h).send({ codigo: '1.1.20', nombre: 'Fondo fijo', imputable: true }).expect(201);
+    cta['1.1.20'] = r.body.id;
+    await http(app).post('/api/contabilidad/cuentas').set(h).send({ codigo: '1.1.20', nombre: 'Otra', imputable: true }).expect(409);
     await http(app).post('/api/contabilidad/cuentas').set(h).send({ codigo: '1.1.01.1', nombre: 'Hija de caja', imputable: true }).expect(400);
     await http(app).post('/api/contabilidad/cuentas').set(h).send({ codigo: '7.1.01', nombre: 'Sin padre', imputable: true }).expect(400);
     await http(app).post('/api/contabilidad/cuentas').set(h).send({ codigo: '1.1.x', nombre: 'Código inválido', imputable: true }).expect(400);
     // Una cuenta asignada a un concepto no se desactiva.
     await http(app).patch(`/api/contabilidad/cuentas/${cta['1.1.01']}`).set(h).send({ codigo: '1.1.01', nombre: 'Caja', imputable: true, activa: false }).expect(409);
-    await http(app).patch(`/api/contabilidad/cuentas/${cta['1.1.08']}`).set(h).send({ codigo: '1.1.08', nombre: 'Fondo fijo de caja', imputable: true }).expect(200);
+    await http(app).patch(`/api/contabilidad/cuentas/${cta['1.1.20']}`).set(h).send({ codigo: '1.1.20', nombre: 'Fondo fijo de caja', imputable: true }).expect(200);
   });
 
   let pagoId: string;

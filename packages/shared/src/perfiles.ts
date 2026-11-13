@@ -107,6 +107,13 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
     ],
   },
   {
+    clave: 'rrhh',
+    nombre: 'Recursos humanos',
+    descripcion: 'Legajos de funcionarios, sueldos, aguinaldo y planillas.',
+    alcance: 'empresa',
+    permisos: ['funcionario.*', 'salario.*', 'sucursal.ver'],
+  },
+  {
     clave: 'repartidor',
     nombre: 'Repartidor',
     descripcion: 'Sus entregas y rutas.',

@@ -22,7 +22,9 @@ import {
   ShieldCheck,
   UserRound,
   Users,
+  Banknote,
   BookOpenCheck,
+  IdCard,
   ChartNoAxesCombined,
   Landmark,
 } from 'lucide-react';
@@ -55,6 +57,10 @@ export function Disposicion() {
     { a: '/flujo-caja', icono: ChartNoAxesCombined, texto: 'Flujo de caja', visible: puede('flujo_caja.ver') },
     { a: '/contabilidad', icono: BookOpenCheck, texto: 'Contabilidad', visible: puede('contabilidad.ver') },
   ];
+  const personal = [
+    { a: '/funcionarios', icono: IdCard, texto: 'Funcionarios', visible: puede('funcionario.ver') },
+    { a: '/sueldos', icono: Banknote, texto: 'Sueldos y aguinaldo', visible: puede('salario.ver') },
+  ];
   const enlaces = [
     { a: '/usuarios', icono: Users, texto: 'Usuarios', visible: puede('usuario.ver') },
     { a: '/perfiles', icono: ShieldCheck, texto: 'Perfiles de acceso', visible: puede('perfil.ver') },
@@ -84,6 +90,15 @@ export function Disposicion() {
             ))}
           {compras.some((e) => e.visible) && <div className="nav-titulo">COMPRAS Y FINANZAS</div>}
           {compras
+            .filter((e) => e.visible)
+            .map((e) => (
+              <NavLink key={e.a} to={e.a} className={({ isActive }) => (isActive ? 'activo' : undefined)}>
+                <e.icono size={18} strokeWidth={1.8} />
+                {e.texto}
+              </NavLink>
+            ))}
+          {personal.some((e) => e.visible) && <div className="nav-titulo">PERSONAL</div>}
+          {personal
             .filter((e) => e.visible)
             .map((e) => (
               <NavLink key={e.a} to={e.a} className={({ isActive }) => (isActive ? 'activo' : undefined)}>

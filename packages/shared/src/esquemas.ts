@@ -506,6 +506,11 @@ export const CONCEPTOS_CONTABLES = {
   ingresos_financieros: 'Ingresos financieros (intereses)',
   deposito_manual: 'Contrapartida de depósitos bancarios manuales',
   extraccion_manual: 'Contrapartida de extracciones bancarias',
+  sueldos: 'Sueldos, jornales y aguinaldos',
+  aportes_patronales: 'Aporte patronal al IPS',
+  sueldos_pagar: 'Sueldos a pagar',
+  ips_pagar: 'IPS a pagar',
+  anticipos_personal: 'Anticipos y descuentos al personal',
 } as const;
 export type ConceptoContable = keyof typeof CONCEPTOS_CONTABLES;
 
@@ -541,3 +546,54 @@ export const asientoManualEntrada = z
   .refine((a) => Math.round(a.lineas.reduce((s, l) => s + l.debe - l.haber, 0) * 100) === 0, { message: 'El debe y el haber deben sumar lo mismo', path: ['lineas'] });
 
 export const cierreContableEntrada = z.object({ hasta: fechaDia, motivo: textoOpcional(300) });
+
+// ── RRHH ──────────────────────────────────────────────────────────────────────
+
+export const funcionarioEntrada = z.object({
+  sucursalId: z.string().uuid('Elija la sucursal'),
+  nombre: z.string().trim().min(3, 'Ingrese el nombre completo').max(160),
+  documento: z.string().trim().min(3, 'Ingrese el número de cédula').max(20),
+  fechaNacimiento: fechaDia.nullable().optional(),
+  telefono: textoOpcional(40),
+  email: z.string().trim().email('Correo inválido').max(160).nullable().optional().or(z.literal('').transform(() => null)),
+  direccion: textoOpcional(200),
+  cargo: z.string().trim().min(2, 'Ingrese el cargo').max(80),
+  fechaIngreso: fechaDia,
+  remuneracion: z.enum(['mensual', 'jornal']),
+  salario: z.coerce.number().min(0).max(1e12).optional(),
+  hijos: z.coerce.number().int().min(0).max(30).default(0),
+  aseguradoIps: z.boolean().default(true),
+  numeroIps: textoOpcional(30),
+  banco: textoOpcional(80),
+  cuentaBancaria: textoOpcional(40),
+  nota: textoOpcional(500),
+});
+
+export const bajaFuncionarioEntrada = z.object({ fechaEgreso: fechaDia, motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
+
+export const rrhhConfiguracionEntrada = z.object({
+  salarioMinimo: z.coerce.number().positive().max(1e10),
+  ipsObrero: z.coerce.number().min(0).max(100),
+  ipsPatronal: z.coerce.number().min(0).max(100),
+  bonificacionPct: z.coerce.number().min(0).max(100),
+  bonificacionTope: z.coerce.number().positive().max(100),
+});
+
+export const liquidacionNuevaEntrada = z.discriminatedUnion('tipo', [
+  z.object({ tipo: z.literal('mensual'), periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mes inválido') }),
+  z.object({ tipo: z.literal('aguinaldo'), anio: z.coerce.number().int().min(2020).max(2100) }),
+]);
+
+export const liquidacionItemEntrada = z.object({
+  dias: z.coerce.number().min(0).max(31).optional(),
+  horasExtra50: z.coerce.number().min(0).max(400).optional(),
+  horasExtra100: z.coerce.number().min(0).max(400).optional(),
+  otrosIngresos: z.coerce.number().min(0).max(1e12).optional(),
+  descuentos: z.coerce.number().min(0).max(1e12).optional(),
+  detalleDescuentos: textoOpcional(200),
+  monto: z.coerce.number().min(0).max(1e12).optional(), // aguinaldo
+});
+
+export const pagoLiquidacionEntrada = z
+  .object({ fecha: fechaDia, medio: z.enum(['banco', 'efectivo']), cuentaBancariaId: z.string().uuid().optional(), cajaId: z.string().uuid().optional() })
+  .refine((p) => (p.medio === 'banco' ? !!p.cuentaBancariaId : !!p.cajaId), { message: 'Elija la cuenta bancaria o la caja', path: ['medio'] });

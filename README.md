@@ -13,9 +13,9 @@ Producto comercial de **Araújo Tech Sistemas**.
 | --- | --- | --- |
 | 0 | Cimientos: autenticación, multiempresa con RLS, permisos, auditoría, Panel Master | Lista · ver pendientes menores abajo |
 | 1 | Operación central: productos, inventario, PDV, caja | Circuito central listo · ver pendientes abajo |
-| 2 | Compras y finanzas | Compras, cuentas a pagar y a cobrar listas · en curso |
+| 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
-| 4 | RRHH, informes, dashboard, app del dueño | Pendiente |
+| 4 | RRHH, informes, dashboard, app del dueño | RRHH y sueldos listos · en curso |
 | 5 | Verticales por rubro e integraciones | Pendiente |
 
 ### Fase 0 · hecho
@@ -120,7 +120,7 @@ Producto comercial de **Araújo Tech Sistemas**.
   No se contabilizan solos (van por asiento manual): el stock inicial, los ajustes de stock, los ingresos y
   retiros manuales de caja y las diferencias de arqueo.
 
-### Fase 2 · completa
+Fase 2 completa.
 
 ### Fase 3 · hecho (factura electrónica)
 - **Configuración fiscal**: ambiente (prueba / producción), timbrado, actividad económica, CSC y certificado
@@ -144,6 +144,28 @@ Producto comercial de **Araújo Tech Sistemas**.
 ### Fase 3 · pendiente
 - KuDE en A4 y envío por correo; consulta de RUC en la DNIT al cargar clientes.
 - Homologación con el ambiente de prueba real de la DNIT (requiere el certificado y el timbrado de la empresa).
+
+### Fase 4 · hecho (RRHH y sueldos)
+- **Funcionarios**: legajo (datos personales, cargo, sucursal, ingreso, remuneración mensual o por jornal,
+  hijos para la bonificación familiar, IPS, cuenta para el sueldo), antigüedad y días de vacaciones por año
+  (12, 18 o 30 según el Código del Trabajo), baja con motivo y reingreso. El salario solo lo ve y cambia
+  quien tiene permiso de salarios (confidencial). Perfil nuevo: Recursos humanos.
+- **Parámetros**: salario mínimo (Gs. 3.044.000 desde el 1/7/2026, Decreto 6225/2026), IPS 9 % obrero y
+  16,5 % patronal, bonificación familiar (5 % del mínimo por hijo, hasta dos mínimos). Se pueden actualizar
+  y cada planilla guarda los valores con que se generó.
+- **Planilla mensual**: se genera con los funcionarios del mes (días proporcionales si entró o salió en el
+  mes), horas extra al 50 % y al 100 %, comisiones y premios, bonificación familiar (fuera de la base del
+  IPS), descuentos y adelantos; confirmación, pago del neto desde el banco o la caja, anulación si no está
+  pagada. Recibos de salario para imprimir y archivos de la planilla y de los aportes al IPS.
+- **Aguinaldo**: la doceava parte de lo cobrado en el año, sin IPS, ajustable antes de confirmar.
+- **Contabilidad**: asiento de sueldos el último día del mes (sueldos, aporte patronal, IPS a pagar,
+  anticipos y sueldos a pagar) y asiento del pago; los sueldos pagados entran al flujo de caja. Las
+  empresas con el plan creado antes de RRHH agregan las cuentas que faltan con un botón.
+
+### Fase 4 · pendiente
+- Informes de gestión, dashboard y app del dueño.
+- RRHH: control de asistencia, registro de vacaciones tomadas y liquidación final por egreso
+  (preaviso e indemnización).
 
 ## Estructura
 

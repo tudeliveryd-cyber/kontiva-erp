@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { dinero } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 
-interface Resumen { ventas: string; cobros: string; ingresos: string; pagos: string; devoluciones: string; gastos: string; entradas: string; salidas: string; neto: string }
+interface Resumen { ventas: string; cobros: string; ingresos: string; pagos: string; devoluciones: string; gastos: string; sueldos: string; entradas: string; salidas: string; neto: string }
 interface FlujoCaja {
   desde: string;
   hasta: string;
@@ -27,10 +27,10 @@ export function Flujo() {
   const maximo = d ? Math.max(1, ...d.real.dias.map((x) => Math.max(Number(x.entradas), Number(x.salidas)))) : 1;
   const exportar = () => {
     if (!d) return;
-    const filas = [['Fecha', 'Ventas al contado', 'Cobros', 'Ingresos bancarios', 'Pagos a proveedores', 'Devoluciones', 'Gastos bancarios', 'Entradas', 'Salidas', 'Neto']];
-    for (const x of d.real.dias) filas.push([x.fecha, x.ventas, x.cobros, x.ingresos, x.pagos, x.devoluciones, x.gastos, x.entradas, x.salidas, x.neto]);
+    const filas = [['Fecha', 'Ventas al contado', 'Cobros', 'Ingresos bancarios', 'Pagos a proveedores', 'Devoluciones', 'Gastos bancarios', 'Sueldos', 'Entradas', 'Salidas', 'Neto']];
+    for (const x of d.real.dias) filas.push([x.fecha, x.ventas, x.cobros, x.ingresos, x.pagos, x.devoluciones, x.gastos, x.sueldos, x.entradas, x.salidas, x.neto]);
     const t = d.real.totales;
-    filas.push(['Total', t.ventas, t.cobros, t.ingresos, t.pagos, t.devoluciones, t.gastos, t.entradas, t.salidas, t.neto]);
+    filas.push(['Total', t.ventas, t.cobros, t.ingresos, t.pagos, t.devoluciones, t.gastos, t.sueldos, t.entradas, t.salidas, t.neto]);
     const csv = filas.map((f) => f.join(';')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
@@ -77,6 +77,7 @@ export function Flujo() {
                   <tr><td>Ventas al contado</td><td className="der num">{dinero(d.real.totales.ventas)}</td><td>Pagos a proveedores</td><td className="der num">{dinero(d.real.totales.pagos)}</td></tr>
                   <tr><td>Cobros de clientes</td><td className="der num">{dinero(d.real.totales.cobros)}</td><td>Devoluciones reintegradas</td><td className="der num">{dinero(d.real.totales.devoluciones)}</td></tr>
                   <tr><td>Ingresos bancarios</td><td className="der num">{dinero(d.real.totales.ingresos)}</td><td>Gastos bancarios</td><td className="der num">{dinero(d.real.totales.gastos)}</td></tr>
+                  <tr><td /><td /><td>Sueldos y aguinaldos pagados</td><td className="der num">{dinero(d.real.totales.sueldos)}</td></tr>
                 </tbody>
               </table>
             </section>
