@@ -13,7 +13,7 @@ describe('RRHH: asistencia, vacaciones y liquidación final', () => {
   let app: INestApplication;
   let e: EmpresaPrueba;
   let h: { Authorization: string };
-  const f: Record<string, string> = {};
+  const f = { ana: '', diego: '' };
 
   const alta = (datos: object) => http(app).post('/api/funcionarios').set(h).send({ sucursalId: e.sucursalId, cargo: 'Vendedor', remuneracion: 'mensual', ...datos }).expect(201);
   const novedad = (datos: object, estado = 201) => http(app).post('/api/rrhh/novedades').set(h).send(datos).expect(estado);
