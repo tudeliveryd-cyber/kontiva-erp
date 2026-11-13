@@ -102,9 +102,15 @@ Producto comercial de **Araújo Tech Sistemas**.
   WhatsApp, cobros de una o varias cuentas (en efectivo entra a la caja y aparece en el arqueo), anulación
   de cobros. Una devolución de una venta a crédito descuenta primero de la deuda; anular una venta a crédito
   anula su cuenta si no tiene cobros.
+- **Bancos**: cuentas con saldo inicial, extracto con saldo corrido, depósitos, extracciones, gastos e ingresos
+  bancarios, transferencias entre cuentas y depósito del efectivo de la caja (sale de la caja, entra al banco).
+  Pagos a proveedores y cobros por transferencia o cheque pueden registrarse en una cuenta; al anularlos se
+  genera el movimiento inverso (nada se borra). Conciliación marcando los movimientos del extracto.
+- **Flujo de caja** (flujo_caja.ver, confidencial): entradas y salidas reales del período por día y por
+  concepto, exportación CSV, y proyección desde el saldo en bancos con lo que vence a cobrar y a pagar.
 
 ### Fase 2 · pendiente
-- Cuentas bancarias, conciliación y flujo de caja; plan de cuentas y asientos automáticos.
+- Plan de cuentas y asientos automáticos (contabilidad).
 
 ### Fase 3 · hecho (factura electrónica)
 - **Configuración fiscal**: ambiente (prueba / producción), timbrado, actividad económica, CSC y certificado

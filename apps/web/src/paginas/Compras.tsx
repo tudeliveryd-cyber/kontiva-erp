@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { fechaHora } from '../lib/formato';
 import { cantidad as fmtCant, dinero, type CajaFila, type Deposito } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { SelectorBanco } from './Bancos';
 
 // ---------------------------------------------------------------------------
 // Tipos y utilidades
@@ -602,7 +603,7 @@ function NuevaCompra({ orden, alCerrar }: { orden?: Orden; alCerrar: (id?: strin
   const [doc, setDoc] = useState({ tipo: 'factura', timbrado: '', numero: '', cdc: '', fecha: hoy() });
   const [condicion, setCondicion] = useState<'contado' | 'credito'>('credito');
   const [vencimiento, setVencimiento] = useState('');
-  const [pago, setPago] = useState<{ registrar: boolean; medio: string; cajaId: string; referencia: string }>({ registrar: false, medio: 'transferencia', cajaId: '', referencia: '' });
+  const [pago, setPago] = useState<{ registrar: boolean; medio: string; cajaId: string; cuentaBancariaId: string; referencia: string }>({ registrar: false, medio: 'transferencia', cajaId: '', cuentaBancariaId: '', referencia: '' });
   const [nota, setNota] = useState('');
   const [lineas, setLineas] = useState<LineaCompra[]>(
     orden?.items
@@ -635,7 +636,7 @@ function NuevaCompra({ orden, alCerrar }: { orden?: Orden; alCerrar: (id?: strin
           fechaDocumento: doc.fecha,
           condicion,
           vencimiento: condicion === 'credito' ? vencimiento || null : null,
-          pago: condicion === 'contado' && pago.registrar ? { medio: pago.medio, cajaId: pago.medio === 'efectivo' ? pago.cajaId || propias[0]?.id || null : null, referencia: pago.referencia || null } : null,
+          pago: condicion === 'contado' && pago.registrar ? { medio: pago.medio, cajaId: pago.medio === 'efectivo' ? pago.cajaId || propias[0]?.id || null : null, cuentaBancariaId: pago.medio !== 'efectivo' && pago.cuentaBancariaId ? pago.cuentaBancariaId : null, referencia: pago.referencia || null } : null,
           nota: nota || null,
           items: lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), costoUnitario: Number(l.costo), ...(Number(l.descuento) > 0 && { descuento: Number(l.descuento) }), ...(l.ordenLinea && { ordenLinea: l.ordenLinea }) })),
         },
@@ -744,6 +745,7 @@ function NuevaCompra({ orden, alCerrar }: { orden?: Orden; alCerrar: (id?: strin
             <Campo etiqueta="Referencia (opcional)" id="co-r">
               <input id="co-r" className="entrada" placeholder="N.º de transferencia o cheque" value={pago.referencia} onChange={(e) => setPago({ ...pago, referencia: e.target.value })} />
             </Campo>
+            {pago.medio !== 'efectivo' && <SelectorBanco id="co-b" valor={pago.cuentaBancariaId} alCambiar={(v) => setPago({ ...pago, cuentaBancariaId: v })} />}
           </div>
         )}
         {!pagoValido && <Aviso tipo="error">Para pagar en efectivo abra su caja en "Cajas y PDV".</Aviso>}
@@ -947,6 +949,7 @@ function PagarCuentas({ cuentas, alCerrar }: { cuentas: CuentaPagar[]; alCerrar:
   const propias = cajas.data?.filter((c) => c.sesion?.propia) ?? [];
   const [montos, setMontos] = useState<Record<string, string>>(Object.fromEntries(cuentas.map((c) => [c.id, String(Math.round(Number(c.saldo)))])));
   const [medio, setMedio] = useState('transferencia');
+  const [banco, setBanco] = useState('');
   const [fecha, setFecha] = useState(hoy());
   const [referencia, setReferencia] = useState('');
   const total = Object.values(montos).reduce((a, v) => a + (Number(v) || 0), 0);
@@ -954,7 +957,7 @@ function PagarCuentas({ cuentas, alCerrar }: { cuentas: CuentaPagar[]; alCerrar:
     mutationFn: () =>
       api('/pagos-proveedor', {
         metodo: 'POST',
-        cuerpo: { proveedorId: cuentas[0]!.proveedor.id, fecha, medio, cajaId: medio === 'efectivo' ? propias[0]?.id ?? null : null, referencia: referencia || null, aplicaciones: cuentas.filter((c) => Number(montos[c.id]) > 0).map((c) => ({ cuentaId: c.id, monto: Number(montos[c.id]) })) },
+        cuerpo: { proveedorId: cuentas[0]!.proveedor.id, fecha, medio, cajaId: medio === 'efectivo' ? propias[0]?.id ?? null : null, cuentaBancariaId: medio !== 'efectivo' && banco ? banco : null, referencia: referencia || null, aplicaciones: cuentas.filter((c) => Number(montos[c.id]) > 0).map((c) => ({ cuentaId: c.id, monto: Number(montos[c.id]) })) },
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['cuentas-pagar'] });
@@ -994,6 +997,7 @@ function PagarCuentas({ cuentas, alCerrar }: { cuentas: CuentaPagar[]; alCerrar:
           <Campo etiqueta="Fecha" id="pg-f"><input id="pg-f" type="date" className="entrada" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
         </div>
         {medio === 'efectivo' && !propias.length && <Aviso tipo="info">El efectivo sale de una caja abierta: abra su caja en "Cajas y PDV".</Aviso>}
+        {medio !== 'efectivo' && <SelectorBanco id="pg-b" valor={banco} alCambiar={setBanco} />}
         <Campo etiqueta="Referencia (opcional)" id="pg-r"><input id="pg-r" className="entrada" placeholder="N.º de transferencia o cheque" value={referencia} onChange={(e) => setReferencia(e.target.value)} /></Campo>
       </div>
     </Cajon>

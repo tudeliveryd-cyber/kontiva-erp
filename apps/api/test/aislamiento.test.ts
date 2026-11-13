@@ -20,6 +20,8 @@ import { ListasPrecioController } from '../src/catalogo/listas.controller';
 import { PedidosController, PresupuestosController } from '../src/operacion/pedidos.controller';
 import { FacturacionController } from '../src/sifen/facturacion.controller';
 import { CobrosController, CuentasCobrarController } from '../src/finanzas/cobrar.controller';
+import { CuentasBancariasController, MovimientosBancariosController } from '../src/finanzas/bancos.controller';
+import { FlujoCajaController } from '../src/finanzas/flujo.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
@@ -63,6 +65,9 @@ const CONTROLADORES = [
   PagosProveedorController,
   CuentasCobrarController,
   CobrosController,
+  CuentasBancariasController,
+  MovimientosBancariosController,
+  FlujoCajaController,
 ];
 
 interface Ruta {
@@ -177,6 +182,8 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/cuentas-cobrar'] = cl.body.id;
     const kB = await http(app).post('/api/cobros').set(hB).send({ clienteId: cl.body.id, fecha: '2026-11-12', medio: 'transferencia', aplicaciones: [{ cuentaId: vcB.body.cuentaCobrar.id, monto: 1000 }] }).expect(201);
     idsDeB['/api/cobros'] = kB.body.id;
+    const cbB = await http(app).post('/api/cuentas-bancarias').set(hB).send({ banco: 'Banco de B', nombre: 'Cuenta corriente', saldoInicial: 0, fechaSaldoInicial: '2026-11-01' }).expect(201);
+    idsDeB['/api/cuentas-bancarias'] = cbB.body.id;
   });
   afterAll(() => app.close());
 
@@ -258,6 +265,10 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/compras/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/pagos-proveedor/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/cobros/:id/anular': { motivo: 'Intento ajeno' },
+          'PATCH /api/cuentas-bancarias/:id': { banco: 'Banco ajeno', nombre: 'Intento ajeno', fechaSaldoInicial: '2026-11-01' },
+          'POST /api/cuentas-bancarias/:id/movimientos': { tipo: 'deposito', fecha: '2026-11-12', monto: 1, descripcion: 'Intento ajeno' },
+          'POST /api/cuentas-bancarias/:id/transferencia': { destinoId: '00000000-0000-7000-8000-000000000000', fecha: '2026-11-12', monto: 1 },
+          'POST /api/cuentas-bancarias/:id/deposito-caja': { cajaId: '00000000-0000-7000-8000-000000000000', fecha: '2026-11-12', monto: 1 },
         };
         const cuerpos: Record<string, object> = { patch: { nombre: 'Intento ajeno' }, put: { permisos: [] } };
         const cuerpo = porRuta[`${r.metodo.toUpperCase()} ${r.ruta}`] ?? cuerpos[r.metodo] ?? {};

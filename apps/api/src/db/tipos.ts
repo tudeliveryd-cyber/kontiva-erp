@@ -252,6 +252,8 @@ export interface BaseDatos {
   cuenta_cobrar: CuentaCobrarTabla;
   cobro_cliente: CobroClienteTabla;
   cobro_aplicacion: CobroAplicacionTabla;
+  cuenta_bancaria: CuentaBancariaTabla;
+  movimiento_bancario: MovimientoBancarioTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -828,6 +830,7 @@ export interface PagoProveedorTabla {
   fecha: Fecha;
   medio: 'efectivo' | 'transferencia' | 'cheque' | 'tarjeta' | 'otro';
   sesion_caja_id: string | null;
+  cuenta_bancaria_id: Generated<string | null>;
   monto: Num;
   referencia: string | null;
   nota: string | null;
@@ -870,6 +873,7 @@ export interface CobroClienteTabla {
   fecha: Fecha;
   medio: 'efectivo' | 'tarjeta' | 'transferencia' | 'cheque' | 'otro';
   sesion_caja_id: string | null;
+  cuenta_bancaria_id: Generated<string | null>;
   monto: Num;
   referencia: string | null;
   nota: string | null;
@@ -886,5 +890,39 @@ export interface CobroAplicacionTabla {
   devolucion_id: string | null;
   cuenta_cobrar_id: string;
   monto: Num;
+  creado_en: Creado;
+}
+
+export interface CuentaBancariaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  banco: string;
+  nombre: string;
+  numero: string | null;
+  moneda: Generated<'PYG'>;
+  saldo_inicial: NumGen;
+  fecha_saldo_inicial: Fecha;
+  activa: Generated<boolean>;
+  creado_por: string | null;
+  creado_en: Creado;
+}
+
+export type TipoMovimientoBancario = 'deposito' | 'extraccion' | 'transferencia_entrada' | 'transferencia_salida' | 'pago_proveedor' | 'cobro' | 'deposito_caja' | 'gasto' | 'ingreso' | 'anulacion';
+
+export interface MovimientoBancarioTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  cuenta_id: string;
+  fecha: Fecha;
+  tipo: TipoMovimientoBancario;
+  descripcion: string;
+  monto: Num;
+  referencia: string | null;
+  origen_tipo: string | null;
+  origen_id: string | null;
+  conciliado: Generated<boolean>;
+  conciliado_en: Date | null;
+  conciliado_por: string | null;
+  creado_por: string;
   creado_en: Creado;
 }

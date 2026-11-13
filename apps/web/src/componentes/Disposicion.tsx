@@ -22,6 +22,8 @@ import {
   ShieldCheck,
   UserRound,
   Users,
+  ChartNoAxesCombined,
+  Landmark,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useSesion } from '../lib/sesion';
@@ -48,6 +50,8 @@ export function Disposicion() {
     { a: '/compras', icono: PackagePlus, texto: 'Compras', visible: puede('recepcion.ver') },
     { a: '/cuentas-cobrar', icono: HandCoins, texto: 'Cuentas a cobrar', visible: puede('cuenta_cobrar.ver') },
     { a: '/cuentas-pagar', icono: Wallet, texto: 'Cuentas a pagar', visible: puede('cuenta_pagar.ver') },
+    { a: '/bancos', icono: Landmark, texto: 'Bancos', visible: puede('banco.ver') },
+    { a: '/flujo-caja', icono: ChartNoAxesCombined, texto: 'Flujo de caja', visible: puede('flujo_caja.ver') },
   ];
   const enlaces = [
     { a: '/usuarios', icono: Users, texto: 'Usuarios', visible: puede('usuario.ver') },

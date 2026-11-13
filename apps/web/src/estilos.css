@@ -287,3 +287,10 @@ dl.datos dd { margin: 0; }
 
 .credito-cobro { display: flex; gap: 8px; align-items: flex-start; padding: 12px; border: 1px dashed var(--linea); border-radius: var(--radio); background: var(--p1); }
 .subtitulo { margin: 4px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--t3); font-weight: 600; }
+
+/* Flujo de caja */
+.barra-flujo { height: 7px; border-radius: 4px; background: var(--fondo2, #f1f5f9); margin: 2px 0; overflow: hidden; }
+.barra-flujo span { display: block; height: 100%; border-radius: 4px; }
+.barra-flujo .ent { background: var(--ok); }
+.barra-flujo .sal { background: var(--bad); opacity: 0.75; }
+td.num { white-space: nowrap; }

@@ -12,6 +12,7 @@ import { siguienteNumero } from '../comun/stock';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 import { obtenerCaja, sesionAbierta } from '../operacion/cajas.controller';
+import { movimientoBancario, obtenerCuentaBancaria, revertirMovimientos } from './bancos.controller';
 
 const NULO = '00000000-0000-0000-0000-000000000000';
 const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
@@ -179,10 +180,12 @@ export class CobrosController {
         if (!sesion || sesion.usuario_id !== ctx.usuarioId) throw conflicto('CAJA_CERRADA', 'Para cobrar en caja, ábrala con su usuario');
         sesionId = sesion.id;
       }
+      if (d.cuentaBancariaId && (d.medio === 'efectivo' || d.cajaId)) throw invalido('Un cobro entra a una caja o a una cuenta bancaria, no a ambas');
+      const banco = d.cuentaBancariaId ? await obtenerCuentaBancaria(tx, d.cuentaBancariaId) : null;
       const numero = await siguienteNumero(tx, 'cobro_cliente');
       const cobro = await tx
         .insertInto('cobro_cliente')
-        .values({ empresa_id: ctx.empresaId, numero, cliente_id: d.clienteId, fecha: d.fecha, medio: d.medio, sesion_caja_id: sesionId, monto: total.toFixed(2), referencia: d.referencia ?? null, nota: d.nota ?? null, creado_por: ctx.usuarioId })
+        .values({ empresa_id: ctx.empresaId, numero, cliente_id: d.clienteId, fecha: d.fecha, medio: d.medio, sesion_caja_id: sesionId, cuenta_bancaria_id: banco?.id ?? null, monto: total.toFixed(2), referencia: d.referencia ?? null, nota: d.nota ?? null, creado_por: ctx.usuarioId })
         .returning('id')
         .executeTakeFirstOrThrow();
       for (const a of d.aplicaciones) {
@@ -198,6 +201,7 @@ export class CobrosController {
           .values({ empresa_id: ctx.empresaId, sesion_id: sesionId, tipo: 'cobro', medio: MEDIO_CAJA[d.medio], moneda: 'PYG', monto: total.toFixed(2), venta_id: null, motivo: `Cobro N.º ${numero} · ${cliente.nombre}`, autorizado_por: null, creado_por: ctx.usuarioId })
           .execute();
       }
+      if (banco) await movimientoBancario(tx, ctx, { cuentaId: banco.id, fecha: d.fecha, tipo: 'cobro', descripcion: `Cobro N.º ${numero} · ${cliente.nombre}`, monto: total, referencia: d.referencia, origenTipo: 'cobro_cliente', origenId: cobro.id });
       await auditar(tx, { ...ctx, ...o }, { accion: 'cobro', entidad: 'cliente', entidadId: d.clienteId, despues: { numero, cliente: cliente.nombre, total: total.toFixed(0), medio: d.medio } });
       return { id: cobro.id, numero, total: total.toFixed(2), cliente: cliente.nombre, fecha: d.fecha, medio: d.medio };
     });
@@ -221,6 +225,7 @@ export class CobrosController {
           .values({ empresa_id: ctx.empresaId, sesion_id: k.sesion_caja_id, tipo: 'cobro', medio: MEDIO_CAJA[k.medio], moneda: 'PYG', monto: new Decimal(k.monto).neg().toFixed(2), venta_id: null, motivo: `Anulación del cobro N.º ${Number(k.numero)}: ${d.motivo}`, autorizado_por: null, creado_por: ctx.usuarioId })
           .execute();
       }
+      if (k.cuenta_bancaria_id) await revertirMovimientos(tx, ctx, 'cobro_cliente', id, d.motivo);
       const apps = await tx.selectFrom('cobro_aplicacion').select(['cuenta_cobrar_id', 'monto']).where('cobro_id', '=', id).execute();
       for (const a of apps) {
         const c = await tx.selectFrom('cuenta_cobrar').select(['monto', 'saldo', 'estado']).where('id', '=', a.cuenta_cobrar_id).forUpdate().executeTakeFirstOrThrow();

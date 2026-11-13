@@ -11,6 +11,7 @@ import { conflicto, ErrorNegocio, invalido, noEncontrado, prohibido } from '../c
 import { moverStock, siguienteNumero } from '../comun/stock';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
+import { movimientoBancario, obtenerCuentaBancaria, revertirMovimientos } from '../finanzas/bancos.controller';
 import { esperado, obtenerCaja, sesionAbierta } from '../operacion/cajas.controller';
 
 const NULO = '00000000-0000-0000-0000-000000000000';
@@ -401,7 +402,7 @@ async function leerCompra(tx: Tx, id: string, verCosto: boolean) {
 async function registrarPago(
   tx: Tx,
   ctx: Ctx,
-  d: { proveedorId: string; fecha: string; medio: 'efectivo' | 'transferencia' | 'cheque' | 'tarjeta' | 'otro'; cajaId?: string | null; referencia?: string | null; nota?: string | null; aplicaciones: { cuentaId: string; monto: number | Decimal }[] },
+  d: { proveedorId: string; fecha: string; medio: 'efectivo' | 'transferencia' | 'cheque' | 'tarjeta' | 'otro'; cajaId?: string | null; cuentaBancariaId?: string | null; referencia?: string | null; nota?: string | null; aplicaciones: { cuentaId: string; monto: number | Decimal }[] },
 ) {
   const ids = d.aplicaciones.map((a) => a.cuentaId);
   if (new Set(ids).size !== ids.length) throw invalido('Hay cuentas repetidas');
@@ -425,10 +426,12 @@ async function registrarPago(
     if (new Decimal(disponible?.monto ?? 0).lt(total)) throw conflicto('SALDO_INSUFICIENTE', 'No hay suficiente efectivo en la caja');
     sesionId = sesion.id;
   }
+  if (d.cuentaBancariaId && d.medio === 'efectivo') throw invalido('Un pago en efectivo no sale de una cuenta bancaria');
+  const banco = d.cuentaBancariaId ? await obtenerCuentaBancaria(tx, d.cuentaBancariaId) : null;
   const numero = await siguienteNumero(tx, 'pago_proveedor');
   const pago = await tx
     .insertInto('pago_proveedor')
-    .values({ empresa_id: ctx.empresaId, numero, proveedor_id: d.proveedorId, fecha: d.fecha, medio: d.medio, sesion_caja_id: sesionId, monto: total.toFixed(2), referencia: d.referencia ?? null, nota: d.nota ?? null, creado_por: ctx.usuarioId })
+    .values({ empresa_id: ctx.empresaId, numero, proveedor_id: d.proveedorId, fecha: d.fecha, medio: d.medio, sesion_caja_id: sesionId, cuenta_bancaria_id: banco?.id ?? null, monto: total.toFixed(2), referencia: d.referencia ?? null, nota: d.nota ?? null, creado_por: ctx.usuarioId })
     .returning('id')
     .executeTakeFirstOrThrow();
   for (const a of d.aplicaciones) {
@@ -443,6 +446,10 @@ async function registrarPago(
       .insertInto('movimiento_caja')
       .values({ empresa_id: ctx.empresaId, sesion_id: sesionId, tipo: 'pago_proveedor', medio: 'efectivo', moneda: 'PYG', monto: total.neg().toFixed(2), venta_id: null, motivo: `Pago N.º ${numero} a proveedor`, autorizado_por: null, creado_por: ctx.usuarioId })
       .execute();
+  }
+  if (banco) {
+    const prov = await tx.selectFrom('proveedor').select('nombre').where('id', '=', d.proveedorId).executeTakeFirstOrThrow();
+    await movimientoBancario(tx, ctx, { cuentaId: banco.id, fecha: d.fecha, tipo: 'pago_proveedor', descripcion: `Pago N.º ${numero} · ${prov.nombre}`, monto: total.neg(), referencia: d.referencia, origenTipo: 'pago_proveedor', origenId: pago.id });
   }
   return { id: pago.id, numero, total };
 }
@@ -653,7 +660,7 @@ export class ComprasController {
           .returning('id')
           .executeTakeFirstOrThrow();
         if (d.condicion === 'contado' && d.pago) {
-          await registrarPago(tx, ctx, { proveedorId: d.proveedorId, fecha: d.fechaDocumento, medio: d.pago.medio, cajaId: d.pago.cajaId, referencia: d.pago.referencia, aplicaciones: [{ cuentaId: cuenta.id, monto: calc.total }] });
+          await registrarPago(tx, ctx, { proveedorId: d.proveedorId, fecha: d.fechaDocumento, medio: d.pago.medio, cajaId: d.pago.cajaId, cuentaBancariaId: d.pago.cuentaBancariaId, referencia: d.pago.referencia, aplicaciones: [{ cuentaId: cuenta.id, monto: calc.total }] });
         }
       }
       await auditar(tx, { ...ctx, ...o }, { accion: 'compra', entidad: 'compra', entidadId: compra.id, despues: { numero, proveedor: prov.nombre, documento: d.documentoNumero, total: calc.total.toFixed(0), condicion: d.condicion } });
@@ -854,6 +861,7 @@ export class PagosProveedorController {
           .values({ empresa_id: ctx.empresaId, sesion_id: g.sesion_caja_id, tipo: 'pago_proveedor', medio: 'efectivo', moneda: 'PYG', monto: new Decimal(g.monto).toFixed(2), venta_id: null, motivo: `Anulación del pago N.º ${Number(g.numero)}: ${d.motivo}`, autorizado_por: null, creado_por: ctx.usuarioId })
           .execute();
       }
+      if (g.cuenta_bancaria_id) await revertirMovimientos(tx, ctx, 'pago_proveedor', id, d.motivo);
       const apps = await tx.selectFrom('pago_aplicacion').select(['cuenta_pagar_id', 'monto']).where('pago_id', '=', id).execute();
       for (const a of apps) {
         const c = await tx.selectFrom('cuenta_pagar').select(['monto', 'saldo', 'estado']).where('id', '=', a.cuenta_pagar_id).forUpdate().executeTakeFirstOrThrow();

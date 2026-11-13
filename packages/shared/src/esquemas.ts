@@ -396,7 +396,7 @@ export const compraEntrada = z
     vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
     /** Contado: cómo se pagó (efectivo desde la caja abierta o por otro medio). */
     pago: z
-      .object({ medio: z.enum(['efectivo', 'transferencia', 'cheque', 'tarjeta', 'otro']), cajaId: uuid.nullable().optional(), referencia: textoOpcional(80) })
+      .object({ medio: z.enum(['efectivo', 'transferencia', 'cheque', 'tarjeta', 'otro']), cajaId: uuid.nullable().optional(), cuentaBancariaId: uuid.nullable().optional(), referencia: textoOpcional(80) })
       .nullable()
       .optional(),
     nota: textoOpcional(1000),
@@ -417,6 +417,8 @@ export const pagoProveedorEntrada = z.object({
   fecha: fechaObligatoria,
   medio: z.enum(['efectivo', 'transferencia', 'cheque', 'tarjeta', 'otro']),
   cajaId: uuid.nullable().optional(),
+  /** Sale de esta cuenta bancaria (transferencia, cheque, débito). */
+  cuentaBancariaId: uuid.nullable().optional(),
   referencia: textoOpcional(80),
   nota: textoOpcional(500),
   aplicaciones: z.array(z.object({ cuentaId: uuid, monto: z.coerce.number().positive().max(1e13) })).min(1, 'Elija qué cuentas paga').max(200),
@@ -440,7 +442,46 @@ export const cobroEntrada = z.object({
   medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'cheque', 'otro']),
   /** Caja abierta propia donde entra el dinero (obligatoria en efectivo). */
   cajaId: uuid.nullable().optional(),
+  /** Entra a esta cuenta bancaria (transferencia, depósito). */
+  cuentaBancariaId: uuid.nullable().optional(),
   referencia: textoOpcional(80),
   nota: textoOpcional(500),
   aplicaciones: z.array(z.object({ cuentaId: uuid, monto: z.coerce.number().positive().max(1e13) })).min(1, 'Elija qué cuentas cobra').max(200),
+});
+
+// ---------------------------------------------------------------------------
+// Fase 2 · bancos y flujo de caja
+// ---------------------------------------------------------------------------
+
+const fechaDia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida');
+
+export const cuentaBancariaEntrada = z.object({
+  banco: z.string().trim().min(2, 'Ingrese el banco').max(120),
+  nombre: z.string().trim().min(2, 'Ingrese un nombre para la cuenta').max(120),
+  numero: textoOpcional(40),
+  saldoInicial: z.coerce.number().min(-1e13).max(1e13).default(0),
+  fechaSaldoInicial: fechaDia,
+  activa: z.boolean().optional(),
+});
+
+export const movimientoBancarioEntrada = z.object({
+  tipo: z.enum(['deposito', 'extraccion', 'gasto', 'ingreso']),
+  fecha: fechaDia,
+  descripcion: z.string().trim().min(3, 'Describa el movimiento').max(300),
+  monto: z.coerce.number().positive('El monto debe ser mayor a cero').max(1e13),
+  referencia: textoOpcional(80),
+});
+
+export const transferenciaBancariaEntrada = z.object({
+  destinoId: uuid,
+  fecha: fechaDia,
+  monto: z.coerce.number().positive().max(1e13),
+  referencia: textoOpcional(80),
+});
+
+export const depositoCajaEntrada = z.object({
+  cajaId: uuid,
+  fecha: fechaDia,
+  monto: z.coerce.number().positive().max(1e13),
+  referencia: textoOpcional(80),
 });

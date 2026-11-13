@@ -32,6 +32,8 @@ import { Pedidos, Presupuestos } from './paginas/Pedidos';
 import { Facturacion } from './paginas/Facturacion';
 import { Compras, CuentasPagar, OrdenesCompra, Proveedores } from './paginas/Compras';
 import { CuentasCobrar } from './paginas/Cobrar';
+import { Bancos } from './paginas/Bancos';
+import { Flujo } from './paginas/Flujo';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -67,6 +69,8 @@ function Rutas() {
         {puede('recepcion.ver') && <Route path="compras" element={<Compras />} />}
         {puede('cuenta_pagar.ver') && <Route path="cuentas-pagar" element={<CuentasPagar />} />}
         {puede('cuenta_cobrar.ver') && <Route path="cuentas-cobrar" element={<CuentasCobrar />} />}
+        {puede('banco.ver') && <Route path="bancos" element={<Bancos />} />}
+        {puede('flujo_caja.ver') && <Route path="flujo-caja" element={<Flujo />} />}
         {puede('cliente.ver') && <Route path="clientes" element={<Clientes />} />}
         {(puede('producto.crear') || puede('cliente.crear')) && <Route path="importar/:tipo" element={<Importar />} />}
         {puede('usuario.ver') && <Route path="usuarios" element={<Usuarios />} />}

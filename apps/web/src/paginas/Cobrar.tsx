@@ -5,6 +5,7 @@ import { Aviso, Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../c
 import { api } from '../lib/api';
 import { dinero, type CajaFila } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { SelectorBanco } from './Bancos';
 
 interface CuentaCobrar {
   id: string;
@@ -126,6 +127,7 @@ export function EstadoCuentaCliente({ clienteId, alCerrar }: { clienteId: string
   const [montos, setMontos] = useState<Record<string, string>>({});
   const [medio, setMedio] = useState('efectivo');
   const [referencia, setReferencia] = useState('');
+  const [banco, setBanco] = useState('');
   const [hecho, setHecho] = useState<{ numero: number; total: string } | null>(null);
   const cobrar = useMutation({
     mutationFn: () =>
@@ -135,7 +137,8 @@ export function EstadoCuentaCliente({ clienteId, alCerrar }: { clienteId: string
           clienteId,
           fecha: hoy(),
           medio,
-          cajaId: propias[0]?.id ?? null,
+          cajaId: medio !== 'efectivo' && banco ? null : propias[0]?.id ?? null,
+          cuentaBancariaId: medio !== 'efectivo' && banco ? banco : null,
           referencia: referencia || null,
           aplicaciones: Object.entries(montos).filter(([, v]) => Number(v) > 0).map(([cuentaId, v]) => ({ cuentaId, monto: Number(v) })),
         },
@@ -207,7 +210,10 @@ export function EstadoCuentaCliente({ clienteId, alCerrar }: { clienteId: string
             </Campo>
             <Campo etiqueta="Referencia (opcional)" id="cb-r"><input id="cb-r" className="entrada" value={referencia} onChange={(e) => setReferencia(e.target.value)} /></Campo>
           </div>
-          {propias[0] ? (
+          {medio !== 'efectivo' && <SelectorBanco id="cb-b" valor={banco} alCambiar={setBanco} />}
+          {medio !== 'efectivo' && banco ? (
+            <p className="tenue peq" style={{ margin: 0 }}>El cobro entra a la cuenta bancaria elegida, no a la caja.</p>
+          ) : propias[0] ? (
             <p className="tenue peq" style={{ margin: 0 }}>El cobro entra a {propias[0].nombre} y aparece en su arqueo.</p>
           ) : (
             medio === 'efectivo' && <Aviso tipo="info">El cobro en efectivo entra a una caja: abra su caja en "Cajas y PDV".</Aviso>

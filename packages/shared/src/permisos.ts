@@ -73,6 +73,7 @@ export const RECURSOS = {
   cuenta_pagar: { nombre: 'Cuentas a pagar y pagos a proveedores', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'aprobar', 'cancelar', 'exportar'] },
   cuenta_cobrar: { nombre: 'Cuentas a cobrar y cobros', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'cancelar', 'exportar'] },
   banco: { nombre: 'Bancos y conciliación', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar'] },
+  flujo_caja: { nombre: 'Flujo de caja', modulo: 'finanzas', acciones: ['ver', 'exportar'], confidencial: true },
   contabilidad: { nombre: 'Asientos y cierres', modulo: 'finanzas', acciones: ['ver', 'crear', 'aprobar', 'exportar'] },
   informe_ganancias: { nombre: 'Informe de ganancias', modulo: 'informes', acciones: ['ver', 'exportar'], confidencial: true },
 

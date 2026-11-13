@@ -93,7 +93,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
     nombre: 'Financiero',
     descripcion: 'Cuentas a pagar y cobrar, bancos y flujo de caja.',
     alcance: 'empresa',
-    permisos: ['cuenta_pagar.*', 'cuenta_cobrar.*', 'banco.*', 'credito_cliente.ver', 'cliente.ver', 'proveedor.ver', 'caja.ver', 'arqueo.ver', 'informe_ganancias.ver'],
+    permisos: ['cuenta_pagar.*', 'cuenta_cobrar.*', 'banco.*', 'flujo_caja.*', 'credito_cliente.ver', 'cliente.ver', 'proveedor.ver', 'caja.ver', 'arqueo.ver', 'informe_ganancias.ver'],
   },
   {
     clave: 'contador',
