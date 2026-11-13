@@ -203,9 +203,23 @@ Fase 2 completa.
 - **App del dueño** (`/movil`): versión para el celular con lo esencial del negocio, instalable en la pantalla
   de inicio (manifiesto, íconos y service worker que nunca guarda datos de la API).
 
+### Fase 4 · hecho (asistencia, vacaciones y liquidación final)
+- **Asistencia**: planilla del mes por funcionario y día con ausencias, ausencias justificadas, reposo,
+  permisos, llegadas tardías y horas extra (50 % o 100 %). Las ausencias, el reposo y las horas extra pasan
+  solos a la planilla de sueldos (y se pueden volver a tomar en un borrador); un mes liquidado ya no se
+  modifica. Permiso nuevo `asistencia` (perfiles Recursos humanos, Gerente y Supervisor).
+- **Vacaciones**: saldo por año de servicio cumplido (12, 18 o 30 días hábiles, art. 218), goce con fechas
+  dentro del saldo y sin superposición, ajustes para el saldo inicial, anulación con motivo.
+- **Liquidación final** por renuncia, despido con o sin causa, mutuo acuerdo o fin de contrato: días
+  trabajados no liquidados, aguinaldo proporcional, vacaciones causadas y proporcionales; en el despido sin
+  causa, preaviso (30/45/60/90 días, art. 87, descontando el ya otorgado) e indemnización (15 días por año o
+  fracción de seis meses, art. 91, doble con 10 años o más), sobre el promedio de los últimos seis meses.
+  IPS por concepto (el criterio para vacaciones y preaviso es configurable en cada liquidación). Al confirmarla,
+  el legajo queda con la fecha y el motivo de egreso; se paga, contabiliza y anula como las demás planillas, y
+  el funcionario ya no entra en las planillas mensuales ni en el aguinaldo siguientes. Recibo para firmar.
+
 ### Fase 4 · pendiente
-- RRHH: control de asistencia, registro de vacaciones tomadas y liquidación final por egreso
-  (preaviso e indemnización).
+- Marcaciones de reloj biométrico (importación de entradas y salidas).
 
 ## Estructura
 

@@ -85,6 +85,7 @@ export const RECURSOS = {
   // RRHH (Fase 4)
   funcionario: { nombre: 'Funcionarios', modulo: 'rrhh', acciones: ['ver', 'crear', 'editar', 'eliminar'] },
   salario: { nombre: 'Salarios', modulo: 'rrhh', acciones: ['ver', 'editar'], confidencial: true },
+  asistencia: { nombre: 'Asistencia y vacaciones', modulo: 'rrhh', acciones: ['ver', 'editar'] },
 
   // Logística (verticales)
   entrega: { nombre: 'Entregas y rutas', modulo: 'logistica', acciones: ['ver', 'crear', 'editar'] },

@@ -263,6 +263,10 @@ export interface BaseDatos {
   funcionario: FuncionarioTabla;
   liquidacion: LiquidacionTabla;
   liquidacion_item: LiquidacionItemTabla;
+  novedad: NovedadTabla;
+  vacacion: VacacionTabla;
+  liquidacion_final: LiquidacionFinalTabla;
+  liquidacion_concepto: LiquidacionConceptoTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -1034,7 +1038,7 @@ export interface FuncionarioTabla {
 export interface LiquidacionTabla {
   empresa_id: string;
   id: Generated<string>;
-  tipo: 'mensual' | 'aguinaldo';
+  tipo: 'mensual' | 'aguinaldo' | 'final';
   periodo: Fecha;
   estado: Generated<'borrador' | 'confirmada' | 'anulada'>;
   salario_minimo: Num;
@@ -1076,4 +1080,58 @@ export interface LiquidacionItemTabla {
   descuentos: NumGen;
   detalle_descuentos: string | null;
   neto: NumGen;
+}
+
+export interface NovedadTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  funcionario_id: string;
+  fecha: Fecha;
+  tipo: 'ausencia' | 'ausencia_justificada' | 'reposo' | 'permiso' | 'llegada_tardia' | 'horas_extra';
+  horas: NumGen;
+  recargo: 50 | 100 | null;
+  observacion: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+export interface VacacionTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  funcionario_id: string;
+  tipo: 'goce' | 'ajuste';
+  desde: FechaNula;
+  hasta: FechaNula;
+  dias: Num;
+  observacion: string | null;
+  estado: Generated<'vigente' | 'anulada'>;
+  anulada_por: string | null;
+  anulada_en: Date | null;
+  motivo_anulacion: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+export interface LiquidacionFinalTabla {
+  empresa_id: string;
+  liquidacion_id: string;
+  funcionario_id: string;
+  fecha_egreso: Fecha;
+  motivo: 'renuncia' | 'despido_injustificado' | 'despido_justificado' | 'mutuo_acuerdo' | 'fin_contrato';
+  detalle_motivo: string | null;
+  opciones: Json<Record<string, unknown>>;
+  promedio_mensual: ColumnType<string | null, string | null, string | null>;
+  cobrado_anio: NumGen;
+  detalle_descuentos: string | null;
+  egreso_anterior: FechaNula;
+  motivo_anterior: string | null;
+}
+export interface LiquidacionConceptoTabla {
+  empresa_id: string;
+  liquidacion_id: string;
+  orden: number;
+  concepto: string;
+  descripcion: string;
+  dias: NumGen;
+  base: NumGen;
+  monto: Num;
+  imponible: boolean;
 }

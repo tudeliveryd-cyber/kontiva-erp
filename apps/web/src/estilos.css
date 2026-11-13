@@ -376,3 +376,26 @@ table.planilla th { white-space: nowrap; }
 .pdv-conexion.sin { background: var(--warnb); color: var(--warn); }
 .pdv-conexion span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pdv-conexion .error { color: var(--bad); }
+
+/* Planilla de asistencia */
+table.asistencia { border-collapse: separate; border-spacing: 0; }
+table.asistencia th, table.asistencia td { padding: 0; text-align: center; border-bottom: 1px solid var(--linea2); }
+table.asistencia th.dia { width: 30px; min-width: 30px; font-size: 11px; padding: 6px 0; line-height: 1.25; }
+table.asistencia th.dia small { display: block; font-weight: 500; color: var(--t3); }
+table.asistencia th.nombre, table.asistencia td.nombre { text-align: left; padding: 8px 14px; position: sticky; left: 0; background: #fff; z-index: 1; min-width: 200px; border-right: 1px solid var(--linea); }
+table.asistencia td.nombre small { display: block; color: var(--t3); font-size: 12px; }
+table.asistencia td.celda { height: 40px; border-left: 1px solid var(--linea2); font-size: 11px; font-weight: 700; }
+table.asistencia td.celda.edita { cursor: pointer; }
+table.asistencia td.celda.edita:hover { background: var(--p1); }
+table.asistencia .domingo { background: #fafafb; }
+table.asistencia .fuera { background: repeating-linear-gradient(135deg, #f4f4f5 0 4px, #fff 4px 8px); cursor: default; }
+table.asistencia td.tot { padding: 0 10px; font-variant-numeric: tabular-nums; font-size: 13px; }
+.cod { display: inline-flex; min-width: 20px; height: 18px; align-items: center; justify-content: center; border-radius: 4px; padding: 0 3px; font-size: 10.5px; font-weight: 700; margin: 1px; }
+.cod-A { color: var(--bad); background: var(--badb); }
+.cod-R { color: var(--warn); background: var(--warnb); }
+.cod-J, .cod-P { color: var(--t2); background: #f1f1f3; }
+.cod-T { color: #7a5600; background: #fff6d6; }
+.cod-H { color: var(--ok); background: var(--okb); }
+.cod-V { color: var(--p5); background: var(--p1); }
+.leyenda { display: flex; gap: 14px; flex-wrap: wrap; padding: 12px 16px; font-size: 12.5px; color: var(--t2); border-top: 1px solid var(--linea2); }
+.leyenda span { display: inline-flex; align-items: center; gap: 6px; }

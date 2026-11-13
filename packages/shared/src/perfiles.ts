@@ -42,7 +42,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'venta.*', 'descuento.aprobar', 'devolucion.*', 'presupuesto.*', 'pedido.*',
       'cliente.*', 'credito_cliente.*', 'caja.*', 'arqueo.*',
       'proveedor.ver', 'orden_compra.*', 'recepcion.*',
-      'cuenta_cobrar.*', 'informe_ventas.*', 'informe_ganancias.ver', 'documento_fiscal.*', 'entrega.*',
+      'cuenta_cobrar.*', 'informe_ventas.*', 'informe_ganancias.ver', 'documento_fiscal.*', 'entrega.*', 'asistencia.*',
     ],
   },
   {
@@ -54,7 +54,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'sucursal.ver', 'producto.ver', 'precio.ver', 'stock.ver', 'stock.editar', 'conteo.ver', 'conteo.crear',
       'venta.ver', 'venta.crear', 'venta.cancelar', 'venta.imprimir', 'descuento.aprobar',
       'devolucion.*', 'cliente.ver', 'cliente.crear', 'caja.*', 'arqueo.*', 'documento_fiscal.ver', 'documento_fiscal.imprimir',
-      'credito_cliente.ver', 'credito_cliente.aprobar', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear',
+      'credito_cliente.ver', 'credito_cliente.aprobar', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear', 'asistencia.ver', 'asistencia.editar',
     ],
   },
   {
@@ -111,7 +111,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
     nombre: 'Recursos humanos',
     descripcion: 'Legajos de funcionarios, sueldos, aguinaldo y planillas.',
     alcance: 'empresa',
-    permisos: ['funcionario.*', 'salario.*', 'sucursal.ver'],
+    permisos: ['funcionario.*', 'salario.*', 'asistencia.*', 'sucursal.ver'],
   },
   {
     clave: 'repartidor',

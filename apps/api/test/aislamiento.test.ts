@@ -23,6 +23,7 @@ import { CobrosController, CuentasCobrarController } from '../src/finanzas/cobra
 import { CuentasBancariasController, MovimientosBancariosController } from '../src/finanzas/bancos.controller';
 import { FlujoCajaController } from '../src/finanzas/flujo.controller';
 import { ContabilidadController } from '../src/contabilidad/contabilidad.controller';
+import { NovedadesController, VacacionesController } from '../src/rrhh/asistencia.controller';
 import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from '../src/rrhh/rrhh.controller';
 import { InformesController } from '../src/informes/informes.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
@@ -75,6 +76,8 @@ const CONTROLADORES = [
   FuncionariosController,
   RrhhConfiguracionController,
   LiquidacionesController,
+  NovedadesController,
+  VacacionesController,
   InformesController,
 ];
 
@@ -211,6 +214,10 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/funcionarios'] = fB.body.id;
     const lB = await http(app).post('/api/liquidaciones').set(hB).send({ tipo: 'mensual', periodo: '2026-10' }).expect(201);
     idsDeB['/api/liquidaciones'] = lB.body.id;
+    const nB = await http(app).post('/api/rrhh/novedades').set(hB).send({ funcionarioId: fB.body.id, fecha: '2026-10-06', tipo: 'ausencia' }).expect(201);
+    idsDeB['/api/rrhh/novedades'] = nB.body.ids[0];
+    const vB = await http(app).post('/api/rrhh/vacaciones/ajuste').set(hB).send({ funcionarioId: fB.body.id, dias: 5, observacion: 'Saldo inicial de B' }).expect(201);
+    idsDeB['/api/rrhh/vacaciones'] = vB.body.id;
   });
   afterAll(() => app.close());
 
@@ -299,6 +306,7 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/liquidaciones/:id/quitar': { funcionarioId: '00000000-0000-7000-8000-000000000000' },
           'POST /api/liquidaciones/:id/pagar': { fecha: '2026-11-01', medio: 'banco', cuentaBancariaId: '00000000-0000-7000-8000-000000000000' },
           'POST /api/liquidaciones/:id/anular': { motivo: 'Intento ajeno' },
+          'POST /api/rrhh/vacaciones/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/contabilidad/cuentas/:id': { codigo: '1.1.01', nombre: 'Intento ajeno', imputable: true },
           'POST /api/contabilidad/asientos/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/cuentas-bancarias/:id': { banco: 'Banco ajeno', nombre: 'Intento ajeno', fechaSaldoInicial: '2026-11-01' },

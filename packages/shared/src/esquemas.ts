@@ -601,6 +601,53 @@ export const liquidacionItemEntrada = z.object({
   monto: z.coerce.number().min(0).max(1e12).optional(), // aguinaldo
 });
 
+export const TIPOS_NOVEDAD = ['ausencia', 'ausencia_justificada', 'reposo', 'permiso', 'llegada_tardia', 'horas_extra'] as const;
+
+/** Novedad de asistencia de un día, o de un rango de días (reposo, ausencias). */
+export const novedadEntrada = z
+  .object({
+    funcionarioId: z.string().uuid('Elija el funcionario'),
+    fecha: fechaDia,
+    hasta: fechaDia.optional(),
+    tipo: z.enum(TIPOS_NOVEDAD),
+    horas: z.coerce.number().min(0).max(24).optional(),
+    recargo: z.union([z.literal(50), z.literal(100)]).optional(),
+    observacion: textoOpcional(200),
+  })
+  .refine((n) => n.tipo !== 'horas_extra' || ((n.horas ?? 0) > 0 && !!n.recargo), { message: 'Indique las horas y el recargo', path: ['horas'] })
+  .refine((n) => !['llegada_tardia', 'permiso'].includes(n.tipo) || (n.horas ?? 0) > 0, { message: 'Indique las horas', path: ['horas'] })
+  .refine((n) => !n.hasta || n.hasta >= n.fecha, { message: 'El rango de fechas es inválido', path: ['hasta'] });
+
+export const vacacionGoceEntrada = z
+  .object({ funcionarioId: z.string().uuid(), desde: fechaDia, hasta: fechaDia, dias: z.coerce.number().positive('Indique los días hábiles').max(90), observacion: textoOpcional(200) })
+  .refine((v) => v.hasta >= v.desde, { message: 'El rango de fechas es inválido', path: ['hasta'] });
+
+export const vacacionAjusteEntrada = z.object({
+  funcionarioId: z.string().uuid(),
+  dias: z.coerce.number().min(-400).max(400).refine((n) => n !== 0, 'Indique los días'),
+  observacion: z.string().trim().min(5, 'Explique el ajuste').max(200),
+});
+
+export const opcionesFiniquitoEntrada = z.object({
+  diasTrabajados: z.coerce.number().min(0).max(31).optional(),
+  preavisoOtorgado: z.coerce.number().int().min(0).max(90).optional(),
+  vacacionesPendientes: z.coerce.number().min(0).max(400).optional(),
+  vacacionesProporcionales: z.boolean().optional(),
+  ipsPreaviso: z.boolean().optional(),
+  ipsVacaciones: z.boolean().optional(),
+  otrosIngresos: z.coerce.number().min(0).max(1e12).optional(),
+  descuentos: z.coerce.number().min(0).max(1e12).optional(),
+  detalleDescuentos: textoOpcional(200),
+});
+
+export const liquidacionFinalEntrada = z.object({
+  funcionarioId: z.string().uuid('Elija el funcionario'),
+  fechaEgreso: fechaDia,
+  motivo: z.enum(['renuncia', 'despido_injustificado', 'despido_justificado', 'mutuo_acuerdo', 'fin_contrato']),
+  detalleMotivo: textoOpcional(300),
+  opciones: opcionesFiniquitoEntrada.optional(),
+});
+
 export const pagoLiquidacionEntrada = z
   .object({ fecha: fechaDia, medio: z.enum(['banco', 'efectivo']), cuentaBancariaId: z.string().uuid().optional(), cajaId: z.string().uuid().optional() })
   .refine((p) => (p.medio === 'banco' ? !!p.cuentaBancariaId : !!p.cajaId), { message: 'Elija la cuenta bancaria o la caja', path: ['medio'] });

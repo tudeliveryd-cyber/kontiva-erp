@@ -15,6 +15,7 @@ import { CobrosController, CuentasCobrarController } from './finanzas/cobrar.con
 import { CuentasBancariasController, MovimientosBancariosController } from './finanzas/bancos.controller';
 import { FlujoCajaController } from './finanzas/flujo.controller';
 import { ContabilidadController } from './contabilidad/contabilidad.controller';
+import { NovedadesController, VacacionesController } from './rrhh/asistencia.controller';
 import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from './rrhh/rrhh.controller';
 import { InformesController } from './informes/informes.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from './compras/compras.controller';
@@ -82,6 +83,8 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     FuncionariosController,
     RrhhConfiguracionController,
     LiquidacionesController,
+    NovedadesController,
+    VacacionesController,
     InformesController,
     VentasController,
     TransferenciasController,

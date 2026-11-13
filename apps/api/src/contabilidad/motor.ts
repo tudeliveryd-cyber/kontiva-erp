@@ -394,17 +394,17 @@ export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
   }
 
   // ── Sueldos y aguinaldos ──
-  const liqs = await sql<{ id: string; tipo: string; periodo: string; fecha: string; bruto: string; ips_obrero: string; ips_patronal: string; descuentos: string; neto: string }>`
-    SELECT x.id, x.tipo, x.periodo::text AS periodo, ${fechaLiquidacion('x')}::text AS fecha, x.bruto, x.ips_obrero, x.ips_patronal, x.descuentos, x.neto
+  const liqs = await sql<{ id: string; tipo: string; periodo: string; fecha: string; bruto: string; ips_obrero: string; ips_patronal: string; descuentos: string; neto: string; funcionario: string | null }>`
+    SELECT x.id, x.tipo, x.periodo::text AS periodo, ${fechaLiquidacion('x')}::text AS fecha, x.bruto, x.ips_obrero, x.ips_patronal, x.descuentos, x.neto, (SELECT f.nombre FROM liquidacion_final lf JOIN funcionario f ON f.id = lf.funcionario_id WHERE lf.liquidacion_id = x.id) AS funcionario
     FROM liquidacion x WHERE x.confirmada_en IS NOT NULL AND ${fechaLiquidacion('x')} <= ${hasta}::date AND ${noContabilizado('liquidacion')}`.execute(tx);
-  const nombreLiq = (l: { tipo: string; periodo: string }) =>
-    l.tipo === 'aguinaldo' ? `Aguinaldo ${l.periodo.slice(0, 4)}` : `Sueldos de ${new Intl.DateTimeFormat('es-PY', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${l.periodo}T12:00:00Z`))}`;
+  const nombreLiq = (l: { tipo: string; periodo: string; funcionario: string | null }) =>
+    l.tipo === 'final' ? `Liquidación final de ${l.funcionario ?? ''}` : l.tipo === 'aguinaldo' ? `Aguinaldo ${l.periodo.slice(0, 4)}` : `Sueldos de ${new Intl.DateTimeFormat('es-PY', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${l.periodo}T12:00:00Z`))}`;
   for (const l of liqs.rows) {
     const ipsO = new Decimal(l.ips_obrero);
     const ipsP = new Decimal(l.ips_patronal);
     asiento({
       fecha: l.fecha,
-      descripcion: `Liquidación: ${nombreLiq(l)}`,
+      descripcion: l.tipo === 'final' ? nombreLiq(l) : `Liquidación: ${nombreLiq(l)}`,
       origenTipo: 'liquidacion',
       origenId: l.id,
       lineas: [
@@ -416,8 +416,8 @@ export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
       ],
     });
   }
-  const pagosLiq = await sql<{ id: string; tipo: string; periodo: string; fecha: string; neto: string; pago_medio: string; pago_cuenta_id: string | null }>`
-    SELECT x.id, x.tipo, x.periodo::text AS periodo, x.pago_fecha::text AS fecha, x.neto, x.pago_medio, x.pago_cuenta_id
+  const pagosLiq = await sql<{ id: string; tipo: string; periodo: string; fecha: string; neto: string; pago_medio: string; pago_cuenta_id: string | null; funcionario: string | null }>`
+    SELECT x.id, x.tipo, x.periodo::text AS periodo, x.pago_fecha::text AS fecha, x.neto, x.pago_medio, x.pago_cuenta_id, (SELECT f.nombre FROM liquidacion_final lf JOIN funcionario f ON f.id = lf.funcionario_id WHERE lf.liquidacion_id = x.id) AS funcionario
     FROM liquidacion x WHERE x.pago_fecha IS NOT NULL AND x.pago_fecha <= ${hasta}::date AND ${noContabilizado('pago_liquidacion')}`.execute(tx);
   for (const l of pagosLiq.rows) {
     const neto = new Decimal(l.neto);
@@ -459,7 +459,7 @@ export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
     SELECT 'cobro', x.id, (x.anulado_en AT TIME ZONE 'America/Asuncion')::date::text, 'Anulación del cobro N.º ' || x.numero
       FROM cobro_cliente x WHERE x.estado = 'anulado' AND (x.anulado_en AT TIME ZONE 'America/Asuncion')::date <= ${hasta}::date AND ${noContabilizado('cobro_anulacion')}
     UNION ALL
-    SELECT 'liquidacion', x.id, greatest((x.anulada_en AT TIME ZONE 'America/Asuncion')::date, ${fechaLiquidacion('x')})::text, 'Anulación de la liquidación de ' || to_char(x.periodo, 'MM/YYYY') || coalesce(' · ' || x.motivo_anulacion, '')
+    SELECT 'liquidacion', x.id, greatest((x.anulada_en AT TIME ZONE 'America/Asuncion')::date, ${fechaLiquidacion('x')})::text, CASE WHEN x.tipo = 'final' THEN 'Anulación de la liquidación final' ELSE 'Anulación de la liquidación de ' || to_char(x.periodo, 'MM/YYYY') END || coalesce(' · ' || x.motivo_anulacion, '')
       FROM liquidacion x WHERE x.estado = 'anulada' AND x.confirmada_en IS NOT NULL
         AND greatest((x.anulada_en AT TIME ZONE 'America/Asuncion')::date, ${fechaLiquidacion('x')}) <= ${hasta}::date AND ${noContabilizado('liquidacion_anulacion')}
     ORDER BY 3`.execute(tx);

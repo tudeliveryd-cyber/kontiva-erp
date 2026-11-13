@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Search, UserMinus, UserPlus } from 'lucide-react';
+import { FileSignature, Pencil, Plus, Search, UserMinus, UserPlus } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
 import { api, type SucursalFila } from '../lib/api';
 import { dinero } from '../lib/operacion';
@@ -32,15 +33,15 @@ export interface Funcionario {
   diasVacaciones: number;
 }
 interface Legajo extends Funcionario {
-  liquidaciones: { id: string; tipo: 'mensual' | 'aguinaldo'; periodo: string; estado: string; pagada: boolean; bruto: string; ipsObrero: string; descuentos: string; neto: string }[];
+  liquidaciones: { id: string; tipo: 'mensual' | 'aguinaldo' | 'final'; periodo: string; estado: string; pagada: boolean; bruto: string; ipsObrero: string; descuentos: string; neto: string }[];
 }
 
 const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
 const fechaCorta = (f: string | null) => (f ? f.split('-').reverse().join('/') : '—');
 const soloNumero = (v: string) => v.replace(/[^0-9]/g, '');
 const miles = (v: string) => (v === '' ? '' : Math.round(Number(v)).toLocaleString('es-PY'));
-export const nombrePeriodo = (tipo: 'mensual' | 'aguinaldo', periodo: string) =>
-  tipo === 'aguinaldo' ? `Aguinaldo ${periodo.slice(0, 4)}` : new Intl.DateTimeFormat('es-PY', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${periodo}T12:00:00Z`)).replace(/^./, (c) => c.toUpperCase());
+export const nombrePeriodo = (tipo: 'mensual' | 'aguinaldo' | 'final', periodo: string) =>
+  tipo === 'final' ? 'Liquidación final' : tipo === 'aguinaldo' ? `Aguinaldo ${periodo.slice(0, 4)}` : new Intl.DateTimeFormat('es-PY', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${periodo}T12:00:00Z`)).replace(/^./, (c) => c.toUpperCase());
 const antiguedad = (desde: string) => {
   const [a, m] = desde.split('-').map(Number) as [number, number];
   const [ha, hm] = hoy().split('-').map(Number) as [number, number];
@@ -226,9 +227,17 @@ function LegajoFuncionario({ id, alCerrar, alEditar }: { id: string; alCerrar: (
   const { puede } = useSesion();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['funcionario', id], queryFn: () => api<Legajo>(`/funcionarios/${id}`) });
+  const navigate = useNavigate();
   const [baja, setBaja] = useState(false);
+  const [finiquito, setFiniquito] = useState(false);
   const [egreso, setEgreso] = useState(hoy());
   const [motivo, setMotivo] = useState('');
+  const [motivoFinal, setMotivoFinal] = useState('renuncia');
+  const vacaciones = useQuery({ queryKey: ['vacaciones', id], queryFn: () => api<{ pendientes: number }>(`/rrhh/vacaciones?funcionarioId=${id}`), enabled: puede('asistencia.ver') });
+  const liquidar = useMutation({
+    mutationFn: () => api<{ id: string }>('/liquidaciones/final', { metodo: 'POST', cuerpo: { funcionarioId: id, fechaEgreso: egreso, motivo: motivoFinal, detalleMotivo: motivo || null } }),
+    onSuccess: (l) => navigate(`/sueldos?liquidacion=${l.id}`),
+  });
   const refrescar = () => {
     void qc.invalidateQueries({ queryKey: ['funcionarios'] });
     void qc.invalidateQueries({ queryKey: ['funcionario', id] });
@@ -246,6 +255,8 @@ function LegajoFuncionario({ id, alCerrar, alEditar }: { id: string; alCerrar: (
           <>
             {f.fechaEgreso ? (
               <button className="btn" disabled={reingreso.isPending} onClick={() => reingreso.mutate()}><UserPlus size={16} /> Reingreso hoy</button>
+            ) : puede('salario.editar') ? (
+              <button className="btn peligro" onClick={() => { setFiniquito(!finiquito); setBaja(false); }}><FileSignature size={16} /> Liquidación final</button>
             ) : (
               <button className="btn peligro" onClick={() => setBaja(!baja)}><UserMinus size={16} /> Dar de baja</button>
             )}
@@ -258,7 +269,28 @@ function LegajoFuncionario({ id, alCerrar, alEditar }: { id: string; alCerrar: (
         <Cargando />
       ) : (
         <>
-          <ErrorApi error={darBaja.error ?? reingreso.error} />
+          <ErrorApi error={darBaja.error ?? reingreso.error ?? liquidar.error} />
+          {finiquito && (
+            <div className="form" style={{ borderBottom: '1px solid var(--linea)', paddingBottom: 14 }}>
+              <div className="fila-campos">
+                <Campo etiqueta="Fecha de egreso" id="lg-fe"><input id="lg-fe" type="date" className="entrada" value={egreso} onChange={(e) => setEgreso(e.target.value)} /></Campo>
+                <Campo etiqueta="Motivo" id="lg-fm">
+                  <select id="lg-fm" className="entrada" value={motivoFinal} onChange={(e) => setMotivoFinal(e.target.value)}>
+                    <option value="renuncia">Renuncia</option>
+                    <option value="despido_injustificado">Despido sin justa causa</option>
+                    <option value="despido_justificado">Despido con justa causa</option>
+                    <option value="mutuo_acuerdo">Mutuo acuerdo</option>
+                    <option value="fin_contrato">Fin de contrato</option>
+                  </select>
+                </Campo>
+              </div>
+              <div className="fila-campos" style={{ alignItems: 'flex-end' }}>
+                <Campo etiqueta="Detalle (opcional)" id="lg-fd"><input id="lg-fd" className="entrada" value={motivo} onChange={(e) => setMotivo(e.target.value)} /></Campo>
+                <button className="btn pri" style={{ marginBottom: 2 }} disabled={liquidar.isPending} onClick={() => liquidar.mutate()}>Calcular liquidación</button>
+              </div>
+              <p className="tenue peq" style={{ margin: 0 }}>Se genera en borrador en "Sueldos y aguinaldo" para revisar. Al confirmarla, el legajo queda con la fecha y el motivo de egreso.</p>
+            </div>
+          )}
           {baja && (
             <div className="form" style={{ borderBottom: '1px solid var(--linea)', paddingBottom: 14 }}>
               <div className="fila-campos" style={{ alignItems: 'flex-end' }}>
@@ -266,12 +298,13 @@ function LegajoFuncionario({ id, alCerrar, alEditar }: { id: string; alCerrar: (
                 <Campo etiqueta="Motivo" id="lg-m"><input id="lg-m" className="entrada" placeholder="Renuncia, despido, fin de contrato" value={motivo} onChange={(e) => setMotivo(e.target.value)} /></Campo>
                 <button className="btn peligro" style={{ marginBottom: 2 }} disabled={motivo.trim().length < 3 || darBaja.isPending} onClick={() => darBaja.mutate()}>Confirmar baja</button>
               </div>
-              <p className="tenue peq" style={{ margin: 0 }}>El legajo no se borra. Recuerde liquidar lo que corresponda (días trabajados, aguinaldo y vacaciones proporcionales).</p>
+              <p className="tenue peq" style={{ margin: 0 }}>El legajo no se borra. La liquidación final (días trabajados, aguinaldo, vacaciones, preaviso e indemnización) la genera quien administra salarios.</p>
             </div>
           )}
           <section className="panel cifras">
             <div className="cifra"><span>Antigüedad</span><b>{antiguedad(f.fechaIngreso)}</b></div>
             <div className="cifra"><span>Vacaciones por año</span><b className="num">{f.diasVacaciones ? `${f.diasVacaciones} días` : 'Desde el primer año'}</b></div>
+            {vacaciones.data && <div className="cifra"><span>Vacaciones pendientes</span><b className="num">{vacaciones.data.pendientes.toLocaleString('es-PY')} días</b></div>}
             {f.salario !== undefined && <div className="cifra"><span>{f.remuneracion === 'mensual' ? 'Salario mensual' : 'Jornal'}</span><b className="num">{dinero(f.salario)}</b></div>}
           </section>
           <dl className="datos">

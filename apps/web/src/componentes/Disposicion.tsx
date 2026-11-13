@@ -23,6 +23,7 @@ import {
   UserRound,
   Users,
   Banknote,
+  CalendarCheck,
   BookOpenCheck,
   ChartColumn,
   Smartphone,
@@ -63,6 +64,7 @@ export function Disposicion() {
   ];
   const personal = [
     { a: '/funcionarios', icono: IdCard, texto: 'Funcionarios', visible: puede('funcionario.ver') },
+    { a: '/asistencia', icono: CalendarCheck, texto: 'Asistencia y vacaciones', visible: puede('asistencia.ver') },
     { a: '/sueldos', icono: Banknote, texto: 'Sueldos y aguinaldo', visible: puede('salario.ver') },
   ];
   const enlaces = [
