@@ -16,7 +16,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
-| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia |
+| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia, restaurante |
 
 ### Fase 0 · hecho
 - **Autenticación**: Argon2id, bloqueo progresivo tras 5 intentos, token de acceso de 15 min + renovación rotativa
@@ -245,6 +245,19 @@ Fase 2 completa.
 - **Libro recetario** (permiso `receta`, en el menú de las empresas del rubro farmacia): ventas bajo receta con los
   datos de la receta, medicamentos y lotes; filtros por fecha, sucursal, paciente, médico y solo archivadas;
   CSV e impresión. El detalle de cada venta muestra la receta y los lotes vendidos.
+
+### Fase 5 · hecho (restaurante)
+- **Salón**: salones y mesas en un plano (cuadradas, redondas, rectangulares) que se arma tocando la grilla; cada
+  mesa muestra su cuenta, comensales, tiempo y si tiene platos listos o sin enviar. Pedidos para llevar (mostrador).
+- **Cuenta y comandas**: carta por categoría con el precio de la sucursal, aclaraciones por plato ("sin cebolla"),
+  envío a cocina por comandas; lo que no tiene estación queda listo para servir. Quitar lo no enviado; anular lo
+  enviado requiere permiso y motivo. Cambiar de mesa, cerrar una cuenta vacía, pre-cuenta para imprimir.
+- **Cocina y bar** (estación del producto): comandas en orden de llegada con el tiempo (aviso a los 15 y 25 minutos),
+  aclaraciones resaltadas, preparando / listo por plato o "todo listo", aviso sonoro de comanda nueva.
+- **Cobro en el PDV** ("Cobrar mesa", F7): la cuenta entera o los ítems elegidos (cuenta dividida, con factura para
+  cada uno; separar una unidad de un ítem), con los precios con que se cargó. La propina entra a la caja aparte de
+  la venta. La cuenta se cierra sola al cobrar todo; anular una de esas ventas la reabre.
+- Permisos `salon` y `cocina`; perfiles Mozo y Cocina. En el menú de los rubros restaurante y panadería.
 
 ## Estructura
 

@@ -24,6 +24,7 @@ import { CuentasBancariasController, MovimientosBancariosController } from '../s
 import { FlujoCajaController } from '../src/finanzas/flujo.controller';
 import { ContabilidadController } from '../src/contabilidad/contabilidad.controller';
 import { RecetarioController } from '../src/informes/recetario.controller';
+import { CocinaController, CuentasController, SalonController } from '../src/restaurante/restaurante.controller';
 import { MarcacionesController, NovedadesController, VacacionesController } from '../src/rrhh/asistencia.controller';
 import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from '../src/rrhh/rrhh.controller';
 import { InformesController } from '../src/informes/informes.controller';
@@ -80,6 +81,9 @@ const CONTROLADORES = [
   NovedadesController,
   MarcacionesController,
   RecetarioController,
+  SalonController,
+  CuentasController,
+  CocinaController,
   VacacionesController,
   InformesController,
 ];
@@ -223,6 +227,12 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/rrhh/vacaciones'] = vB.body.id;
     const mB = await http(app).post('/api/rrhh/marcaciones').set(hB).send({ funcionarioId: fB.body.id, fecha: '2026-10-06', hora: '08:00' }).expect(201);
     idsDeB['/api/rrhh/marcaciones'] = mB.body.id;
+    const slB = await http(app).post('/api/restaurante/salones').set(hB).send({ sucursalId: b.sucursalId, nombre: 'Salón de B' }).expect(201);
+    idsDeB['/api/restaurante/salones'] = slB.body.id;
+    const msB = await http(app).post('/api/restaurante/mesas').set(hB).send({ salonId: slB.body.id, nombre: '1' }).expect(201);
+    idsDeB['/api/restaurante/mesas'] = msB.body.id;
+    const ctB = await http(app).post('/api/restaurante/cuentas').set(hB).send({ mesaId: msB.body.id }).expect(201);
+    idsDeB['/api/restaurante/cuentas'] = ctB.body.id;
   });
   afterAll(() => app.close());
 
@@ -278,7 +288,8 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
       it(`${r.metodo.toUpperCase()} ${r.ruta}`, async () => {
         const prefijo = Object.keys(idsDeB).find((p) => r.ruta.startsWith(p + '/'));
         expect(prefijo, `sin id de prueba para ${r.ruta}`).toBeDefined();
-        const ruta = r.ruta.replace(':id', idsDeB[prefijo!]!);
+        // Un segundo parámetro (por ejemplo, :item) va con un id cualquiera: el primero ya es ajeno.
+        const ruta = r.ruta.replace(':id', idsDeB[prefijo!]!).replace(/:[a-z]+/g, '00000000-0000-7000-8000-000000000000');
         // Cuerpos válidos para que la validación no responda 400 antes de buscar el registro.
         const porRuta: Record<string, object> = {
           'PATCH /api/productos/:id': { nombre: 'Intento ajeno', variantes: [{ precio: 1, codigos: [] }] },
@@ -312,6 +323,11 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/liquidaciones/:id/pagar': { fecha: '2026-11-01', medio: 'banco', cuentaBancariaId: '00000000-0000-7000-8000-000000000000' },
           'POST /api/liquidaciones/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/rrhh/vacaciones/:id/anular': { motivo: 'Intento ajeno' },
+          'POST /api/restaurante/mesas': { salonId: '00000000-0000-7000-8000-000000000000', nombre: '9' },
+          'POST /api/restaurante/cuentas/:id/items': { items: [{ varianteId: '00000000-0000-7000-8000-000000000000', cantidad: 1 }] },
+          'POST /api/restaurante/cuentas/:id/items/:item/anular': { motivo: 'Intento ajeno' },
+          'POST /api/restaurante/cuentas/:id/items/:item/dividir': { cantidad: 1 },
+          'POST /api/restaurante/cuentas/:id/mover': { mesaId: '00000000-0000-7000-8000-000000000000' },
           'PATCH /api/contabilidad/cuentas/:id': { codigo: '1.1.01', nombre: 'Intento ajeno', imputable: true },
           'POST /api/contabilidad/asientos/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/cuentas-bancarias/:id': { banco: 'Banco ajeno', nombre: 'Intento ajeno', fechaSaldoInicial: '2026-11-01' },

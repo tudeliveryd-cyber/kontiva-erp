@@ -30,6 +30,7 @@ export interface Producto {
   forma?: string | null;
   registroSanitario?: string | null;
   condicionVenta?: 'libre' | 'receta' | 'receta_archivada';
+  estacion?: 'cocina' | 'bar' | null;
   activo: boolean;
   variantes: (Variante & { id: string })[];
 }

@@ -227,7 +227,7 @@ describe('Autenticación', () => {
         usuarios: await tx.selectFrom('usuario').select('id').execute(),
         auditoria: await tx.selectFrom('auditoria').select('accion').execute(),
       }));
-      expect(datos.perfiles).toHaveLength(12);
+      expect(datos.perfiles).toHaveLength(14);
       expect(datos.sucursales).toEqual([{ codigo: '001', nombre: 'Casa matriz' }]);
       expect(datos.usuarios).toHaveLength(1);
       expect(datos.auditoria.map((a) => a.accion)).toContain('alta_empresa');

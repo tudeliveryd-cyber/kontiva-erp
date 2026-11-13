@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardCheck, CloudOff, FileText, Minus, Percent, Pill, Plus, Printer, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, CloudOff, FileText, Minus, Percent, Pill, Plus, Printer, RefreshCw, Scissors, Search, Trash2, UserRound, UtensilsCrossed, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { calcularItems, calcularPagos, ErrorCalculo, type ConfigBalanza, type Cotizaciones } from '@kontiva/shared';
@@ -12,6 +12,10 @@ import { useSesion } from '../lib/sesion';
 import { buscarEnCatalogo, encolar, esErrorDeRed, usePdvOffline } from '../lib/offline';
 import { estadoAgente, guardarAgente, imprimirEnAgente, leerAgente, pruebaAgente, ticketDeVenta, ticketProvisorio, type ConfigAgente } from '../lib/impresora';
 import { fechaCorta, type DocComercial } from './Pedidos';
+import { nombreCuenta, type Cuenta } from './Salon';
+
+/** Cuenta del salón que se está cobrando: los ítems elegidos van fijos en la venta. */
+export interface CobroCuenta { id: string; numero: number; nombre: string; items: string[]; propina: number }
 
 interface ContextoPdv {
   caja: { id: string; nombre: string };
@@ -140,7 +144,10 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const [listaCliente, setListaCliente] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [nota, setNota] = useState<string | null>(null);
-  const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | 'pedidos' | 'receta' | 'equivalentes' | null>(null);
+  const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | 'pedidos' | 'receta' | 'equivalentes' | 'mesas' | null>(null);
+  const [cuentaCobro, setCuentaCobro] = useState<CobroCuenta | null>(null);
+  const { puede: puedeUsuario } = useSesion();
+  const gastronomia = ['restaurante', 'panaderia'].includes(yo?.empresa.rubro ?? '') && puedeUsuario('salon.ver');
   const [receta, setReceta] = useState<RecetaVenta | null>(null);
   const [equivDe, setEquivDe] = useState<ItemBusqueda | null>(null);
   const [pedido, setPedido] = useState<DocComercial | null>(null);
@@ -260,6 +267,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     setListaCliente(null);
     setNota(null);
     setPedido(null);
+    setCuentaCobro(null);
     setAutorizacion(null);
     setVendida(null);
     setProvisoria(null);
@@ -292,10 +300,13 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
       } else if (e.key === 'F6') {
         e.preventDefault();
         setDialogo('pedidos');
+      } else if (e.key === 'F7' && gastronomia) {
+        e.preventDefault();
+        setDialogo('mesas');
       } else if (e.key === 'F8' && sel !== null) {
         e.preventDefault();
         setDialogo(c.puede.descuento || autorizacion ? 'descuento' : 'autorizar');
-      } else if (e.key === 'Delete' && sel !== null) {
+      } else if (e.key === 'Delete' && sel !== null && !cuentaCobro) {
         e.preventDefault();
         quitar(sel);
       }
@@ -451,6 +462,9 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                           </div>
                         </td>
                         <td>
+                          {cuentaCobro ? (
+                            <span className="num" style={{ fontWeight: 600 }}>{fmtCant(l.cantidad)}</span>
+                          ) : (
                           <div className="cant" onClick={(e) => e.stopPropagation()}>
                             <button aria-label="Menos" onClick={() => cambiarCantidad(i, String(Math.max(Number(l.cantidad) - 1, l.unidad === 'unidad' ? 1 : 0.001)))}>
                               <Minus size={14} />
@@ -467,6 +481,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                             </button>
                             {l.unidad !== 'unidad' && <span className="tenue peq">{l.unidad}</span>}
                           </div>
+                          )}
                         </td>
                         <td className="der num">{dinero(l.precio)}</td>
                         <td className="der num" style={{ fontWeight: 600 }}>{total !== undefined ? dinero(total) : '—'}</td>
@@ -476,7 +491,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                               <Pill size={16} />
                             </button>
                           )}
-                          <button className="enlace" aria-label="Quitar" onClick={(e) => { e.stopPropagation(); quitar(i); }}>
+                          <button className="enlace" aria-label="Quitar" disabled={!!cuentaCobro} onClick={(e) => { e.stopPropagation(); quitar(i); }}>
                             <Trash2 size={16} />
                           </button>
                         </td>
@@ -522,6 +537,12 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           <button className="btn" onClick={() => setDialogo('pedidos')}>
             <ClipboardCheck size={16} /> {pedido ? `Pedido N.º ${pedido.numero}` : 'Cobrar un pedido'} <span className="tecla">F6</span>
           </button>
+          {gastronomia && (
+            <button className="btn" onClick={() => setDialogo('mesas')}>
+              <UtensilsCrossed size={16} /> {cuentaCobro ? cuentaCobro.nombre : 'Cobrar mesa'} <span className="tecla">F7</span>
+            </button>
+          )}
+          {cuentaCobro && cuentaCobro.propina > 0 && <Aviso tipo="info">Propina {dinero(cuentaCobro.propina)}: se cobra aparte, en efectivo, y entra a la caja para el personal.</Aviso>}
           {autorizacion && <Aviso tipo="info">Descuento autorizado por {autorizacion.nombre}</Aviso>}
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {lineas.length > 0 && (
@@ -530,7 +551,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
               </button>
             )}
             <div className="tenue peq">
-              {yo?.usuario.nombre} · Supr: quitar línea · F2 cobrar · F4 cliente · F6 pedido · F8 descuento
+              {yo?.usuario.nombre} · Supr: quitar línea · F2 cobrar · F4 cliente · F6 pedido{gastronomia ? " · F7 mesa" : ""} · F8 descuento
             </div>
             <button className="btn chico" onClick={() => navigate('/ventas')}>
               Ventas de la caja
@@ -550,6 +571,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           pedidoId={pedido?.id ?? null}
           autorizacion={autorizacion?.token}
           receta={lineas.some(conReceta) ? receta : null}
+          cuenta={cuentaCobro}
           alCerrar={() => {
             setDialogo(null);
             enfocar();
@@ -593,6 +615,33 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
             setDialogo(null);
             setEquivDe(null);
             agregar(it);
+          }}
+          alCerrar={() => {
+            setDialogo(null);
+            enfocar();
+          }}
+        />
+      )}
+      {dialogo === 'mesas' && (
+        <CobrarMesa
+          sucursalId={c.sucursal.id}
+          alElegir={(cu, items, propina) => {
+            if (lineas.length && !cuentaCobro && !confirm('Se reemplazan los productos cargados por los de la cuenta. ¿Continuar?')) return;
+            const elegidos = cu.items.filter((i) => items.includes(i.id));
+            const porVar = new Map<string, Linea>();
+            for (const i of elegidos) {
+              const a = porVar.get(i.varianteId);
+              if (a) a.cantidad = String(Number(a.cantidad) + Number(i.cantidad));
+              else porVar.set(i.varianteId, { varianteId: i.varianteId, descripcion: i.descripcion, sku: null, unidad: i.unidad, tasaIva: i.tasaIva, precio: i.precioUnitario, controlaStock: false, stock: null, cantidad: String(Number(i.cantidad)), descuento: 0 });
+            }
+            setLineas([...porVar.values()]);
+            setCuentaCobro({ id: cu.id, numero: cu.numero, nombre: nombreCuenta(cu), items, propina });
+            setPedido(null);
+            setSel(null);
+            setAviso(null);
+            setNota(`${nombreCuenta(cu)} · cuenta N.º ${cu.numero}: ${elegidos.length === cu.items.filter((i) => !i.ventaId && i.estado !== 'anulado').length ? 'se cobra completa' : `se cobran ${elegidos.length} de sus productos`}`);
+            setDialogo(null);
+            enfocar();
           }}
           alCerrar={() => {
             setDialogo(null);
@@ -728,7 +777,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   );
 }
 
-function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; receta: RecetaVenta | null; alCerrar: () => void; alVender: (v: Venta) => void; catalogoGuardado: boolean; alVenderSinConexion: (p: VentaProvisoria) => void }) {
+function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; receta: RecetaVenta | null; cuenta: CobroCuenta | null; alCerrar: () => void; alVender: (v: Venta) => void; catalogoGuardado: boolean; alVenderSinConexion: (p: VentaProvisoria) => void }) {
   const [pagos, setPagos] = useState<PagoUI[]>([{ medio: 'efectivo', moneda: 'PYG', monto: String(props.total) }]);
   // Venta a crédito (cuenta corriente del cliente).
   const [credito, setCredito] = useState('');
@@ -762,12 +811,13 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
     pagos: pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio: p.medio, moneda: p.moneda, monto: Number(p.monto) })),
     vueltoMoneda,
     ...(props.receta && { receta: { ...props.receta, pacienteDocumento: props.receta.pacienteDocumento || null, numero: props.receta.numero || null } }),
+    ...(props.cuenta && { cuentaId: props.cuenta.id, cuentaItems: props.cuenta.items, ...(props.cuenta.propina > 0 && { propina: { monto: props.cuenta.propina, medio: 'efectivo' } }) }),
   });
   /**
    * Sin conexión se puede vender al contado, sin pedido y sin descuentos que pidan PIN (el PIN lo valida el servidor).
    * Los precios van en la venta: el servidor los respeta solo si cambiaron después.
    */
-  const sinConexionPermitida = props.catalogoGuardado && montoCredito === 0 && !props.pedidoId && (props.c.puede.descuento || props.lineas.every((l) => l.descuento === 0));
+  const sinConexionPermitida = props.catalogoGuardado && montoCredito === 0 && !props.pedidoId && !props.cuenta && (props.c.puede.descuento || props.lineas.every((l) => l.descuento === 0));
   const guardarSinConexion = async () => {
     const creadaEn = new Date().toISOString();
     const clave_ = `kontiva.sc.${props.c.caja.id}`;
@@ -1194,6 +1244,88 @@ function Equivalentes({ cajaId, de, catalogo, alElegir, alCerrar }: { cajaId: st
               <b className="num">{dinero(r.precio)}</b>
             </button>
           ))}
+        </div>
+      )}
+    </Cajon>
+  );
+}
+
+/** Cuentas abiertas del salón: se elige qué ítems se cobran (cuenta dividida) y la propina. */
+function CobrarMesa({ sucursalId, alElegir, alCerrar }: { sucursalId: string; alElegir: (c: Cuenta, items: string[], propina: number) => void; alCerrar: () => void }) {
+  const q = useQuery({ queryKey: ['cuentas-abiertas', sucursalId], queryFn: () => api<Cuenta[]>(`/restaurante/cuentas?sucursalId=${sucursalId}`) });
+  const [elegida, setElegida] = useState<string | null>(null);
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [propina, setPropina] = useState('');
+  const cuenta = q.data?.find((c) => c.id === elegida);
+  const cobrables = cuenta?.items.filter((i) => !i.ventaId && i.estado !== 'anulado' && i.estado !== 'pendiente') ?? [];
+  const sinEnviar = cuenta?.items.filter((i) => i.estado === 'pendiente').length ?? 0;
+  const separar = useMutation({
+    mutationFn: (item: string) => api<Cuenta>(`/restaurante/cuentas/${elegida}/items/${item}/dividir`, { metodo: 'POST', cuerpo: { cantidad: 1 } }),
+    onSuccess: () => void q.refetch(),
+  });
+  const total = cobrables.filter((i) => marcados.has(i.id)).reduce((s, i) => s + Number(i.total), 0);
+  const elegir = (c: Cuenta) => {
+    setElegida(c.id);
+    setMarcados(new Set(c.items.filter((i) => !i.ventaId && i.estado !== 'anulado' && i.estado !== 'pendiente').map((i) => i.id)));
+    setPropina('');
+  };
+  return (
+    <Cajon titulo={cuenta ? `${nombreCuenta(cuenta)} · cuenta N.º ${cuenta.numero}` : 'Cobrar mesa'} ancho={620} alCerrar={alCerrar}>
+      <ErrorApi error={q.error ?? separar.error} />
+      {!q.data ? (
+        <Cargando />
+      ) : !cuenta ? (
+        !q.data.length ? (
+          <Vacio titulo="No hay cuentas abiertas" />
+        ) : (
+          <div>
+            {q.data.map((c) => (
+              <button key={c.id} className="fila-cuenta" onClick={() => elegir(c)}>
+                <span style={{ flex: 1 }}><b>{nombreCuenta(c)}</b><span className="tenue peq" style={{ display: 'block' }}>N.º {c.numero} · {c.mozo} · {c.comensales} comensales</span></span>
+                <b className="num">{dinero(c.totales.pendiente)}</b>
+              </button>
+            ))}
+          </div>
+        )
+      ) : (
+        <div className="form">
+          {sinEnviar > 0 && <Aviso tipo="info">{sinEnviar} producto(s) sin enviar a cocina no se cobran hasta enviarlos.</Aviso>}
+          <table>
+            <tbody>
+              {cobrables.map((i) => (
+                <tr key={i.id}>
+                  <td style={{ width: 32 }}>
+                    <input type="checkbox" aria-label={`Cobrar ${i.descripcion}`} checked={marcados.has(i.id)} onChange={(e) => { const n = new Set(marcados); if (e.target.checked) n.add(i.id); else n.delete(i.id); setMarcados(n); }} />
+                  </td>
+                  <td>{Number(i.cantidad)} × {i.descripcion}</td>
+                  <td className="der num">{dinero(i.total)}</td>
+                  <td className="der">
+                    {Number(i.cantidad) > 1 && (
+                      <button className="btn chico" title="Separar una unidad para cobrarla aparte" disabled={separar.isPending} onClick={() => separar.mutate(i.id)}><Scissors size={13} /> 1</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn chico" onClick={() => setMarcados(new Set(cobrables.map((i) => i.id)))}>Todo</button>
+            <button className="btn chico" onClick={() => setMarcados(new Set())}>Nada</button>
+            <span className="tenue peq" style={{ marginLeft: 'auto' }}>
+              {cuenta.comensales > 1 && `Por persona (${cuenta.comensales}): ${dinero(Math.ceil(Number(cuenta.totales.pendiente) / cuenta.comensales))} · `}A cobrar: <b>{dinero(total)}</b>
+            </span>
+          </div>
+          <Campo etiqueta="Propina (en efectivo, para el personal)" id="cm-p">
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" className="btn chico" onClick={() => setPropina('')}>Sin propina</button>
+              <button type="button" className="btn chico" onClick={() => setPropina(String(Math.round(total * 0.1)))}>10 %</button>
+              <input id="cm-p" className="entrada num" style={{ width: 140 }} value={propina} onChange={(e) => setPropina(e.target.value.replace(/\D/g, ''))} />
+            </div>
+          </Campo>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" onClick={() => setElegida(null)}>Otra cuenta</button>
+            <button className="btn pri" disabled={!marcados.size} onClick={() => alElegir(cuenta, [...marcados], Number(propina) || 0)}>Cargar en la caja</button>
+          </div>
         </div>
       )}
     </Cajon>

@@ -264,6 +264,11 @@ export interface BaseDatos {
   liquidacion: LiquidacionTabla;
   liquidacion_item: LiquidacionItemTabla;
   novedad: NovedadTabla;
+  salon: SalonTabla;
+  mesa: MesaTabla;
+  cuenta_salon: CuentaSalonTabla;
+  comanda: ComandaTabla;
+  cuenta_salon_item: CuentaSalonItemTabla;
   receta: RecetaTabla;
   lote: LoteTabla;
   stock_lote: StockLoteTabla;
@@ -393,6 +398,7 @@ export interface ProductoTabla {
   forma: string | null;
   registro_sanitario: string | null;
   condicion_venta: Generated<'libre' | 'receta' | 'receta_archivada'>;
+  estacion: 'cocina' | 'bar' | null;
   activo: Generated<boolean>;
   creado_en: Creado;
   creado_por: string | null;
@@ -520,6 +526,7 @@ export interface VentaTabla {
   cliente_id: string | null;
   lista_precio_id: string | null;
   pedido_id: string | null;
+  cuenta_salon_id: Generated<string | null>;
   credito: NumGen;
   estado: Generated<'confirmada' | 'anulada'>;
   comprobante: Generated<'interno' | 'factura'>;
@@ -1201,6 +1208,71 @@ export interface RecetaTabla {
   fecha: Fecha;
   numero: string | null;
   retenida: Generated<boolean>;
+  creado_por: string;
+  creado_en: Creado;
+}
+export interface SalonTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  sucursal_id: string;
+  nombre: string;
+  orden: Generated<number>;
+  activo: Generated<boolean>;
+}
+export interface MesaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  salon_id: string;
+  nombre: string;
+  capacidad: Generated<number>;
+  forma: Generated<'cuadrada' | 'redonda' | 'rectangular'>;
+  pos_x: Generated<number>;
+  pos_y: Generated<number>;
+  activa: Generated<boolean>;
+}
+export interface CuentaSalonTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: ColumnType<string, number | string, never>;
+  sucursal_id: string;
+  tipo: 'mesa' | 'mostrador';
+  mesa_id: string | null;
+  nombre: string | null;
+  comensales: Generated<number>;
+  mozo_id: string;
+  estado: Generated<'abierta' | 'cerrada' | 'anulada'>;
+  propina: NumGen;
+  nota: string | null;
+  abierta_en: Creado;
+  cerrada_en: Date | null;
+  anulada_por: string | null;
+  motivo_anulacion: string | null;
+}
+export interface ComandaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  cuenta_id: string;
+  numero: number;
+  enviada_en: Creado;
+  creado_por: string;
+}
+export interface CuentaSalonItemTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  cuenta_id: string;
+  comanda_id: string | null;
+  variante_id: string;
+  descripcion: string;
+  cantidad: Num;
+  precio_unitario: Num;
+  nota: string | null;
+  estacion: 'cocina' | 'bar' | null;
+  estado: Generated<'pendiente' | 'enviado' | 'preparando' | 'listo' | 'entregado' | 'anulado'>;
+  venta_id: string | null;
+  listo_en: Date | null;
+  entregado_en: Date | null;
+  anulado_por: string | null;
+  motivo_anulacion: string | null;
   creado_por: string;
   creado_en: Creado;
 }

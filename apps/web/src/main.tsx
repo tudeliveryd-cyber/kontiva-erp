@@ -41,6 +41,8 @@ import { Funcionarios } from './paginas/Funcionarios';
 import { Sueldos } from './paginas/Sueldos';
 import { Asistencia } from './paginas/Asistencia';
 import { Recetario } from './paginas/Recetario';
+import { Salon } from './paginas/Salon';
+import { Cocina } from './paginas/Cocina';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -85,6 +87,8 @@ function Rutas() {
         {puede('salario.ver') && <Route path="sueldos" element={<Sueldos />} />}
         {puede('asistencia.ver') && <Route path="asistencia" element={<Asistencia />} />}
         {puede('receta.ver') && <Route path="recetario" element={<Recetario />} />}
+        {puede('salon.ver') && <Route path="salon" element={<Salon />} />}
+        {puede('cocina.ver') && <Route path="cocina" element={<Cocina />} />}
         {puede('cliente.ver') && <Route path="clientes" element={<Clientes />} />}
         {(puede('producto.crear') || puede('cliente.crear')) && <Route path="importar/:tipo" element={<Importar />} />}
         {puede('usuario.ver') && <Route path="usuarios" element={<Usuarios />} />}

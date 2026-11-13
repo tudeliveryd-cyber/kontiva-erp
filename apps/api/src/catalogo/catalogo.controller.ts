@@ -20,7 +20,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
     .leftJoin('marca as m', 'm.id', 'p.marca_id')
     .select([
       'p.id', 'p.nombre', 'p.descripcion', 'p.categoria_id', 'p.marca_id', 'p.tipo', 'p.unidad', 'p.tasa_iva',
-      'p.controla_stock', 'p.controla_lote', 'p.principio_activo', 'p.concentracion', 'p.forma', 'p.registro_sanitario', 'p.condicion_venta', 'p.activo', 'p.creado_en', 'c.nombre as categoria', 'm.nombre as marca',
+      'p.controla_stock', 'p.controla_lote', 'p.principio_activo', 'p.concentracion', 'p.forma', 'p.registro_sanitario', 'p.condicion_venta', 'p.estacion', 'p.activo', 'p.creado_en', 'c.nombre as categoria', 'm.nombre as marca',
     ])
     .where('p.id', '=', id)
     .executeTakeFirst();
@@ -54,6 +54,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
     forma: p.forma,
     registroSanitario: p.registro_sanitario,
     condicionVenta: p.condicion_venta,
+    estacion: p.estacion,
     activo: p.activo,
     creadoEn: p.creado_en,
     variantes: variantes.map((v) => ({
@@ -179,6 +180,7 @@ export class ProductosController {
       forma: d.forma ?? null,
       registro_sanitario: d.registroSanitario ?? null,
       condicion_venta: d.condicionVenta,
+      estacion: d.tipo === 'servicio' ? null : d.estacion,
       activo: d.activo,
     };
   }

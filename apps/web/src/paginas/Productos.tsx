@@ -110,7 +110,7 @@ interface VarianteForm {
 }
 
 function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCerrar: () => void }) {
-  const { puede } = useSesion();
+  const { puede, yo } = useSesion();
   const qc = useQueryClient();
   const categorias = useQuery({ queryKey: ['categorias'], queryFn: () => api<{ id: string; nombre: string }[]>('/categorias') });
   const editable = producto ? puede('producto.editar') : puede('producto.crear');
@@ -130,6 +130,7 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
     forma: producto?.forma ?? '',
     registroSanitario: producto?.registroSanitario ?? '',
     condicionVenta: producto?.condicionVenta ?? 'libre',
+    estacion: producto?.estacion ?? '',
   });
   const [medicamento, setMedicamento] = useState(!!(producto?.principioActivo || (producto?.condicionVenta && producto.condicionVenta !== 'libre')));
   const [variantes, setVariantes] = useState<VarianteForm[]>(
@@ -157,6 +158,7 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
         tasaIva: Number(d.tasaIva),
         controlaStock: d.tipo === 'servicio' ? false : d.controlaStock,
         controlaLote: d.tipo !== 'servicio' && d.controlaStock && d.controlaLote,
+        estacion: d.tipo === 'servicio' || !d.estacion ? null : d.estacion,
         ...(medicamento
           ? { principioActivo: d.principioActivo.trim() || null, concentracion: d.concentracion.trim() || null, forma: d.forma.trim() || null, registroSanitario: d.registroSanitario.trim() || null, condicionVenta: d.condicionVenta }
           : { principioActivo: null, concentracion: null, forma: null, registroSanitario: null, condicionVenta: 'libre' }),
@@ -260,6 +262,15 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
             <input type="checkbox" disabled={!editable} checked={d.controlaLote} onChange={(e) => setD({ ...d, controlaLote: e.target.checked })} /> Controlar lotes y vencimientos
             <span className="tenue peq">(la compra pide lote o vencimiento; se vende primero lo que vence antes y nunca lo vencido)</span>
           </label>
+        )}
+        {d.tipo === 'producto' && ['restaurante', 'panaderia'].includes(yo?.empresa.rubro ?? '') && (
+          <Campo etiqueta="Se prepara en (restaurante)" id="pr-es" ayuda="Su comanda aparece en esa pantalla; sin estación, el mozo lo sirve directo.">
+            <select id="pr-es" className="entrada" disabled={!editable} value={d.estacion} onChange={(e) => setD({ ...d, estacion: e.target.value as typeof d.estacion })}>
+              <option value="">Se sirve directo</option>
+              <option value="cocina">Cocina</option>
+              <option value="bar">Bar</option>
+            </select>
+          </Campo>
         )}
         {d.tipo === 'producto' && (
           <label className="casilla">

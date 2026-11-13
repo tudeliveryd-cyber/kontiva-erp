@@ -134,6 +134,8 @@ export const productoEntrada = z.object({
   forma: textoOpcional(60),
   registroSanitario: textoOpcional(40),
   condicionVenta: z.enum(['libre', 'receta', 'receta_archivada']).default('libre'),
+  /** Restaurante: estación donde se prepara (su comanda aparece en esa pantalla). */
+  estacion: z.enum(['cocina', 'bar']).nullable().default(null),
   activo: z.boolean().default(true),
   variantes: z.array(varianteEntrada).min(1).max(200),
 });
@@ -268,6 +270,10 @@ export const ventaEntrada = z.object({
   vueltoMoneda: z.enum(['PYG', 'USD', 'BRL']).default('PYG'),
   /** Parte del total que queda en la cuenta corriente del cliente (venta a crédito). */
   credito: z.coerce.number().min(0).max(1e13).optional(),
+  /** Restaurante: cuenta que se cobra (entera o los ítems elegidos) y propina para el personal. */
+  cuentaId: uuid.optional(),
+  cuentaItems: z.array(uuid).min(1).max(300).optional(),
+  propina: z.object({ monto: z.coerce.number().positive().max(1e10), medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro']) }).optional(),
   /** Receta de los medicamentos de venta bajo receta (obligatoria si la venta tiene alguno). */
   receta: z
     .object({
@@ -702,3 +708,42 @@ export const liquidacionFinalEntrada = z.object({
 export const pagoLiquidacionEntrada = z
   .object({ fecha: fechaDia, medio: z.enum(['banco', 'efectivo']), cuentaBancariaId: z.string().uuid().optional(), cajaId: z.string().uuid().optional() })
   .refine((p) => (p.medio === 'banco' ? !!p.cuentaBancariaId : !!p.cajaId), { message: 'Elija la cuenta bancaria o la caja', path: ['medio'] });
+
+// ── Restaurante ──────────────────────────────────────────────────────────────
+
+export const salonEntrada = z.object({
+  sucursalId: z.string().uuid('Elija la sucursal'),
+  nombre: z.string().trim().min(1, 'Indique el nombre').max(60),
+  orden: z.coerce.number().int().min(0).max(99).default(0),
+});
+
+export const mesaEntrada = z.object({
+  salonId: z.string().uuid(),
+  nombre: z.string().trim().min(1, 'Indique el nombre o número').max(20),
+  capacidad: z.coerce.number().int().min(1).max(50).default(4),
+  forma: z.enum(['cuadrada', 'redonda', 'rectangular']).default('cuadrada'),
+  posX: z.coerce.number().int().min(0).max(23).default(0),
+  posY: z.coerce.number().int().min(0).max(23).default(0),
+});
+
+export const cuentaAbrirEntrada = z
+  .object({
+    mesaId: z.string().uuid().optional(),
+    sucursalId: z.string().uuid().optional(),
+    nombre: z.string().trim().max(60).nullable().optional().or(z.literal('').transform(() => null)),
+    comensales: z.coerce.number().int().min(1).max(99).default(1),
+  })
+  .refine((c) => !!c.mesaId !== !!c.sucursalId, { message: 'Elija una mesa o, para mostrador, la sucursal' });
+
+export const cuentaItemsEntrada = z.object({
+  items: z
+    .array(
+      z.object({
+        varianteId: z.string().uuid(),
+        cantidad: z.coerce.number().positive().max(999),
+        nota: z.string().trim().max(200).nullable().optional().or(z.literal('').transform(() => null)),
+      }),
+    )
+    .min(1)
+    .max(100),
+});

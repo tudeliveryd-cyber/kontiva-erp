@@ -9,6 +9,7 @@ import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, tiene, type Ctx, type Origen } from '../comun/contexto';
 import { Requiere } from '../comun/decoradores';
 import { moverLotes } from '../comun/lotes';
+import { cerrarSiPagada } from '../restaurante/restaurante.controller';
 import { conflicto, ErrorNegocio, invalido, noEncontrado, prohibido } from '../comun/errores';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
@@ -427,6 +428,37 @@ export class VentasController {
           pedido = p;
         }
 
+        // Cuenta del salón: se cobra con los precios con que se cargó; entera o los ítems elegidos.
+        let cuenta: { id: string; numero: string } | null = null;
+        let itemsCuenta: string[] = [];
+        if (d.cuentaId) {
+          if (registradaOffline) throw invalido('Las cuentas del salón se cobran con conexión');
+          if (d.pedidoId) throw invalido('Una venta no cobra un pedido y una cuenta a la vez');
+          const cu = await tx.selectFrom('cuenta_salon').select(['id', 'numero', 'estado', 'sucursal_id']).where('id', '=', d.cuentaId).forUpdate().executeTakeFirst();
+          if (!cu) throw noEncontrado('Cuenta');
+          if (cu.estado !== 'abierta') throw conflicto('CUENTA_CERRADA', 'La cuenta ya está cerrada');
+          if (cu.sucursal_id !== caja.sucursal_id) throw invalido('La cuenta es de otra sucursal');
+          let q = tx.selectFrom('cuenta_salon_item').select(['id', 'variante_id', 'cantidad', 'precio_unitario', 'estado']).where('cuenta_id', '=', cu.id).where('venta_id', 'is', null).where('estado', '<>', 'anulado');
+          if (d.cuentaItems) q = q.where('id', 'in', d.cuentaItems);
+          const its = await q.forUpdate().execute();
+          if (d.cuentaItems && its.length !== new Set(d.cuentaItems).size) throw conflicto('ITEM_COBRADO', 'Algún ítem ya se cobró o se anuló');
+          if (!its.length) throw conflicto('CUENTA_SIN_SALDO', 'No hay nada pendiente de cobro en la cuenta');
+          if (its.some((i) => i.estado === 'pendiente')) throw conflicto('ITEMS_SIN_ENVIAR', 'Hay productos sin enviar a cocina: envíelos o quítelos antes de cobrar');
+          const porVar = new Map<string, { cantidad: Decimal; precio: string }>();
+          for (const i of its) {
+            const a = porVar.get(i.variante_id);
+            if (a && new Decimal(a.precio).toFixed(2) !== new Decimal(i.precio_unitario).toFixed(2)) throw invalido('Un producto tiene dos precios en la cuenta: cóbrelos por separado');
+            porVar.set(i.variante_id, { cantidad: (a?.cantidad ?? new Decimal(0)).plus(i.cantidad), precio: i.precio_unitario });
+          }
+          const enVenta = new Map<string, Decimal>();
+          for (const i of d.items) enVenta.set(i.varianteId, (enVenta.get(i.varianteId) ?? new Decimal(0)).plus(i.cantidad));
+          if (enVenta.size !== porVar.size || [...porVar].some(([v, x]) => !enVenta.get(v)?.eq(x.cantidad))) throw invalido('Los productos de la venta no coinciden con los de la cuenta');
+          for (const [v, x] of porVar) precios.set(v, x.precio);
+          cuenta = cu;
+          itemsCuenta = its.map((i) => i.id);
+        }
+        if (d.propina && !d.cuentaId) throw invalido('La propina se registra al cobrar una cuenta del salón');
+
         // Sin conexión, la caja cobró con los precios que tenía: se respetan solo si el precio cambió
         // después de la venta (así no sirve para bajar precios a voluntad).
         const preciosOffline = new Map<string, string>();
@@ -530,6 +562,7 @@ export class VentasController {
             cliente_id: d.clienteId ?? null,
             lista_precio_id: lista,
             pedido_id: pedido?.id ?? null,
+            cuenta_salon_id: cuenta?.id ?? null,
             subtotal: calc.subtotal.toFixed(2),
             descuento: calc.descuento.toFixed(2),
             total: calc.total.toFixed(2),
@@ -654,6 +687,20 @@ export class VentasController {
         if (pedido) {
           await tx.updateTable('pedido').set({ estado: 'entregado', venta_id: venta.id, cerrado_por: ctx.usuarioId, cerrado_en: new Date() }).where('id', '=', pedido.id).execute();
           await auditar(tx, { ...ctx, ...o }, { accion: 'entregado', entidad: 'pedido', entidadId: pedido.id, despues: { ventaId: venta.id, venta: numero } });
+        }
+        if (cuenta) {
+          await tx.updateTable('cuenta_salon_item').set({ venta_id: venta.id }).where('id', 'in', itemsCuenta).execute();
+          // Propina: entra a la caja aparte de la venta (no es ingreso del local; se reparte al personal).
+          if (d.propina) {
+            const monto = new Decimal(d.propina.monto).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+            await tx
+              .insertInto('movimiento_caja')
+              .values({ empresa_id: ctx.empresaId, sesion_id: sesion.id, tipo: 'ingreso', medio: d.propina.medio, moneda: 'PYG', monto: monto.toFixed(2), venta_id: venta.id, motivo: `Propina · cuenta N.º ${Number(cuenta.numero)}`, autorizado_por: null, creado_por: ctx.usuarioId })
+              .execute();
+            await tx.updateTable('cuenta_salon').set({ propina: sql`propina + ${monto.toFixed(2)}::numeric` }).where('id', '=', cuenta.id).execute();
+          }
+          await cerrarSiPagada(tx, cuenta.id);
+          await auditar(tx, { ...ctx, ...o }, { accion: 'cobro', entidad: 'cuenta_salon', entidadId: cuenta.id, despues: { ventaId: venta.id, venta: numero, items: itemsCuenta.length, propina: d.propina?.monto ?? 0 } });
         }
         return (await leerVenta(tx, venta.id))!;
       });
@@ -823,6 +870,13 @@ export class VentasController {
           .where('id', '=', cancelacion.id)
           .execute();
         await auditar(tx, { ...ctx, ...o }, { accion: 'cancelar', entidad: 'documento_electronico', entidadId: cancelacion.id, despues: { motivo: d.motivo, protocolo: cancelacion.protocolo } });
+      }
+      // Los ítems de la cuenta cobrados con esta venta vuelven a quedar por cobrar; la cuenta se reabre.
+      const cuentaVenta = await tx.selectFrom('venta').select('cuenta_salon_id').where('id', '=', id).executeTakeFirstOrThrow();
+      if (cuentaVenta.cuenta_salon_id) {
+        await tx.updateTable('cuenta_salon_item').set({ venta_id: null }).where('venta_id', '=', id).execute();
+        await tx.updateTable('cuenta_salon').set({ estado: 'abierta', cerrada_en: null }).where('id', '=', cuentaVenta.cuenta_salon_id).where('estado', '=', 'cerrada').execute();
+        await auditar(tx, { ...ctx, ...o }, { accion: 'reabrir', entidad: 'cuenta_salon', entidadId: cuentaVenta.cuenta_salon_id, despues: { motivo: `Venta N.º ${Number(v.numero)} anulada` } });
       }
       // El pedido entregado con esta venta vuelve a quedar pendiente.
       if (v.pedido_id) {

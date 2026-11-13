@@ -24,6 +24,8 @@ import {
   Users,
   Banknote,
   CalendarCheck,
+  ChefHat,
+  UtensilsCrossed,
   FileHeart,
   BookOpenCheck,
   ChartColumn,
@@ -38,6 +40,8 @@ import { Marca } from './ui';
 
 export function Disposicion() {
   const { yo, salir, puede } = useSesion();
+  // Salón y cocina: rubros gastronómicos, o usuarios cuyo perfil es solo de salón o cocina.
+  const gastronomia = ['restaurante', 'panaderia'].includes(yo?.empresa.rubro ?? '') || (!puede('venta.ver') && (puede('salon.ver') || puede('cocina.ver')));
   if (!yo) return null;
 
   const operacion = [
@@ -59,6 +63,8 @@ export function Disposicion() {
     { a: '/cuentas-pagar', icono: Wallet, texto: 'Cuentas a pagar', visible: puede('cuenta_pagar.ver') },
     { a: '/bancos', icono: Landmark, texto: 'Bancos', visible: puede('banco.ver') },
     { a: '/flujo-caja', icono: ChartNoAxesCombined, texto: 'Flujo de caja', visible: puede('flujo_caja.ver') },
+    { a: '/salon', icono: UtensilsCrossed, texto: 'Salón', visible: puede('salon.ver') && gastronomia },
+    { a: '/cocina', icono: ChefHat, texto: 'Cocina y bar', visible: puede('cocina.ver') && gastronomia },
     { a: '/recetario', icono: FileHeart, texto: 'Libro recetario', visible: puede('receta.ver') && yo?.empresa.rubro === 'farmacia' },
     { a: '/informes', icono: ChartColumn, texto: 'Informes', visible: puede('informe_ventas.ver') || puede('stock.ver') || puede('recepcion.ver') },
     { a: '/movil', icono: Smartphone, texto: 'App del dueño', visible: puede('informe_ventas.ver') },

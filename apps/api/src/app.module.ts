@@ -16,6 +16,7 @@ import { CuentasBancariasController, MovimientosBancariosController } from './fi
 import { FlujoCajaController } from './finanzas/flujo.controller';
 import { ContabilidadController } from './contabilidad/contabilidad.controller';
 import { RecetarioController } from './informes/recetario.controller';
+import { CocinaController, CuentasController, SalonController } from './restaurante/restaurante.controller';
 import { MarcacionesController, NovedadesController, VacacionesController } from './rrhh/asistencia.controller';
 import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from './rrhh/rrhh.controller';
 import { InformesController } from './informes/informes.controller';
@@ -87,6 +88,9 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     NovedadesController,
     MarcacionesController,
     RecetarioController,
+    SalonController,
+    CuentasController,
+    CocinaController,
     VacacionesController,
     InformesController,
     VentasController,
