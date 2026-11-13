@@ -61,6 +61,7 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
   aprobado_obs: { texto: 'Aprobado con observación', clase: 'i-ok' },
   rechazado: { texto: 'Rechazado', clase: 'i-bad' },
   cancelado: { texto: 'Cancelado', clase: 'i-n' },
+  inutilizado: { texto: 'Número inutilizado', clase: 'i-n' },
 };
 const TIPOS: Record<number, string> = { 1: 'Factura', 4: 'Autofactura', 5: 'Nota de crédito', 6: 'Nota de débito', 7: 'Nota de remisión' };
 
@@ -197,11 +198,18 @@ function FichaDocumento({ id, alCerrar }: { id: string; alCerrar: () => void }) 
   const { puede } = useSesion();
   const qc = useQueryClient();
   const d = useQuery({ queryKey: ['fe-documento', id], queryFn: () => api<DocDetalle>(`/facturacion/documentos/${id}`) });
-  const reenviar = useMutation({
-    mutationFn: () => api(`/facturacion/documentos/${id}/reenviar`, { metodo: 'POST', cuerpo: {} }),
+  const refrescar = () => {
+    void qc.invalidateQueries({ queryKey: ['fe-documento', id] });
+    void qc.invalidateQueries({ queryKey: ['fe-documentos'] });
+  };
+  const reenviar = useMutation({ mutationFn: () => api(`/facturacion/documentos/${id}/reenviar`, { metodo: 'POST', cuerpo: {} }), onSuccess: refrescar });
+  const regenerar = useMutation({ mutationFn: () => api(`/facturacion/documentos/${id}/regenerar`, { metodo: 'POST', cuerpo: {} }), onSuccess: refrescar });
+  const [motivoInu, setMotivoInu] = useState<string | null>(null);
+  const inutilizar = useMutation({
+    mutationFn: () => api(`/facturacion/documentos/${id}/inutilizar`, { metodo: 'POST', cuerpo: { motivo: motivoInu } }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['fe-documento', id] });
-      void qc.invalidateQueries({ queryKey: ['fe-documentos'] });
+      setMotivoInu(null);
+      refrescar();
     },
   });
   const descargar = () => {
@@ -248,15 +256,36 @@ function FichaDocumento({ id, alCerrar }: { id: string; alCerrar: () => void }) 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <a className="btn" href={d.data.qr} target="_blank" rel="noreferrer"><ShieldCheck size={16} /> Consultar en e-Kuatia</a>
             <button className="btn" onClick={descargar}><Download size={16} /> Descargar XML</button>
-            {(d.data.estado === 'rechazado' || d.data.estado === 'pendiente') && puede('documento_fiscal.crear') && (
-              <button className="btn" disabled={reenviar.isPending} onClick={() => reenviar.mutate()}><RefreshCw size={16} /> Volver a enviar</button>
+            {d.data.estado === 'pendiente' && puede('documento_fiscal.crear') && (
+              <button className="btn" disabled={reenviar.isPending} onClick={() => reenviar.mutate()}><RefreshCw size={16} /> Enviar de nuevo</button>
             )}
           </div>
-          <ErrorApi error={reenviar.error} />
+          <ErrorApi error={reenviar.error ?? regenerar.error ?? inutilizar.error} />
           {d.data.estado === 'rechazado' && (
-            <p className="tenue peq" style={{ margin: 0 }}>
-              Si el rechazo se debe a un dato (por ejemplo, el RUC del cliente), corríjalo y vuelva a enviar. Si el problema es de la configuración, revise la pestaña Configuración.
-            </p>
+            <div className="form" style={{ borderTop: '1px solid var(--linea)', paddingTop: 14 }}>
+              <p className="tenue peq" style={{ margin: 0 }}>
+                Corrija el dato que causó el rechazo (por ejemplo, el RUC o el nombre del cliente en Clientes, o la configuración fiscal) y genere el documento de nuevo: conserva el mismo número y CDC, como permite la DNIT. Si no se va a corregir, inutilice el número.
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {puede('documento_fiscal.crear') && (
+                  <button className="btn pri" disabled={regenerar.isPending} onClick={() => regenerar.mutate()}><RefreshCw size={16} /> Corregir y reenviar</button>
+                )}
+                {puede('documento_fiscal.cancelar') && motivoInu === null && (
+                  <button className="btn peligro" onClick={() => setMotivoInu('')}>Inutilizar número</button>
+                )}
+              </div>
+              {motivoInu !== null && (
+                <>
+                  <Campo etiqueta="Motivo de la inutilización" id="inu-m">
+                    <input id="inu-m" className="entrada" autoFocus value={motivoInu} onChange={(e) => setMotivoInu(e.target.value)} />
+                  </Campo>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn peligro" disabled={motivoInu.trim().length < 5 || inutilizar.isPending} onClick={() => inutilizar.mutate()}>Confirmar inutilización</button>
+                    <button className="btn" onClick={() => setMotivoInu(null)}>Volver</button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </>
       )}

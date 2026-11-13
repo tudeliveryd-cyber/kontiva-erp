@@ -89,65 +89,64 @@ export function receptor(cliente: { nombre: string; documento: string | null; te
 
 const MEDIOS: Record<string, number> = { efectivo: 1, tarjeta: 3, transferencia: 5, otro: 99 };
 
+interface ItemDe {
+  codigo: string;
+  descripcion: string;
+  unidad: string;
+  cantidad: Decimal;
+  precioUnitario: Decimal;
+  /** Descuento total de la línea (el manual lo informa por unidad). */
+  descuento: Decimal;
+  tasaIva: number;
+  servicio: boolean;
+}
+
+interface OpcionesDe {
+  tipo: 1 | 5;
+  sucursalId: string;
+  punto: string;
+  fecha: Date;
+  cliente: Parameters<typeof receptor>[0];
+  items: ItemDe[];
+  /** Bloques propios del tipo: factura + condición, o nota de crédito + documento asociado. */
+  extra: Record<string, unknown>;
+  totalEsperado: Decimal;
+  ventaId?: string;
+  devolucionId?: string;
+  asociadoId?: string;
+  /** Corrección de un DE rechazado: mismo número y código de seguridad → mismo CDC. */
+  reemplazar?: Reemplazo;
+}
+
+export interface Reemplazo {
+  id: string;
+  numero: number;
+  codigoSeguridad: string;
+  cdc: string;
+}
+
 /**
- * Emite la factura electrónica de una venta dentro de su misma transacción:
- * reserva el número, genera el XML del manual v150, lo firma, agrega el QR y lo deja en cola.
- * El envío a SIFEN lo hace el emisor en segundo plano.
+ * Genera, firma y deja en cola un documento electrónico dentro de la transacción en curso:
+ * reserva el número (establecimiento + punto + tipo + timbrado), arma el XML del manual v150,
+ * lo firma, agrega el QR y controla que el total coincida con la operación.
  */
-export async function emitirFactura(tx: Tx, ctx: Ctx, fe: FeActiva, ventaId: string): Promise<string> {
-  const v = await tx
-    .selectFrom('venta as v')
-    .innerJoin('caja as c', 'c.id', 'v.caja_id')
-    .innerJoin('sucursal as s', 's.id', 'v.sucursal_id')
-    .leftJoin('cliente as cl', 'cl.id', 'v.cliente_id')
-    .select([
-      'v.id',
-      'v.total',
-      'v.vuelto',
-      'v.creado_en',
-      'v.sucursal_id',
-      'c.punto_expedicion',
-      's.codigo as est',
-      's.nombre as sucursal',
-      's.direccion',
-      's.telefono',
-      's.fe_numero_casa',
-      's.fe_departamento',
-      's.fe_distrito',
-      's.fe_ciudad',
-      's.fe_email',
-      'cl.nombre as cl_nombre',
-      'cl.documento as cl_documento',
-      'cl.telefono as cl_telefono',
-      'cl.email as cl_email',
-      'cl.direccion as cl_direccion',
-    ])
-    .where('v.id', '=', ventaId)
-    .executeTakeFirstOrThrow();
-  if (!v.punto_expedicion) throw invalido('La caja no tiene punto de expedición');
-  if (!v.fe_departamento || !v.fe_distrito || !v.fe_ciudad || !v.direccion) throw invalido(`Complete la dirección fiscal de la sucursal ${v.sucursal} en Facturación electrónica`);
+async function emitirDocumento(tx: Tx, ctx: Ctx, fe: FeActiva, o: OpcionesDe): Promise<string> {
+  const s = await tx.selectFrom('sucursal').selectAll().where('id', '=', o.sucursalId).executeTakeFirstOrThrow();
+  if (!s.fe_departamento || !s.fe_distrito || !s.fe_ciudad || !s.direccion) throw invalido(`Complete la dirección fiscal de la sucursal ${s.nombre} en Facturación electrónica`);
   const empresa = await tx.selectFrom('empresa').select(['razon_social', 'nombre_fantasia', 'ruc', 'telefono', 'email']).executeTakeFirstOrThrow();
   if (!empresa.ruc || !validarRuc(empresa.ruc)) throw invalido('La empresa no tiene un RUC válido');
+  const cliente = receptor(o.cliente);
 
-  const [items, pagos] = await Promise.all([
-    tx
-      .selectFrom('venta_item as i')
-      .innerJoin('variante as va', 'va.id', 'i.variante_id')
-      .innerJoin('producto as p', 'p.id', 'va.producto_id')
-      .select(['i.linea', 'i.descripcion', 'i.cantidad', 'i.precio_unitario', 'i.descuento', 'i.tasa_iva', 'va.sku', 'va.id as variante_id', 'p.unidad', 'p.tipo'])
-      .where('i.venta_id', '=', ventaId)
-      .orderBy('i.linea')
-      .execute(),
-    tx.selectFrom('venta_pago').select(['medio', 'monto_pyg']).where('venta_id', '=', ventaId).orderBy('linea').execute(),
-  ]);
-
-  // Número correlativo por establecimiento + punto + tipo + timbrado.
-  const { rows } = await sql<{ ultimo: number }>`
-    INSERT INTO fe_numeracion (empresa_id, establecimiento, punto, tipo_documento, timbrado, ultimo)
-    VALUES (${ctx.empresaId}::uuid, ${v.est}, ${v.punto_expedicion}, 1, ${fe.timbrado.numero}, 1)
-    ON CONFLICT (empresa_id, establecimiento, punto, tipo_documento, timbrado) DO UPDATE SET ultimo = fe_numeracion.ultimo + 1
-    RETURNING ultimo`.execute(tx);
-  const numero = rows[0]!.ultimo;
+  let numero: number;
+  if (o.reemplazar) numero = o.reemplazar.numero;
+  else {
+    const { rows } = await sql<{ ultimo: number }>`
+      INSERT INTO fe_numeracion (empresa_id, establecimiento, punto, tipo_documento, timbrado, ultimo)
+      VALUES (${ctx.empresaId}::uuid, ${s.codigo}, ${o.punto}, ${o.tipo}, ${fe.timbrado.numero}, 1)
+      ON CONFLICT (empresa_id, establecimiento, punto, tipo_documento, timbrado) DO UPDATE SET ultimo = fe_numeracion.ultimo + 1
+      RETURNING ultimo`.execute(tx);
+    numero = rows[0]!.ultimo;
+  }
 
   const geo = xmlgen as unknown as { getDepartamento(n: number): { descripcion: string } | undefined; getDistrito(n: number): { descripcion: string } | undefined; getCiudad(n: number): { descripcion: string } | undefined };
   const params = {
@@ -162,103 +161,102 @@ export async function emitirFactura(tx: Tx, ctx: Ctx, fe: FeActiva, ventaId: str
     ...(fe.tipoRegimen && { tipoRegimen: fe.tipoRegimen }),
     establecimientos: [
       {
-        codigo: v.est,
-        direccion: v.direccion,
-        numeroCasa: v.fe_numero_casa || '0',
-        departamento: v.fe_departamento,
-        departamentoDescripcion: geo.getDepartamento(v.fe_departamento)?.descripcion,
-        distrito: v.fe_distrito,
-        distritoDescripcion: geo.getDistrito(v.fe_distrito)?.descripcion,
-        ciudad: v.fe_ciudad,
-        ciudadDescripcion: geo.getCiudad(v.fe_ciudad)?.descripcion,
-        telefono: v.telefono || empresa.telefono || '000000',
-        email: v.fe_email || empresa.email || undefined,
-        denominacion: v.sucursal,
+        codigo: s.codigo,
+        direccion: s.direccion,
+        numeroCasa: s.fe_numero_casa || '0',
+        departamento: s.fe_departamento,
+        departamentoDescripcion: geo.getDepartamento(s.fe_departamento)?.descripcion,
+        distrito: s.fe_distrito,
+        distritoDescripcion: geo.getDistrito(s.fe_distrito)?.descripcion,
+        ciudad: s.fe_ciudad,
+        ciudadDescripcion: geo.getCiudad(s.fe_ciudad)?.descripcion,
+        telefono: s.telefono || empresa.telefono || '000000',
+        email: s.fe_email || empresa.email || undefined,
+        denominacion: s.nombre,
       },
     ],
   };
-
-  // Pagos en guaraníes; el vuelto sale del efectivo para que lo informado sume el total.
-  let vuelto = new Decimal(v.vuelto ?? 0);
-  const entregas = pagos.map((p) => {
-    let monto = new Decimal(p.monto_pyg);
-    if (p.medio === 'efectivo' && vuelto.gt(0)) {
-      const resta = Decimal.min(vuelto, monto);
-      monto = monto.minus(resta);
-      vuelto = vuelto.minus(resta);
-    }
-    const tipo = MEDIOS[p.medio] ?? 99;
-    return {
-      tipo,
-      monto: monto.toFixed(0),
-      moneda: 'PYG',
-      ...(tipo === 3 && { infoTarjeta: { tipo: 99, tipoDescripcion: 'Tarjeta', medioPago: 1 } }),
-      ...(tipo === 99 && { tipoDescripcion: 'Otro' }),
-    };
-  }).filter((e) => Number(e.monto) > 0);
-
-  const servicios = items.filter((i) => i.tipo === 'servicio').length;
+  const servicios = o.items.filter((i) => i.servicio).length;
   const data = {
-    tipoDocumento: 1,
-    establecimiento: v.est,
-    punto: v.punto_expedicion,
+    tipoDocumento: o.tipo,
+    establecimiento: s.codigo,
+    punto: o.punto,
     numero: String(numero).padStart(7, '0'),
-    codigoSeguridadAleatorio: String(randomInt(1, 999999999)).padStart(9, '0'),
-    fecha: fechaSifen(v.creado_en),
+    codigoSeguridadAleatorio: o.reemplazar?.codigoSeguridad ?? String(randomInt(1, 999999999)).padStart(9, '0'),
+    fecha: fechaSifen(o.fecha),
     tipoEmision: 1,
-    tipoTransaccion: servicios === 0 ? 1 : servicios === items.length ? 2 : 3,
+    tipoTransaccion: servicios === 0 ? 1 : servicios === o.items.length ? 2 : 3,
     tipoImpuesto: 1,
     moneda: 'PYG',
-    cliente: receptor(v.cl_nombre ? { nombre: v.cl_nombre, documento: v.cl_documento, telefono: v.cl_telefono, email: v.cl_email, direccion: v.cl_direccion } : null),
-    factura: { presencia: 1 },
-    condicion: { tipo: 1, entregas: entregas.length ? entregas : [{ tipo: 1, monto: new Decimal(v.total).toFixed(0), moneda: 'PYG' }] },
-    items: items.map((i) => {
-      const tasa = Number(i.tasa_iva);
-      const cantidad = Number(i.cantidad);
-      return {
-        codigo: i.sku || i.variante_id.slice(-12),
-        descripcion: i.descripcion,
-        unidadMedida: UNIDADES[i.unidad] ?? 77,
-        cantidad,
-        precioUnitario: Number(i.precio_unitario),
-        // El manual informa el descuento por unidad.
-        descuento: Number(i.descuento) > 0 ? Number(new Decimal(i.descuento).div(i.cantidad).toDecimalPlaces(8)) : 0,
-        ivaTipo: tasa === 0 ? 3 : 1,
-        ivaProporcion: tasa === 0 ? 0 : 100,
-        iva: tasa,
-      };
-    }),
+    cliente,
+    ...o.extra,
+    items: o.items.map((i) => ({
+      codigo: i.codigo,
+      descripcion: i.descripcion,
+      unidadMedida: UNIDADES[i.unidad] ?? 77,
+      cantidad: Number(i.cantidad),
+      precioUnitario: Number(i.precioUnitario),
+      descuento: i.descuento.gt(0) ? Number(i.descuento.div(i.cantidad).toDecimalPlaces(8)) : 0,
+      ivaTipo: i.tasaIva === 0 ? 3 : 1,
+      ivaProporcion: i.tasaIva === 0 ? 0 : 100,
+      iva: i.tasaIva,
+    })),
   };
 
   let xml: string;
   try {
     xml = await (xmlgen as unknown as { generateXMLDE(p: object, d: object, c: object): Promise<string> }).generateXMLDE(params, data, {});
   } catch (e) {
-    throw invalido(`No se pudo generar la factura electrónica: ${(e as Error).message}`);
+    throw invalido(`No se pudo generar el documento electrónico: ${(e as Error).message}`);
   }
   const firmado = firmarDE(xml, fe.cert);
   const qr = urlQr(firmado, fe.ambiente, fe.cscId, fe.csc);
   const final = agregarQr(firmado, qr);
   const cdc = /<DE\s[^>]*Id="([0-9]{44})"/.exec(final)![1]!;
   const totalXml = new Decimal(valor(final, 'dTotGralOpe') ?? '0');
-  if (!totalXml.eq(new Decimal(v.total))) throw invalido(`El total de la factura (${totalXml.toFixed(0)}) no coincide con el de la venta (${new Decimal(v.total).toFixed(0)})`);
+  if (!totalXml.eq(o.totalEsperado)) throw invalido(`El total del documento electrónico (${totalXml.toFixed(0)}) no coincide con el de la operación (${o.totalEsperado.toFixed(0)})`);
+  const receptorDocumento = 'ruc' in cliente ? cliente.ruc : cliente.documentoTipo === 5 ? null : cliente.documentoNumero;
+
+  if (o.reemplazar) {
+    if (cdc !== o.reemplazar.cdc) throw invalido('Los datos corregidos cambian el CDC (fecha, timbrado o tipo de contribuyente): no se puede reutilizar el número; inutilícelo');
+    await tx
+      .updateTable('documento_electronico')
+      .set({
+        estado: 'pendiente',
+        xml_firmado: final,
+        qr_url: qr,
+        receptor_nombre: cliente.razonSocial,
+        receptor_documento: receptorDocumento,
+        total_iva: new Decimal(valor(final, 'dTotIVA') ?? '0').toFixed(2),
+        lote_protocolo: null,
+        respuesta_codigo: null,
+        respuesta_mensaje: 'Corregido y en cola para reenviar',
+        intentos: 0,
+        proximo_intento: new Date(),
+      })
+      .where('id', '=', o.reemplazar.id)
+      .execute();
+    return o.reemplazar.id;
+  }
 
   const r = await tx
     .insertInto('documento_electronico')
     .values({
       empresa_id: ctx.empresaId,
-      tipo_documento: 1,
+      tipo_documento: o.tipo,
       cdc,
       ambiente: fe.ambiente,
       timbrado: fe.timbrado.numero,
-      establecimiento: v.est,
-      punto: v.punto_expedicion,
+      establecimiento: s.codigo,
+      punto: o.punto,
       numero,
-      fecha_emision: v.creado_en,
-      sucursal_id: v.sucursal_id,
-      venta_id: ventaId,
-      receptor_nombre: data.cliente.razonSocial,
-      receptor_documento: 'ruc' in data.cliente ? data.cliente.ruc : data.cliente.documentoTipo === 5 ? null : data.cliente.documentoNumero,
+      fecha_emision: o.fecha,
+      sucursal_id: o.sucursalId,
+      venta_id: o.ventaId ?? null,
+      devolucion_id: o.devolucionId ?? null,
+      documento_asociado_id: o.asociadoId ?? null,
+      receptor_nombre: cliente.razonSocial,
+      receptor_documento: receptorDocumento,
       total: totalXml.toFixed(2),
       total_iva: new Decimal(valor(final, 'dTotIVA') ?? '0').toFixed(2),
       xml_firmado: final,
@@ -267,8 +265,133 @@ export async function emitirFactura(tx: Tx, ctx: Ctx, fe: FeActiva, ventaId: str
     })
     .returning('id')
     .executeTakeFirstOrThrow();
-  await tx.updateTable('venta').set({ comprobante: 'factura' }).where('id', '=', ventaId).execute();
   return r.id;
+}
+
+async function clienteDeVenta(tx: Tx, ventaId: string) {
+  const c = await tx
+    .selectFrom('venta as v')
+    .innerJoin('cliente as cl', 'cl.id', 'v.cliente_id')
+    .select(['cl.nombre', 'cl.documento', 'cl.telefono', 'cl.email', 'cl.direccion'])
+    .where('v.id', '=', ventaId)
+    .executeTakeFirst();
+  return c ?? null;
+}
+
+/** Factura electrónica de una venta, en su misma transacción. El envío lo hace el emisor en segundo plano. */
+export async function emitirFactura(tx: Tx, ctx: Ctx, fe: FeActiva, ventaId: string, reemplazar?: Reemplazo): Promise<string> {
+  const v = await tx
+    .selectFrom('venta as v')
+    .innerJoin('caja as c', 'c.id', 'v.caja_id')
+    .select(['v.total', 'v.vuelto', 'v.creado_en', 'v.sucursal_id', 'c.punto_expedicion'])
+    .where('v.id', '=', ventaId)
+    .executeTakeFirstOrThrow();
+  if (!v.punto_expedicion) throw invalido('La caja no tiene punto de expedición');
+  const [items, pagos] = await Promise.all([
+    tx
+      .selectFrom('venta_item as i')
+      .innerJoin('variante as va', 'va.id', 'i.variante_id')
+      .innerJoin('producto as p', 'p.id', 'va.producto_id')
+      .select(['i.descripcion', 'i.cantidad', 'i.precio_unitario', 'i.descuento', 'i.tasa_iva', 'va.sku', 'va.id as variante_id', 'p.unidad', 'p.tipo'])
+      .where('i.venta_id', '=', ventaId)
+      .orderBy('i.linea')
+      .execute(),
+    tx.selectFrom('venta_pago').select(['medio', 'monto_pyg']).where('venta_id', '=', ventaId).orderBy('linea').execute(),
+  ]);
+  // Pagos en guaraníes; el vuelto sale del efectivo para que lo informado sume el total.
+  let vuelto = new Decimal(v.vuelto ?? 0);
+  const entregas = pagos
+    .map((p) => {
+      let monto = new Decimal(p.monto_pyg);
+      if (p.medio === 'efectivo' && vuelto.gt(0)) {
+        const resta = Decimal.min(vuelto, monto);
+        monto = monto.minus(resta);
+        vuelto = vuelto.minus(resta);
+      }
+      const tipo = MEDIOS[p.medio] ?? 99;
+      return {
+        tipo,
+        monto: monto.toFixed(0),
+        moneda: 'PYG',
+        ...(tipo === 3 && { infoTarjeta: { tipo: 99, tipoDescripcion: 'Tarjeta', medioPago: 1 } }),
+        ...(tipo === 99 && { tipoDescripcion: 'Otro' }),
+      };
+    })
+    .filter((e) => Number(e.monto) > 0);
+  const id = await emitirDocumento(tx, ctx, fe, {
+    tipo: 1,
+    sucursalId: v.sucursal_id,
+    punto: v.punto_expedicion,
+    fecha: v.creado_en,
+    cliente: await clienteDeVenta(tx, ventaId),
+    items: items.map((i) => ({
+      codigo: i.sku || i.variante_id.slice(-12),
+      descripcion: i.descripcion,
+      unidad: i.unidad,
+      cantidad: new Decimal(i.cantidad),
+      precioUnitario: new Decimal(i.precio_unitario),
+      descuento: new Decimal(i.descuento),
+      tasaIva: Number(i.tasa_iva),
+      servicio: i.tipo === 'servicio',
+    })),
+    extra: {
+      factura: { presencia: 1 },
+      condicion: { tipo: 1, entregas: entregas.length ? entregas : [{ tipo: 1, monto: new Decimal(v.total).toFixed(0), moneda: 'PYG' }] },
+    },
+    totalEsperado: new Decimal(v.total),
+    ventaId,
+    reemplazar,
+  });
+  await tx.updateTable('venta').set({ comprobante: 'factura' }).where('id', '=', ventaId).execute();
+  return id;
+}
+
+/**
+ * Nota de crédito electrónica (motivo devolución) por los ítems devueltos, asociada a la factura.
+ * La emite el punto de expedición de la caja donde se hace la devolución.
+ */
+export async function emitirNotaCredito(
+  tx: Tx,
+  ctx: Ctx,
+  fe: FeActiva,
+  a: { devolucionId: string; ventaId: string; facturaId: string; facturaCdc: string; sucursalId: string; punto: string; total: Decimal; lineas: { linea: number; cantidad: Decimal; total: Decimal }[]; fecha?: Date },
+  reemplazar?: Reemplazo,
+): Promise<string> {
+  const items = await tx
+    .selectFrom('venta_item as i')
+    .innerJoin('variante as va', 'va.id', 'i.variante_id')
+    .innerJoin('producto as p', 'p.id', 'va.producto_id')
+    .select(['i.linea', 'i.descripcion', 'i.precio_unitario', 'i.tasa_iva', 'va.sku', 'va.id as variante_id', 'p.unidad', 'p.tipo'])
+    .where('i.venta_id', '=', a.ventaId)
+    .execute();
+  const porLinea = new Map(items.map((i) => [i.linea, i]));
+  return emitirDocumento(tx, ctx, fe, {
+    tipo: 5,
+    sucursalId: a.sucursalId,
+    punto: a.punto,
+    fecha: a.fecha ?? new Date(),
+    cliente: await clienteDeVenta(tx, a.ventaId),
+    items: a.lineas.map((l) => {
+      const i = porLinea.get(l.linea)!;
+      const precio = new Decimal(i.precio_unitario);
+      return {
+        codigo: i.sku || i.variante_id.slice(-12),
+        descripcion: i.descripcion,
+        unidad: i.unidad,
+        cantidad: l.cantidad,
+        precioUnitario: precio,
+        // Lo que se reintegra es proporcional a lo cobrado: la diferencia con el precio de lista va como descuento.
+        descuento: Decimal.max(precio.mul(l.cantidad).minus(l.total), 0),
+        tasaIva: Number(i.tasa_iva),
+        servicio: i.tipo === 'servicio',
+      };
+    }),
+    extra: { notaCreditoDebito: { motivo: 2 }, documentoAsociado: { formato: 1, cdc: a.facturaCdc } },
+    totalEsperado: a.total,
+    devolucionId: a.devolucionId,
+    asociadoId: a.facturaId,
+    reemplazar,
+  });
 }
 
 /** Número de comprobante para mostrar: 001-001-0000001. */

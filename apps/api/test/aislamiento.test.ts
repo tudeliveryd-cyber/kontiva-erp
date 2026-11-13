@@ -226,6 +226,7 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/pedidos/:id/estado': { estado: 'preparado' },
           'PUT /api/facturacion/establecimientos/:id': { direccion: 'Calle ajena', departamento: 11, distrito: 145, ciudad: 3432, telefono: '061500000' },
           'PUT /api/facturacion/puntos/:id': { punto: '009' },
+          'POST /api/facturacion/documentos/:id/inutilizar': { motivo: 'Intento ajeno' },
         };
         const cuerpos: Record<string, object> = { patch: { nombre: 'Intento ajeno' }, put: { permisos: [] } };
         const cuerpo = porRuta[`${r.metodo.toUpperCase()} ${r.ruta}`] ?? cuerpos[r.metodo] ?? {};

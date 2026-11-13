@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { Printer } from 'lucide-react';
 import { useState } from 'react';
 import { DialogoAutorizacion } from '../componentes/Autorizacion';
-import { Ticket } from '../componentes/Ticket';
+import { Ticket, TicketNotaCredito, type DevolucionNc } from '../componentes/Ticket';
 import { Aviso, Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
 import { api } from '../lib/api';
 import { fechaHora } from '../lib/formato';
@@ -103,6 +103,7 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
   const [modo, setModo] = useState<'ver' | 'autorizar' | 'anular' | 'devolver'>('ver');
   const [token, setToken] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [nota, setNota] = useState<string | null>(null); // devolución cuya nota de crédito se muestra
   const anular = useMutation({
     mutationFn: () => api<Venta>(`/ventas/${id}/anular`, { metodo: 'POST', cuerpo: { motivo }, encabezados: token ? { 'X-Autorizacion': token } : undefined }),
     onSuccess: (r) => {
@@ -121,15 +122,19 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
           Anulada el {fechaHora(venta.anulacion.fecha)} por {venta.anulacion.por}: {venta.anulacion.motivo}
         </div>
       )}
-      <div style={{ border: '1px solid var(--linea)', borderRadius: 8 }}>
-        <Ticket venta={venta} empresa={{ nombre: yo.empresa.nombre, razonSocial: yo.empresa.razonSocial, ruc: yo.empresa.ruc }} />
-      </div>
-      {modo === 'ver' && (
+      {nota ? (
+        <VerNotaCredito devolucionId={nota} venta={venta} empresa={{ nombre: yo.empresa.nombre, razonSocial: yo.empresa.razonSocial, ruc: yo.empresa.ruc }} alVolver={() => setNota(null)} />
+      ) : (
+        <div style={{ border: '1px solid var(--linea)', borderRadius: 8 }}>
+          <Ticket venta={venta} empresa={{ nombre: yo.empresa.nombre, razonSocial: yo.empresa.razonSocial, ruc: yo.empresa.ruc }} />
+        </div>
+      )}
+      {modo === 'ver' && !nota && (
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => window.print()}>
             <Printer size={16} /> Reimprimir
           </button>
-          {venta.estado === 'confirmada' && venta.comprobante !== 'factura' && puede('venta.crear') && venta.items.some((i) => Number(i.cantidadDevuelta) < Number(i.cantidad)) && (
+          {venta.estado === 'confirmada' && puede('venta.crear') && venta.items.some((i) => Number(i.cantidadDevuelta) < Number(i.cantidad)) && (
             <button className="btn" onClick={() => setModo('devolver')}>
               Devolución
             </button>
@@ -141,12 +146,32 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
           )}
         </div>
       )}
-      {venta.devoluciones.length > 0 && (
-        <p className="tenue peq" style={{ margin: 0 }}>
-          Devoluciones: {venta.devoluciones.map((d) => `N.º ${d.numero} (${dinero(d.total)}, ${fechaHora(d.fecha)})`).join(' · ')}
-        </p>
+      {venta.devoluciones.length > 0 && !nota && (
+        <div className="tenue peq" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          Devoluciones:
+          {venta.devoluciones.map((d) =>
+            venta.comprobante === 'factura' ? (
+              <button key={d.id} className="btn" style={{ height: 28, fontSize: 12.5 }} onClick={() => setNota(d.id)}>
+                N.º {d.numero} · {dinero(d.total)} · nota de crédito
+              </button>
+            ) : (
+              <span key={d.id}>N.º {d.numero} ({dinero(d.total)}, {fechaHora(d.fecha)})</span>
+            ),
+          )}
+        </div>
       )}
-      {modo === 'devolver' && <Devolucion venta={venta} alTerminar={(r) => { qc.setQueryData(['venta', id], r); void qc.invalidateQueries({ queryKey: ['ventas'] }); setModo('ver'); }} alCancelar={() => setModo('ver')} />}
+      {modo === 'devolver' && (
+        <Devolucion
+          venta={venta}
+          alTerminar={(r, devId) => {
+            qc.setQueryData(['venta', id], r);
+            void qc.invalidateQueries({ queryKey: ['ventas'] });
+            setModo('ver');
+            if (r.comprobante === 'factura') setNota(devId);
+          }}
+          alCancelar={() => setModo('ver')}
+        />
+      )}
       {modo === 'autorizar' && (
         <DialogoAutorizacion permiso="venta.cancelar" titulo="Autorizar anulación" alAutorizar={(t) => { setToken(t); setModo('anular'); }} alCerrar={() => setModo('ver')} />
       )}
@@ -166,7 +191,7 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
   );
 }
 
-function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTerminar: (v: Venta) => void; alCancelar: () => void }) {
+function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTerminar: (v: Venta, devolucionId: string) => void; alCancelar: () => void }) {
   const { puede } = useSesion();
   const cajas = useQuery({ queryKey: ['cajas'], queryFn: () => api<CajaFila[]>('/cajas') });
   const propias = cajas.data?.filter((c) => c.sesion?.propia) ?? [];
@@ -182,10 +207,10 @@ function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTermina
   }, 0);
   const devolver = useMutation({
     mutationFn: async () => {
-      await api('/devoluciones', { metodo: 'POST', cuerpo: { ventaId: venta.id, cajaId: propias[0]!.id, medio, motivo, items }, encabezados: token ? { 'X-Autorizacion': token } : undefined });
-      return api<Venta>(`/ventas/${venta.id}`);
+      const dev = await api<{ id: string }>('/devoluciones', { metodo: 'POST', cuerpo: { ventaId: venta.id, cajaId: propias[0]!.id, medio, motivo, items }, encabezados: token ? { 'X-Autorizacion': token } : undefined });
+      return { venta: await api<Venta>(`/ventas/${venta.id}`), devId: dev.id };
     },
-    onSuccess: alTerminar,
+    onSuccess: (r) => alTerminar(r.venta, r.devId),
   });
   if (pidiendo) {
     return <DialogoAutorizacion permiso="devolucion.aprobar" titulo="Autorizar devolución" alAutorizar={(t) => { setToken(t); setPidiendo(false); }} alCerrar={() => setPidiendo(false)} />;
@@ -240,5 +265,29 @@ function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTermina
         </>
       )}
     </div>
+  );
+}
+
+function VerNotaCredito({ devolucionId, venta, empresa, alVolver }: { devolucionId: string; venta: Venta; empresa: { nombre: string; razonSocial: string; ruc: string | null }; alVolver: () => void }) {
+  const d = useQuery({ queryKey: ['devolucion', devolucionId], queryFn: () => api<DevolucionNc>(`/devoluciones/${devolucionId}`) });
+  if (!d.data) return d.error ? <ErrorApi error={d.error} /> : <Cargando />;
+  return (
+    <>
+      {d.data.notaCredito ? (
+        <div style={{ border: '1px solid var(--linea)', borderRadius: 8 }}>
+          <TicketNotaCredito dev={d.data} venta={venta} empresa={empresa} />
+        </div>
+      ) : (
+        <Aviso tipo="info">Esta devolución no tiene nota de crédito electrónica.</Aviso>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {d.data.notaCredito && (
+          <button className="btn" onClick={() => window.print()}>
+            <Printer size={16} /> Imprimir nota de crédito
+          </button>
+        )}
+        <button className="btn" onClick={alVolver}>Volver a la venta</button>
+      </div>
+    </>
   );
 }

@@ -652,7 +652,7 @@ export interface FeNumeracionTabla {
   ultimo: Generated<number>;
 }
 
-export type EstadoDocumentoElectronico = 'pendiente' | 'enviado' | 'aprobado' | 'aprobado_obs' | 'rechazado' | 'cancelado';
+export type EstadoDocumentoElectronico = 'pendiente' | 'enviado' | 'aprobado' | 'aprobado_obs' | 'rechazado' | 'cancelado' | 'inutilizado';
 
 export interface DocumentoElectronicoTabla {
   empresa_id: string;

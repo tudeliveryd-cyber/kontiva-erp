@@ -11,8 +11,10 @@ import { conflicto, invalido, noEncontrado } from '../comun/errores';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 import { ErrorCertificado, leerP12 } from './certificado';
-import { cargarFe, numeroComprobante } from './emision';
-import { EmisorSifen } from './emisor.service';
+import Decimal from 'decimal.js';
+import { cargarFe, emitirFactura, emitirNotaCredito, numeroComprobante } from './emision';
+import { valor } from './firma';
+import { EmisorSifen, inutilizarEnSifen } from './emisor.service';
 
 interface Geo {
   consultarDepartamentos(): Promise<{ codigo: number; descripcion: string }[]>;
@@ -75,7 +77,7 @@ async function estado(tx: Tx, ctx: Ctx) {
   };
 }
 
-const ESTADOS_DOC = ['pendiente', 'enviado', 'aprobado', 'aprobado_obs', 'rechazado', 'cancelado'] as const;
+const ESTADOS_DOC = ['pendiente', 'enviado', 'aprobado', 'aprobado_obs', 'rechazado', 'cancelado', 'inutilizado'] as const;
 
 @Controller('facturacion')
 export class FacturacionController {
@@ -296,6 +298,86 @@ export class FacturacionController {
       if (d.estado !== 'pendiente' && d.estado !== 'rechazado') throw conflicto('NO_REENVIABLE', 'Solo se reenvían documentos pendientes o rechazados');
       await tx.updateTable('documento_electronico').set({ estado: 'pendiente', lote_protocolo: null, proximo_intento: new Date() }).where('id', '=', id).execute();
       await auditar(tx, { ...ctx, ...o }, { accion: 'reenviar', entidad: 'documento_electronico', entidadId: id });
+      return { ok: true };
+    });
+  }
+
+  /**
+   * Corrige un documento rechazado: lo vuelve a generar con los datos actuales (por ejemplo, el RUC del
+   * cliente corregido) manteniendo número, código de seguridad y CDC, como permite la DNIT, y lo pone en cola.
+   */
+  @Requiere('documento_fiscal', 'crear')
+  @Post('documentos/:id/regenerar')
+  @HttpCode(200)
+  regenerar(@Contexto() ctx: Ctx, @Param('id', ParseUUIDPipe) id: string, @OrigenPeticion() o: Origen) {
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const d = await tx.selectFrom('documento_electronico').selectAll().where('id', '=', id).forUpdate().executeTakeFirst();
+      if (!d) throw noEncontrado('Documento electrónico');
+      exigirSucursal(ctx, d.sucursal_id, 'Documento electrónico');
+      if (d.estado !== 'rechazado') throw conflicto('NO_REGENERABLE', 'Solo se corrigen documentos rechazados');
+      const fe = await cargarFe(tx, true);
+      if (!fe) throw conflicto('FE_SIN_CONFIGURACION', 'Falta la configuración de facturación electrónica');
+      if (fe.timbrado.numero !== d.timbrado) throw conflicto('TIMBRADO_DISTINTO', 'El documento es de otro timbrado: inutilice el número');
+      const reemplazo = { id: d.id, numero: d.numero, cdc: d.cdc, codigoSeguridad: valor(d.xml_firmado, 'dCodSeg')! };
+      if (d.tipo_documento === 1 && d.venta_id) {
+        await emitirFactura(tx, ctx, fe, d.venta_id, reemplazo);
+      } else if (d.tipo_documento === 5 && d.devolucion_id && d.documento_asociado_id) {
+        const dev = await tx.selectFrom('devolucion').select(['venta_id', 'total']).where('id', '=', d.devolucion_id).executeTakeFirstOrThrow();
+        const lineas = await tx.selectFrom('devolucion_item').select(['linea_venta', 'cantidad', 'total']).where('devolucion_id', '=', d.devolucion_id).execute();
+        const factura = await tx.selectFrom('documento_electronico').select('cdc').where('id', '=', d.documento_asociado_id).executeTakeFirstOrThrow();
+        await emitirNotaCredito(
+          tx,
+          ctx,
+          fe,
+          {
+            devolucionId: d.devolucion_id,
+            ventaId: dev.venta_id,
+            facturaId: d.documento_asociado_id,
+            facturaCdc: factura.cdc,
+            sucursalId: d.sucursal_id,
+            punto: d.punto,
+            total: new Decimal(dev.total),
+            lineas: lineas.map((l) => ({ linea: l.linea_venta, cantidad: new Decimal(l.cantidad), total: new Decimal(l.total) })),
+            fecha: d.fecha_emision,
+          },
+          reemplazo,
+        );
+      } else throw conflicto('NO_REGENERABLE', 'Este documento no se puede regenerar');
+      await auditar(tx, { ...ctx, ...o }, { accion: 'regenerar', entidad: 'documento_electronico', entidadId: id, despues: { cdc: d.cdc } });
+      return { ok: true };
+    });
+  }
+
+  /** Inutiliza ante SIFEN el número de un documento rechazado que no se va a corregir. */
+  @Requiere('documento_fiscal', 'cancelar')
+  @Post('documentos/:id/inutilizar')
+  @HttpCode(200)
+  async inutilizar(@Contexto() ctx: Ctx, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown, @OrigenPeticion() o: Origen) {
+    const { motivo } = validar(z.object({ motivo: z.string().trim().min(5, 'Indique el motivo (mínimo 5 letras)').max(500) }), body);
+    const previo = await this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const d = await tx.selectFrom('documento_electronico').selectAll().where('id', '=', id).executeTakeFirst();
+      if (!d) throw noEncontrado('Documento electrónico');
+      exigirSucursal(ctx, d.sucursal_id, 'Documento electrónico');
+      if (d.estado !== 'rechazado') throw conflicto('NO_INUTILIZABLE', 'Solo se inutilizan números de documentos rechazados');
+      const fe = await cargarFe(tx, true);
+      const emp = await tx.selectFrom('empresa').select(['ruc', 'razon_social']).executeTakeFirstOrThrow();
+      if (!fe || !emp.ruc) throw conflicto('FE_SIN_CONFIGURACION', 'Falta la configuración de facturación electrónica');
+      return { d, fe, emp: { ruc: emp.ruc, razonSocial: emp.razon_social } };
+    });
+    let r: Awaited<ReturnType<typeof inutilizarEnSifen>>;
+    try {
+      r = await inutilizarEnSifen(previo.fe, previo.emp, { tipoDocumento: previo.d.tipo_documento, establecimiento: previo.d.establecimiento, punto: previo.d.punto, desde: previo.d.numero, hasta: previo.d.numero, motivo });
+    } catch (e) {
+      throw conflicto('SIFEN_SIN_CONEXION', `No se pudo inutilizar en SIFEN: ${(e as Error).message}`);
+    }
+    if (r.estado !== 'Aprobado') throw conflicto('INUTILIZACION_RECHAZADA', `SIFEN no aceptó la inutilización: ${r.mensajes.map((m) => `${m.codigo} ${m.mensaje}`).join(' · ')}`);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      await tx
+        .updateTable('documento_electronico')
+        .set({ estado: 'inutilizado', cancelado_en: new Date(), cancelado_por: ctx.usuarioId, motivo_cancelacion: motivo, respuesta_mensaje: `Número inutilizado${r.protocolo ? ` · protocolo ${r.protocolo}` : ''}` })
+        .where('id', '=', id)
+        .execute();
+      await auditar(tx, { ...ctx, ...o }, { accion: 'inutilizar', entidad: 'documento_electronico', entidadId: id, despues: { motivo, protocolo: r.protocolo } });
       return { ok: true };
     });
   }

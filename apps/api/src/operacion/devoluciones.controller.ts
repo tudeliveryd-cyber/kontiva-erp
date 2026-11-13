@@ -12,6 +12,8 @@ import { moverStock, siguienteNumero } from '../comun/stock';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 import { esperado, obtenerCaja, sesionAbierta } from './cajas.controller';
+import QRCode from 'qrcode';
+import { cargarFe, emitirNotaCredito, numeroComprobante } from '../sifen/emision';
 
 /** Cantidad ya devuelta por línea de una venta. */
 export async function devueltoPorLinea(tx: Tx, ventaId: string) {
@@ -42,9 +44,34 @@ export async function leerDevolucion(tx: Tx, id: string) {
     .where('i.devolucion_id', '=', id)
     .orderBy('i.linea_venta')
     .execute();
+  const nc = await tx
+    .selectFrom('documento_electronico as n')
+    .leftJoin('documento_electronico as f', 'f.id', 'n.documento_asociado_id')
+    .select(['n.id', 'n.cdc', 'n.establecimiento', 'n.punto', 'n.numero', 'n.timbrado', 'n.estado', 'n.qr_url', 'n.ambiente', 'n.total_iva', 'n.respuesta_mensaje', 'n.receptor_nombre', 'n.receptor_documento', 'f.cdc as f_cdc', 'f.establecimiento as f_est', 'f.punto as f_punto', 'f.numero as f_numero'])
+    .where('n.devolucion_id', '=', id)
+    .executeTakeFirst();
+  const feConf = nc ? await tx.selectFrom('fe_configuracion').select('timbrado_fecha').executeTakeFirst() : undefined;
   return {
     id: d.id,
     numero: Number(d.numero),
+    notaCredito: nc
+      ? {
+          id: nc.id,
+          cdc: nc.cdc,
+          numero: numeroComprobante(nc),
+          timbrado: nc.timbrado,
+          timbradoInicio: feConf?.timbrado_fecha ?? null,
+          estado: nc.estado,
+          qr: nc.qr_url,
+          qrImagen: `data:image/svg+xml;base64,${Buffer.from(await QRCode.toString(nc.qr_url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })).toString('base64')}`,
+          ambiente: nc.ambiente,
+          totalIva: nc.total_iva,
+          mensaje: nc.respuesta_mensaje,
+          receptor: nc.receptor_nombre,
+          receptorDocumento: nc.receptor_documento,
+          factura: nc.f_cdc ? { cdc: nc.f_cdc, numero: numeroComprobante({ establecimiento: nc.f_est!, punto: nc.f_punto!, numero: nc.f_numero! }) } : null,
+        }
+      : null,
     venta: { id: d.venta_id, numero: Number(d.venta_numero) },
     sucursalId: d.sucursal_id,
     medio: d.medio,
@@ -105,9 +132,20 @@ export class DevolucionesController {
       const venta = await tx.selectFrom('venta').select(['id', 'numero', 'estado', 'sucursal_id', 'comprobante']).where('id', '=', d.ventaId).forUpdate().executeTakeFirst();
       if (!venta || !enSucursal(ctx, venta.sucursal_id)) throw noEncontrado('Venta');
       if (venta.estado === 'anulada') throw conflicto('VENTA_ANULADA', 'La venta está anulada: no hay nada que devolver');
-      if (venta.comprobante === 'factura') throw conflicto('NOTA_CREDITO_PENDIENTE', 'La venta tiene factura electrónica: la devolución se registra con nota de crédito electrónica (próxima versión). Mientras tanto, si la caja sigue abierta, anule la venta.');
 
       const caja = await obtenerCaja(tx, ctx, d.cajaId, true);
+      // Venta con factura electrónica: la devolución emite una nota de crédito electrónica asociada.
+      let fiscal: { fe: NonNullable<Awaited<ReturnType<typeof cargarFe>>>; factura: { id: string; cdc: string }; punto: string } | null = null;
+      if (venta.comprobante === 'factura') {
+        const factura = await tx.selectFrom('documento_electronico').select(['id', 'cdc', 'estado']).where('venta_id', '=', venta.id).where('tipo_documento', '=', 1).executeTakeFirstOrThrow();
+        if (factura.estado === 'pendiente' || factura.estado === 'enviado') throw conflicto('FE_EN_PROCESO', 'La factura electrónica de la venta todavía está en proceso en SIFEN: intente en unos minutos');
+        if (factura.estado === 'rechazado') throw conflicto('FACTURA_RECHAZADA', 'SIFEN rechazó la factura de esta venta: corríjala y reenvíela antes de registrar la devolución');
+        if (factura.estado === 'cancelado') throw conflicto('FACTURA_CANCELADA', 'La factura de esta venta está cancelada');
+        if (!caja.punto_expedicion) throw conflicto('CAJA_SIN_PUNTO', 'La devolución emite nota de crédito electrónica: asigne un punto de expedición a esta caja en Facturación electrónica');
+        const fe = await cargarFe(tx, true);
+        if (!fe) throw conflicto('FE_SIN_CONFIGURACION', 'Falta la configuración de facturación electrónica para emitir la nota de crédito');
+        fiscal = { fe, factura, punto: caja.punto_expedicion };
+      }
       const sesion = await sesionAbierta(tx, caja.id);
       if (!sesion || sesion.usuario_id !== ctx.usuarioId) throw conflicto('CAJA_CERRADA', 'Abra su caja para registrar la devolución');
 
@@ -161,7 +199,19 @@ export class DevolucionesController {
           .values({ empresa_id: ctx.empresaId, sesion_id: sesion.id, tipo: 'devolucion', medio: d.medio, moneda: 'PYG', monto: total.neg().toFixed(2), venta_id: venta.id, motivo: d.motivo, autorizado_por: autorizadoPor, creado_por: ctx.usuarioId })
           .execute();
       }
-      await auditar(tx, { ...ctx, ...o }, { accion: 'devolucion', entidad: 'venta', entidadId: venta.id, autorizadoPor, despues: { numero, venta: Number(venta.numero), total: total.toFixed(0), motivo: d.motivo } });
+      if (fiscal) {
+        await emitirNotaCredito(tx, ctx, fiscal.fe, {
+          devolucionId: dev.id,
+          ventaId: venta.id,
+          facturaId: fiscal.factura.id,
+          facturaCdc: fiscal.factura.cdc,
+          sucursalId: caja.sucursal_id,
+          punto: fiscal.punto,
+          total,
+          lineas: detalle.map((x) => ({ linea: x.linea, cantidad: x.cantidad, total: x.total })),
+        });
+      }
+      await auditar(tx, { ...ctx, ...o }, { accion: 'devolucion', entidad: 'venta', entidadId: venta.id, autorizadoPor, despues: { numero, venta: Number(venta.numero), total: total.toFixed(0), motivo: d.motivo, notaCredito: !!fiscal } });
       return (await leerDevolucion(tx, dev.id))!;
     });
   }

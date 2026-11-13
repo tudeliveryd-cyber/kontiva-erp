@@ -65,8 +65,8 @@ class SifenSimulado {
         }
         if (req.url!.endsWith('evento.wsdl')) {
           this.eventos.push(cuerpo);
-          const cdc = valor(cuerpo, 'Id')!;
-          const ok = verificarFirma(cuerpo) && [...this.lotes.values()].flat().some((d) => d.cdc === cdc && d.aprobado);
+          const cdc = valor(cuerpo, 'Id');
+          const ok = verificarFirma(cuerpo) && (cuerpo.includes('<rGeVeInu>') || [...this.lotes.values()].flat().some((d) => d.cdc === cdc && d.aprobado));
           res.end(sobre(`<ns2:rRetEnviEventoDe ${ns}><ns2:dFecProc>2026-11-12T10:00:09</ns2:dFecProc><ns2:gResProcEVe><ns2:dEstRes>${ok ? 'Aprobado' : 'Rechazado'}</ns2:dEstRes>${ok ? '<ns2:dProtAut>9988776655</ns2:dProtAut>' : ''}<ns2:id>1</ns2:id><ns2:gResProc><ns2:dCodRes>${ok ? '0600' : '4002'}</ns2:dCodRes><ns2:dMsgRes>${ok ? 'Evento registrado correctamente' : 'CDC inexistente o firma inválida'}</ns2:dMsgRes></ns2:gResProc></ns2:gResProcEVe></ns2:rRetEnviEventoDe>`));
           return;
         }
@@ -240,12 +240,94 @@ describe('Facturación electrónica (SIFEN)', () => {
     expect(d.body).toMatchObject({ estado: 'cancelado', cancelacion: { motivo: 'Error de carga' } });
   });
 
-  it('con la factura en proceso no se anula; la devolución espera la nota de crédito', async () => {
+  it('con la factura en proceso no se anula ni se devuelve', async () => {
     const v = await vender().expect(201);
     const r = await http(app).post(`/api/ventas/${v.body.id}/anular`).set(h).send({ motivo: 'Probando' }).expect(409);
     expect(r.body.codigo).toBe('FE_EN_PROCESO');
     const dv = await http(app).post('/api/devoluciones').set(h).send({ ventaId: v.body.id, cajaId: base.cajaId, motivo: 'Fallado', items: [{ linea: 1, cantidad: 1 }] }).expect(409);
-    expect(dv.body.codigo).toBe('NOTA_CREDITO_PENDIENTE');
+    expect(dv.body.codigo).toBe('FE_EN_PROCESO');
+  });
+
+  it('devolución de una venta facturada: nota de crédito electrónica asociada a la factura', async () => {
+    const cl = await http(app).post('/api/clientes').set(h).send({ nombre: 'Comercial Norte', documento: rucValido() }).expect(201);
+    const v = await vender({ clienteId: cl.body.id, items: [{ varianteId: base.varianteId, cantidad: 3, descuento: 3000 }], pagos: [{ medio: 'efectivo', moneda: 'PYG', monto: 30000 }] }).expect(201);
+    expect(v.body.total).toBe('30000.00');
+    await procesar();
+    await espera(1100);
+    await procesar();
+    const fac = await http(app).get(`/api/facturacion/documentos/${v.body.documentoElectronico.id}`).set(h).expect(200);
+    expect(fac.body.estado).toBe('aprobado');
+    const dv = await http(app).post('/api/devoluciones').set(h).send({ ventaId: v.body.id, cajaId: base.cajaId, motivo: 'Talle equivocado', items: [{ linea: 1, cantidad: 1 }] }).expect(201);
+    expect(dv.body.total).toBe('10000.00');
+    const nc = dv.body.notaCredito;
+    expect(nc).toMatchObject({ numero: '001-001-0000001', estado: 'pendiente', factura: { cdc: fac.body.cdc }, receptor: 'Comercial Norte' });
+    expect(nc.cdc.slice(0, 2)).toBe('05');
+    const d = await http(app).get(`/api/facturacion/documentos/${nc.id}`).set(h).expect(200);
+    expect(verificarFirma(d.body.xml)).toBe(true);
+    expect(valor(d.body.xml, 'iTiDE')).toBe('5');
+    expect(valor(d.body.xml, 'iMotEmi')).toBe('2');
+    expect(valor(d.body.xml, 'dCdCDERef')).toBe(fac.body.cdc);
+    expect(valor(d.body.xml, 'dTotGralOpe')).toBe('10000');
+    // La segunda devolución cierra exacto lo que falta.
+    const dv2 = await http(app).post('/api/devoluciones').set(h).send({ ventaId: v.body.id, cajaId: base.cajaId, motivo: 'Resto', items: [{ linea: 1, cantidad: 2 }] }).expect(201);
+    expect(dv2.body.notaCredito).toMatchObject({ numero: '001-001-0000002' });
+    const d2 = await http(app).get(`/api/facturacion/documentos/${dv2.body.notaCredito.id}`).set(h).expect(200);
+    expect(valor(d2.body.xml, 'dTotGralOpe')).toBe('20000');
+    await procesar();
+    await espera(1100);
+    await procesar();
+    const fin = await http(app).get(`/api/facturacion/documentos/${nc.id}`).set(h).expect(200);
+    expect(fin.body.estado).toBe('aprobado');
+  });
+
+  it('documento rechazado: se corrige con el mismo CDC o se inutiliza el número', async () => {
+    const rc = await http(app).post('/api/clientes').set(h).send({ nombre: 'RECHAZAR TRES', documento: rucValido() }).expect(201);
+    const vr = await vender({ clienteId: rc.body.id }).expect(201);
+    const doc = { id: vr.body.documentoElectronico.id, cdc: vr.body.documentoElectronico.cdc, numero: vr.body.documentoElectronico.numero };
+    await procesar();
+    await espera(1100);
+    await procesar();
+    let d = await http(app).get(`/api/facturacion/documentos/${doc.id}`).set(h).expect(200);
+    expect(d.body.estado).toBe('rechazado');
+    // Corrige el dato del cliente y regenera: mismo número y CDC, nueva firma.
+    const c = rc.body;
+    await http(app).patch(`/api/clientes/${c.id}`).set(h).send({ nombre: 'Corregida SA', documento: c.documento }).expect(200);
+    await http(app).post(`/api/facturacion/documentos/${doc.id}/regenerar`).set(h).send({}).expect(200);
+    d = await http(app).get(`/api/facturacion/documentos/${doc.id}`).set(h).expect(200);
+    expect(d.body).toMatchObject({ estado: 'pendiente', cdc: doc.cdc, numero: doc.numero, receptor: 'Corregida SA' });
+    expect(verificarFirma(d.body.xml)).toBe(true);
+    await procesar();
+    await espera(1100);
+    await procesar();
+    d = await http(app).get(`/api/facturacion/documentos/${doc.id}`).set(h).expect(200);
+    expect(d.body.estado).toBe('aprobado');
+    await http(app).post(`/api/facturacion/documentos/${doc.id}/regenerar`).set(h).send({}).expect(409);
+
+    // Otro rechazado que no se corrige: inutilización del número.
+    const otro = await http(app).post('/api/clientes').set(h).send({ nombre: 'RECHAZAR OTRA', documento: rucValido() }).expect(201);
+    const v = await vender({ clienteId: otro.body.id }).expect(201);
+    await procesar();
+    await espera(1100);
+    await procesar();
+    await http(app).post(`/api/facturacion/documentos/${v.body.documentoElectronico.id}/inutilizar`).set(h).send({ motivo: 'x' }).expect(400);
+    await http(app).post(`/api/facturacion/documentos/${v.body.documentoElectronico.id}/inutilizar`).set(h).send({ motivo: 'Datos del cliente incorrectos' }).expect(200);
+    d = await http(app).get(`/api/facturacion/documentos/${v.body.documentoElectronico.id}`).set(h).expect(200);
+    expect(d.body).toMatchObject({ estado: 'inutilizado' });
+    expect(sifen.eventos.at(-1)).toContain('<rGeVeInu>');
+  });
+
+  it('devolución facturada desde una caja sin punto de expedición: se pide el punto', async () => {
+    const cl = await http(app).get('/api/clientes?q=Comercial').set(h).expect(200);
+    const v = await vender({ clienteId: cl.body[0].id }).expect(201);
+    await procesar();
+    await espera(1100);
+    await procesar();
+    const c = await http(app).post('/api/cajas').set(h).send({ nombre: `Caja ${unico()}`, sucursalId: e.sucursalId, depositoId: base.depositoId }).expect(201);
+    const cajero = await crearUsuario(app, e, 'supervisor');
+    const t = (await login(app, cajero.email)).token;
+    await http(app).post(`/api/cajas/${c.body.id}/abrir`).set(auth(t)).send({ fondos: [{ moneda: 'PYG', monto: 100000 }] }).expect(201);
+    const r = await http(app).post('/api/devoluciones').set(auth(t)).send({ ventaId: v.body.id, cajaId: c.body.id, motivo: 'Fallado', items: [{ linea: 1, cantidad: 1 }] }).expect(409);
+    expect(r.body.codigo).toBe('CAJA_SIN_PUNTO');
   });
 
   it('caja sin punto de expedición: comprobante interno', async () => {

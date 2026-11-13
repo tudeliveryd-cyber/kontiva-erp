@@ -195,3 +195,16 @@ export async function cancelarEnSifen(fe: FeActiva, empresa: { ruc: string; razo
   const [r] = await enviarEvento(fe.ambiente, firmado, fe.cert);
   return r ?? { cdc, estado: 'Rechazado', protocolo: null, mensajes: [{ codigo: '', mensaje: 'Sin respuesta de SIFEN' }] };
 }
+
+/** Evento de inutilización de un rango de números de un tipo de documento (síncrono). */
+export async function inutilizarEnSifen(
+  fe: FeActiva,
+  empresa: { ruc: string; razonSocial: string },
+  r: { tipoDocumento: number; establecimiento: string; punto: string; desde: number; hasta: number; motivo: string },
+) {
+  const params = { version: 150, ruc: empresa.ruc, razonSocial: empresa.razonSocial, actividadesEconomicas: [fe.actividad], timbradoNumero: fe.timbrado.numero, timbradoFecha: fe.timbrado.fecha, tipoContribuyente: fe.tipoContribuyente, establecimientos: [] };
+  const sobre = await (xmlgen as unknown as { generateXMLEventoInutilizacion(id: number, p: object, d: object): Promise<string> }).generateXMLEventoInutilizacion(nuevoId(), params, { timbrado: fe.timbrado.numero, ...r });
+  const firmado = firmarEvento(sobre.replace(/>\s+</g, '><').trim(), fe.cert);
+  const [res] = await enviarEvento(fe.ambiente, firmado, fe.cert);
+  return res ?? { cdc: '', estado: 'Rechazado', protocolo: null, mensajes: [{ codigo: '', mensaje: 'Sin respuesta de SIFEN' }] };
+}

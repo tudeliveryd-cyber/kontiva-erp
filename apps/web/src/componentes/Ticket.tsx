@@ -109,3 +109,68 @@ export function Ticket({ venta, empresa }: { venta: Venta; empresa: { nombre: st
     </div>
   );
 }
+
+export interface DevolucionNc {
+  id: string;
+  numero: number;
+  total: string;
+  motivo: string;
+  fecha: string;
+  usuario: string;
+  items: { linea: number; descripcion: string; cantidad: string; total: string }[];
+  notaCredito: {
+    cdc: string;
+    numero: string;
+    timbrado: string;
+    timbradoInicio: string | null;
+    estado: string;
+    qrImagen: string;
+    ambiente: 'test' | 'produccion';
+    totalIva: string;
+    receptor: string;
+    receptorDocumento: string | null;
+    factura: { cdc: string; numero: string } | null;
+  } | null;
+}
+
+/** KuDE de la nota de crédito electrónica (formato ticket de 80 mm). */
+export function TicketNotaCredito({ dev, venta, empresa }: { dev: DevolucionNc; venta: Venta; empresa: { nombre: string; razonSocial: string; ruc: string | null } }) {
+  const nc = dev.notaCredito!;
+  return (
+    <div className="ticket">
+      <div className="t-centro">
+        <b style={{ fontSize: 14 }}>{empresa.nombre}</b>
+        <div>{empresa.razonSocial}</div>
+        {empresa.ruc && <div>RUC {empresa.ruc}</div>}
+        <div>{venta.sucursal.nombre}{venta.sucursal.direccion ? ` · ${venta.sucursal.direccion}` : ''}</div>
+      </div>
+      <div className="t-linea" />
+      <div>Timbrado N.º {nc.timbrado}</div>
+      {nc.timbradoInicio && <div>Inicio de vigencia: {nc.timbradoInicio.split('-').reverse().join('/')}</div>}
+      <div className="t-centro t-fuerte" style={{ marginTop: 4 }}>NOTA DE CRÉDITO ELECTRÓNICA</div>
+      <div className="t-centro t-fuerte">N.º {nc.numero}</div>
+      {nc.ambiente === 'test' && <div className="t-centro t-fuerte">AMBIENTE DE PRUEBA · SIN VALOR FISCAL</div>}
+      <div>{fechaHora(dev.fecha)}</div>
+      <div>Cliente: {nc.receptor}{nc.receptorDocumento ? ` · ${nc.receptorDocumento}` : ''}</div>
+      <div>Motivo: Devolución · {dev.motivo}</div>
+      {nc.factura && <div>Factura asociada: {nc.factura.numero}</div>}
+      <div className="t-linea" />
+      {dev.items.map((i) => (
+        <div key={i.linea} style={{ marginBottom: 3 }}>
+          <div>{i.descripcion}</div>
+          <div className="t-fila"><span>{cantidad(i.cantidad)} unid.</span><span>{numero(i.total)}</span></div>
+        </div>
+      ))}
+      <div className="t-linea" />
+      <div className="t-fila t-fuerte" style={{ fontSize: 15 }}><span>TOTAL</span><span>{dinero(dev.total)}</span></div>
+      <div className="t-fila t-fuerte"><span>Total IVA</span><span>{numero(nc.totalIva)}</span></div>
+      <div className="t-linea" />
+      <div className="t-centro"><img src={nc.qrImagen} alt="Código QR de consulta" style={{ width: '34mm', height: '34mm', margin: '4px auto', display: 'block' }} /></div>
+      <div className="t-centro" style={{ fontSize: 11 }}>Consulte la validez con el número de CDC en https://ekuatia.set.gov.py/consultas{nc.ambiente === 'test' ? '-test' : ''}</div>
+      <div className="t-centro t-fuerte" style={{ fontSize: 11, marginTop: 4 }}>CDC: {nc.cdc.match(/.{1,4}/g)!.join(' ')}</div>
+      <div className="t-centro" style={{ fontSize: 10, marginTop: 4 }}>ESTE DOCUMENTO ES UNA REPRESENTACIÓN GRÁFICA DE UN DOCUMENTO ELECTRÓNICO (XML)</div>
+      <div className="t-linea" />
+      <div className="t-centro" style={{ fontSize: 10 }}>KONTIVA ERP · Araújo Tech Sistemas</div>
+    </div>
+  );
+}

@@ -14,7 +14,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 0 | Cimientos: autenticación, multiempresa con RLS, permisos, auditoría, Panel Master | Lista · ver pendientes menores abajo |
 | 1 | Operación central: productos, inventario, PDV, caja | Circuito central listo · ver pendientes abajo |
 | 2 | Compras y finanzas | Pendiente |
-| 3 | Facturación electrónica SIFEN | Factura electrónica lista (ambiente de prueba) · ver abajo |
+| 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Pendiente |
 | 5 | Verticales por rubro e integraciones | Pendiente |
 
@@ -96,10 +96,13 @@ Producto comercial de **Araújo Tech Sistemas**.
   una transacción. Pantalla de documentos con estado, mensaje de la DNIT, XML y reenvío.
 - **KuDE** en formato ticket de 80 mm con QR, CDC y leyendas.
 - **Cancelación**: anular una venta con factura aprobada envía el evento de cancelación firmado (hasta 48 h).
+- **Nota de crédito electrónica**: la devolución de una venta facturada emite la NC (motivo devolución)
+  asociada al CDC de la factura, con los ítems y montos devueltos; KuDE de la NC en ticket.
+- **Rechazos**: corregir y reenviar con el mismo número y CDC (como permite la DNIT) o inutilizar el número
+  con el evento de inutilización.
 - **Pruebas** contra un simulador de SIFEN que verifica la firma de cada documento.
 
 ### Fase 3 · pendiente
-- Nota de crédito electrónica para devoluciones e inutilización de números.
 - KuDE en A4 y envío por correo; consulta de RUC en la DNIT al cargar clientes.
 - Homologación con el ambiente de prueba real de la DNIT (requiere el certificado y el timbrado de la empresa).
 
