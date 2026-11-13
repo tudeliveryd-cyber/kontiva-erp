@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { calcularDvRuc } from '@kontiva/shared';
 import { generarP12DePrueba } from '../src/sifen/certificado';
 import { sha256Hex, valor, verificarFirma } from '../src/sifen/firma';
+import { leerXmlDe } from '../src/sifen/kude';
+import { Correo } from '../src/comun/correo';
 import { crearEmpresa, crearUsuario, http, iniciarApp, login, prepararVenta, rucValido, unico, type EmpresaPrueba } from './ayudas';
 
 const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
@@ -185,6 +187,74 @@ describe('Facturación electrónica (SIFEN)', () => {
     d = await http(app).get(`/api/facturacion/documentos/${facturaId}`).set(h).expect(200);
     expect(d.body).toMatchObject({ estado: 'aprobado', respuesta: { codigo: '0260' } });
     expect(d.body.protocoloAutorizacion).toBeTruthy();
+  });
+
+  const binario = (url: string) =>
+    http(app)
+      .get(url)
+      .set(h)
+      .buffer(true)
+      .parse((res, cb) => {
+        const partes: Buffer[] = [];
+        res.on('data', (c: Buffer) => partes.push(c));
+        res.on('end', () => cb(null, Buffer.concat(partes)));
+      });
+
+  it('KuDE en A4 (PDF) y XML del documento, armados desde el XML firmado', async () => {
+    const d = await http(app).get(`/api/facturacion/documentos/${facturaId}`).set(h).expect(200);
+    const k = leerXmlDe(d.body.xml);
+    expect(k).toMatchObject({ cdc: d.body.cdc, numero: '001-001-0000001', timbrado: '12558946', condicion: 'Contado', emisor: { ruc: RUC } });
+    expect(k.tipo).toMatch(/Factura electrónica/i);
+    expect(k.items).toHaveLength(1);
+    expect(k.items[0]).toMatchObject({ cantidad: '2', iva10: '22000' });
+    expect(k.totales).toMatchObject({ total: '22000', iva10: '2000' });
+    const pdf = await binario(`/api/facturacion/documentos/${facturaId}/kude`).expect(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+    expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    expect((pdf.body as Buffer).length).toBeGreaterThan(3000);
+    if (process.env.GUARDAR_KUDE) (await import('node:fs')).writeFileSync(process.env.GUARDAR_KUDE, pdf.body as Buffer);
+    const xml = await binario(`/api/facturacion/documentos/${facturaId}/xml`).expect(200);
+    expect((xml.body as Buffer).toString('utf8')).toBe(d.body.xml);
+  });
+
+  it('envío por correo: manual con dirección, y automático al aprobarse si el cliente tiene correo', async () => {
+    const correo = app.get(Correo);
+    // Consumidor final sin correo: hay que indicar la dirección.
+    await http(app).post(`/api/facturacion/documentos/${facturaId}/correo`).set(h).send({}).expect(400);
+    await http(app).post(`/api/facturacion/documentos/${facturaId}/correo`).set(h).send({ email: 'cliente@correo.test' }).expect(200);
+    const m = correo.enviados.at(-1)!;
+    expect(m).toMatchObject({ para: 'cliente@correo.test' });
+    expect(m.asunto).toContain('001-001-0000001');
+    expect(m.adjuntos!.map((a) => a.tipo)).toEqual(['application/pdf', 'application/xml']);
+    expect((m.adjuntos![0]!.contenido as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+    const d = await http(app).get(`/api/facturacion/documentos/${facturaId}`).set(h).expect(200);
+    expect(d.body.correo).toMatchObject({ para: 'cliente@correo.test' });
+
+    // Automático: se activa en la configuración; sale cuando SIFEN aprueba.
+    const conf = await http(app).get('/api/facturacion/configuracion').set(h).expect(200);
+    await http(app)
+      .put('/api/facturacion/configuracion')
+      .set(h)
+      .send({ ambiente: 'test', tipoContribuyente: 2, actividadCodigo: '47190', actividadDescripcion: 'Venta al por menor', timbradoNumero: conf.body.timbradoNumero, timbradoFecha: '2026-01-01', cscId: '1', envioCorreo: true })
+      .expect(200);
+    const cl = await http(app).post('/api/clientes').set(h).send({ nombre: 'María Gómez', documento: '5678901', email: 'maria@correo.test' }).expect(201);
+    const v = await vender({ clienteId: cl.body.id }).expect(201);
+    const antes = correo.enviados.length;
+    await procesar();
+    await espera(1100);
+    const r = await procesar();
+    expect(r.body.correos).toBe(1);
+    expect(correo.enviados.length).toBe(antes + 1);
+    expect(correo.enviados.at(-1)!.para).toBe('maria@correo.test');
+    const dv = await http(app).get(`/api/facturacion/documentos/${v.body.documentoElectronico.id}`).set(h).expect(200);
+    expect(dv.body.correo).toMatchObject({ para: 'maria@correo.test' });
+    // No se repite.
+    expect((await procesar()).body.correos ?? 0).toBe(0);
+    await http(app)
+      .put('/api/facturacion/configuracion')
+      .set(h)
+      .send({ ambiente: 'test', tipoContribuyente: 2, actividadCodigo: '47190', actividadDescripcion: 'Venta al por menor', timbradoNumero: conf.body.timbradoNumero, timbradoFecha: '2026-01-01', cscId: '1', envioCorreo: false })
+      .expect(200);
   });
 
   it('cliente contribuyente: B2B con RUC; rechazo de SIFEN y reenvío', async () => {

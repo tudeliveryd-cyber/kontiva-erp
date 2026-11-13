@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, StreamableFile } from '@nestjs/common';
 import { feCertificadoEntrada, feConfiguracionEntrada, feEstablecimientoEntrada, fePuntoEntrada, validarRuc } from '@kontiva/shared';
 import xmlgen from 'facturacionelectronicapy-xmlgen';
 import { z } from 'zod';
@@ -15,6 +15,9 @@ import Decimal from 'decimal.js';
 import { cargarFe, emitirFactura, emitirNotaCredito, numeroComprobante } from './emision';
 import { valor } from './firma';
 import { EmisorSifen, inutilizarEnSifen } from './emisor.service';
+import { correoReceptor, enviarDocumentoPorCorreo } from './envio-correo';
+import { kudePdf } from './kude';
+import { Correo } from '../comun/correo';
 
 interface Geo {
   consultarDepartamentos(): Promise<{ codigo: number; descripcion: string }[]>;
@@ -66,6 +69,7 @@ async function estado(tx: Tx, ctx: Ctx) {
     timbradoNumero: c?.timbrado_numero ?? '',
     timbradoFecha: c?.timbrado_fecha ?? '',
     cscId: c?.csc_id ?? '',
+    envioCorreo: c?.envio_correo ?? false,
     cscCargado: !!c?.csc_cifrado,
     certificado: c?.certificado_cifrado ? { titular: c.certificado_titular, ruc: c.certificado_ruc, vence: c.certificado_vence } : null,
     empresa: { razonSocial: empresa.razon_social, ruc: empresa.ruc },
@@ -84,6 +88,7 @@ export class FacturacionController {
   constructor(
     private readonly db: Db,
     private readonly emisor: EmisorSifen,
+    private readonly correoSvc: Correo,
   ) {}
 
   @Requiere('config_fiscal', 'ver')
@@ -110,6 +115,7 @@ export class FacturacionController {
         timbrado_numero: d.timbradoNumero,
         timbrado_fecha: d.timbradoFecha,
         csc_id: d.cscId.padStart(4, '0'),
+        ...(d.envioCorreo !== undefined && { envio_correo: d.envioCorreo }),
         ...(d.csc && { csc_cifrado: cifrar(d.csc) }),
         actualizado_por: ctx.usuarioId,
         actualizado_en: new Date(),
@@ -281,8 +287,54 @@ export class FacturacionController {
         protocoloAutorizacion: d.protocolo_autorizacion,
         cancelacion: d.cancelado_en ? { en: d.cancelado_en, motivo: d.motivo_cancelacion } : null,
         ventaId: d.venta_id,
+        correo: d.correo_enviado_en ? { para: d.correo_enviado_a, en: d.correo_enviado_en } : d.correo_error ? { error: d.correo_error } : null,
+        correoSugerido: await correoReceptor(tx, id),
         xml: d.xml_firmado,
       };
+    });
+  }
+
+  /** KuDE en hoja A4 (PDF), armado desde el XML firmado. */
+  @Requiere('documento_fiscal', 'ver')
+  @Get('documentos/:id/kude')
+  kude(@Contexto() ctx: Ctx, @Param('id', ParseUUIDPipe) id: string) {
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const d = await tx.selectFrom('documento_electronico').select(['sucursal_id', 'xml_firmado', 'qr_url', 'ambiente', 'estado', 'establecimiento', 'punto', 'numero']).where('id', '=', id).executeTakeFirst();
+      if (!d) throw noEncontrado('Documento electrónico');
+      exigirSucursal(ctx, d.sucursal_id, 'Documento electrónico');
+      const pdf = await kudePdf(d.xml_firmado, d.qr_url, { ambiente: d.ambiente, estado: d.estado });
+      return new StreamableFile(pdf, { type: 'application/pdf', disposition: `inline; filename="${numeroComprobante(d)}.pdf"` });
+    });
+  }
+
+  /** El XML firmado tal como se envió a SIFEN. */
+  @Requiere('documento_fiscal', 'ver')
+  @Get('documentos/:id/xml')
+  xml(@Contexto() ctx: Ctx, @Param('id', ParseUUIDPipe) id: string) {
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const d = await tx.selectFrom('documento_electronico').select(['sucursal_id', 'xml_firmado', 'cdc']).where('id', '=', id).executeTakeFirst();
+      if (!d) throw noEncontrado('Documento electrónico');
+      exigirSucursal(ctx, d.sucursal_id, 'Documento electrónico');
+      return new StreamableFile(Buffer.from(d.xml_firmado, 'utf8'), { type: 'application/xml; charset=utf-8', disposition: `attachment; filename="${d.cdc}.xml"` });
+    });
+  }
+
+  /** Envía el KuDE (PDF) y el XML por correo. Sin dirección, usa el correo del cliente. */
+  @Requiere('documento_fiscal', 'crear')
+  @Post('documentos/:id/correo')
+  @HttpCode(200)
+  correo(@Contexto() ctx: Ctx, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown, @OrigenPeticion() o: Origen) {
+    const b = validar(z.object({ email: z.string().trim().email('Correo inválido').max(160).optional() }), body ?? {});
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const d = await tx.selectFrom('documento_electronico').select(['sucursal_id', 'estado']).where('id', '=', id).executeTakeFirst();
+      if (!d) throw noEncontrado('Documento electrónico');
+      exigirSucursal(ctx, d.sucursal_id, 'Documento electrónico');
+      if (d.estado !== 'aprobado' && d.estado !== 'aprobado_obs') throw conflicto('NO_APROBADO', 'Solo se envían documentos aprobados por SIFEN');
+      const para = b.email ?? (await correoReceptor(tx, id));
+      if (!para) throw invalido('El cliente no tiene correo: ingrese una dirección');
+      await enviarDocumentoPorCorreo(tx, this.correoSvc, id, para);
+      await auditar(tx, { ...ctx, ...o }, { accion: 'enviar_correo', entidad: 'documento_electronico', entidadId: id, despues: { para } });
+      return { para };
     });
   }
 

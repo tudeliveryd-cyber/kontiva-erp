@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Printer } from 'lucide-react';
+import { FileText, Printer } from 'lucide-react';
 import { useState } from 'react';
 import { DialogoAutorizacion } from '../componentes/Autorizacion';
 import { Ticket, TicketNotaCredito, type DevolucionNc } from '../componentes/Ticket';
@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { fechaHora } from '../lib/formato';
 import { dinero, type CajaFila, type Venta } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { abrirKude } from '../componentes/AccionesDocumento';
 
 interface FilaVenta {
   id: string;
@@ -134,6 +135,11 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
           <button className="btn" onClick={() => window.print()}>
             <Printer size={16} /> Reimprimir
           </button>
+          {venta.documentoElectronico && puede('documento_fiscal.ver') && (
+            <button className="btn" onClick={() => void abrirKude(venta.documentoElectronico!.id).catch(() => undefined)}>
+              <FileText size={16} /> KuDE A4
+            </button>
+          )}
           {venta.estado === 'confirmada' && puede('venta.crear') && venta.items.some((i) => Number(i.cantidadDevuelta) < Number(i.cantidad)) && (
             <button className="btn" onClick={() => setModo('devolver')}>
               Devolución

@@ -2,6 +2,8 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import xmlgen from 'facturacionelectronicapy-xmlgen';
 import { sql } from 'kysely';
 import { config } from '../config';
+import { Correo } from '../comun/correo';
+import { enviarDocumentoPorCorreo } from './envio-correo';
 import { Db } from '../db/database';
 import type { EstadoDocumentoElectronico } from '../db/tipos';
 import { consultarLote, enviarEvento, enviarLote, ErrorSifen } from './cliente';
@@ -28,7 +30,10 @@ export class EmisorSifen implements OnModuleInit, OnModuleDestroy {
   private temporizador: NodeJS.Timeout | null = null;
   private trabajando = false;
 
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly correo: Correo,
+  ) {}
 
   onModuleInit() {
     if (config().SIFEN_EMISOR === 'activo' && config().NODE_ENV !== 'test') {
@@ -59,7 +64,34 @@ export class EmisorSifen implements OnModuleInit, OnModuleDestroy {
     if (!fe) return { enviados: 0, consultados: 0 };
     const enviados = await this.enviarPendientes(empresaId, fe);
     const consultados = await this.consultarLotes(empresaId, fe);
-    return { enviados, consultados };
+    const correos = await this.enviarCorreos(empresaId);
+    return { enviados, consultados, correos };
+  }
+
+  /** Envío automático del KuDE y el XML al cliente cuando SIFEN aprueba (si la empresa lo activó). Hasta 3 intentos. */
+  private async enviarCorreos(empresaId: string): Promise<number> {
+    const docs = await this.db.enEmpresa(empresaId, async (tx) => {
+      const { rows } = await sql<{ id: string; para: string }>`
+        SELECT d.id, fe_correo_receptor(d) AS para FROM documento_electronico d JOIN fe_configuracion f ON f.empresa_id = d.empresa_id AND f.envio_correo
+        WHERE d.estado IN ('aprobado', 'aprobado_obs') AND d.correo_enviado_en IS NULL AND d.correo_intentos < 3
+          AND d.procesado_en > now() - interval '7 days' AND fe_correo_receptor(d) IS NOT NULL
+        ORDER BY d.procesado_en LIMIT 50`.execute(tx);
+      return rows;
+    });
+    let enviados = 0;
+    for (const d of docs) {
+      try {
+        await this.db.enEmpresa(empresaId, (tx) => enviarDocumentoPorCorreo(tx, this.correo, d.id, d.para));
+        enviados++;
+      } catch (e) {
+        const msg = (e as Error).message.slice(0, 300);
+        this.log.warn(`Correo del documento ${d.id}: ${msg}`);
+        await this.db.enEmpresa(empresaId, (tx) =>
+          tx.updateTable('documento_electronico').set((eb) => ({ correo_intentos: eb('correo_intentos', '+', 1), correo_error: msg })).where('id', '=', d.id).execute(),
+        );
+      }
+    }
+    return enviados;
   }
 
   private async enviarPendientes(empresaId: string, fe: FeActiva): Promise<number> {

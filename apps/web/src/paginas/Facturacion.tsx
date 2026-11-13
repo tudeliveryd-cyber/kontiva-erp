@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { fechaHora } from '../lib/formato';
 import { dinero } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { AccionesDocumento } from '../componentes/AccionesDocumento';
 
 interface Establecimiento {
   id: string;
@@ -32,6 +33,7 @@ interface ConfigFe {
   timbradoFecha: string;
   cscId: string;
   cscCargado: boolean;
+  envioCorreo: boolean;
   certificado: { titular: string | null; ruc: string | null; vence: string | null } | null;
   empresa: { razonSocial: string; ruc: string | null };
   establecimientos: Establecimiento[];
@@ -172,6 +174,8 @@ function Documentos() {
 
 interface DocDetalle {
   id: string;
+  correo: { para?: string | null; en?: string; error?: string } | null;
+  correoSugerido: string | null;
   tipoDocumento: number;
   cdc: string;
   numero: string;
@@ -260,6 +264,7 @@ function FichaDocumento({ id, alCerrar }: { id: string; alCerrar: () => void }) 
               <button className="btn" disabled={reenviar.isPending} onClick={() => reenviar.mutate()}><RefreshCw size={16} /> Enviar de nuevo</button>
             )}
           </div>
+          <AccionesDocumento id={id} estado={d.data.estado} correo={d.data.correo} correoSugerido={d.data.correoSugerido} />
           <ErrorApi error={reenviar.error ?? regenerar.error ?? inutilizar.error} />
           {d.data.estado === 'rechazado' && (
             <div className="form" style={{ borderTop: '1px solid var(--linea)', paddingTop: 14 }}>
@@ -427,8 +432,9 @@ function DatosFiscales({ d, editable }: { d: ConfigFe; editable: boolean }) {
     cscId: d.cscId || '0001',
     csc: '',
   });
+  const [envioCorreo, setEnvioCorreo] = useState(d.envioCorreo);
   const guardar = useMutation({
-    mutationFn: () => api<ConfigFe>('/facturacion/configuracion', { metodo: 'PUT', cuerpo: { ...f, tipoContribuyente: Number(f.tipoContribuyente) } }),
+    mutationFn: () => api<ConfigFe>('/facturacion/configuracion', { metodo: 'PUT', cuerpo: { ...f, tipoContribuyente: Number(f.tipoContribuyente), envioCorreo } }),
     onSuccess: (r) => {
       qc.setQueryData(['fe-config'], r);
       setF((x) => ({ ...x, csc: '' }));
@@ -475,6 +481,13 @@ function DatosFiscales({ d, editable }: { d: ConfigFe; editable: boolean }) {
             {campo('cscId', 'ID del CSC', { placeholder: '0001' })}
             {campo('csc', 'CSC (código de seguridad)', { tipo: 'password', placeholder: d.cscCargado ? 'Cargado · escriba solo para cambiarlo' : '32 caracteres', ayuda: 'Lo entrega la DNIT en Marangatu. Se guarda cifrado.' })}
           </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <input type="checkbox" style={{ marginTop: 3 }} disabled={!editable} checked={envioCorreo} onChange={(e) => setEnvioCorreo(e.target.checked)} />
+            <span>
+              Enviar al cliente el KuDE (PDF) y el XML por correo cuando SIFEN apruebe el documento
+              <span className="tenue peq" style={{ display: 'block' }}>Solo a clientes con correo cargado. Requiere el servidor de correo configurado.</span>
+            </span>
+          </label>
           {editable && (
             <div>
               <button className="btn pri" disabled={guardar.isPending} onClick={() => guardar.mutate()}>Guardar datos fiscales</button>

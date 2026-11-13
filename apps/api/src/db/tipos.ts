@@ -665,6 +665,7 @@ export interface FeConfiguracionTabla {
   certificado_titular: string | null;
   certificado_ruc: string | null;
   certificado_vence: Date | null;
+  envio_correo: Generated<boolean>;
   actualizado_por: string | null;
   actualizado_en: Actualizado;
 }
@@ -711,6 +712,10 @@ export interface DocumentoElectronicoTabla {
   protocolo_autorizacion: string | null;
   procesado_en: Date | null;
   cancelado_en: Date | null;
+  correo_enviado_a: string | null;
+  correo_enviado_en: Date | null;
+  correo_intentos: Generated<number>;
+  correo_error: string | null;
   cancelado_por: string | null;
   motivo_cancelacion: string | null;
   creado_por: string;

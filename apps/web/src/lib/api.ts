@@ -49,6 +49,7 @@ export interface OpcionesApi {
 
 export interface Cliente {
   api: <T = unknown>(ruta: string, opciones?: OpcionesApi) => Promise<T>;
+  archivo: (ruta: string) => Promise<Blob>;
   renovarSesion: () => Promise<boolean>;
   fijarToken: (t: string | null) => void;
   alPerderSesion: (fn: () => void) => void;
@@ -99,8 +100,22 @@ export function crearCliente(base: string): Cliente {
     return (await r.json()) as T;
   };
 
+  /** Descarga un archivo (PDF, XML) con la sesión; devuelve el contenido como Blob. */
+  const archivo = async (ruta: string, reintento = true): Promise<Blob> => {
+    const headers: Record<string, string> = { 'X-Kontiva': '1' };
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    const r = await fetch(`${base}${ruta}`, { headers, credentials: 'same-origin' });
+    if (r.status === 401 && reintento) {
+      if (await renovarSesion()) return archivo(ruta, false);
+      alExpirar?.();
+    }
+    if (!r.ok) throw await leerError(r);
+    return r.blob();
+  };
+
   return {
     api,
+    archivo,
     renovarSesion,
     fijarToken: (t) => (accessToken = t),
     alPerderSesion: (fn) => (alExpirar = fn),
@@ -109,6 +124,7 @@ export function crearCliente(base: string): Cliente {
 
 const empresas = crearCliente('/api');
 export const api = empresas.api;
+export const archivo = empresas.archivo;
 export const renovarSesion = empresas.renovarSesion;
 export const fijarToken = empresas.fijarToken;
 export const alPerderSesion = empresas.alPerderSesion;

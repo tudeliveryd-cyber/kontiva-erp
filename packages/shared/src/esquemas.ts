@@ -335,6 +335,8 @@ export const feConfiguracionEntrada = z.object({
   cscId: z.string().trim().regex(/^[0-9]{1,4}$/, 'Identificador del CSC (ej. 0001)'),
   /** Vacío = conservar el CSC cargado. */
   csc: z.string().trim().max(64).optional().transform((v) => (v ? v : undefined)),
+  /** Enviar al cliente el KuDE y el XML por correo cuando SIFEN aprueba el documento. */
+  envioCorreo: z.boolean().optional(),
 });
 
 export const feCertificadoEntrada = z.object({

@@ -141,8 +141,13 @@ Fase 2 completa.
   con el evento de inutilización.
 - **Pruebas** contra un simulador de SIFEN que verifica la firma de cada documento.
 
+- **KuDE en A4** (PDF) armado desde el XML firmado: emisor y timbrado, receptor, detalle por tasa de IVA,
+  subtotales, liquidación del IVA, QR, CDC y leyendas de la DNIT; aviso de ambiente de prueba.
+- **Envío por correo** del KuDE y el XML: manual desde el documento o la venta, y automático cuando SIFEN aprueba
+  (opción de la configuración fiscal; hasta 3 intentos, con el error a la vista).
+
 ### Fase 3 · pendiente
-- KuDE en A4 y envío por correo; consulta de RUC en la DNIT al cargar clientes.
+- Consulta de RUC en la DNIT al cargar clientes.
 - Homologación con el ambiente de prueba real de la DNIT (requiere el certificado y el timbrado de la empresa).
 
 ### Fase 4 · hecho (RRHH y sueldos)
