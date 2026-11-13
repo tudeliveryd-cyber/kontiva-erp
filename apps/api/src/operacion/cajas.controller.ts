@@ -64,7 +64,7 @@ async function resumenSesion(tx: Tx, sesionId: string) {
     .selectFrom('movimiento_caja')
     .select(['tipo', 'medio', 'moneda', 'monto', 'motivo', 'creado_en'])
     .where('sesion_id', '=', sesionId)
-    .where('tipo', 'in', ['apertura', 'retiro', 'ingreso'])
+    .where('tipo', 'in', ['apertura', 'retiro', 'ingreso', 'cobro', 'pago_proveedor'])
     .orderBy('id')
     .execute();
   return {

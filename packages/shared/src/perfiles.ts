@@ -42,7 +42,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'venta.*', 'descuento.aprobar', 'devolucion.*', 'presupuesto.*', 'pedido.*',
       'cliente.*', 'credito_cliente.*', 'caja.*', 'arqueo.*',
       'proveedor.ver', 'orden_compra.*', 'recepcion.*',
-      'cuenta_cobrar.ver', 'informe_ganancias.ver', 'documento_fiscal.*', 'entrega.*',
+      'cuenta_cobrar.*', 'informe_ganancias.ver', 'documento_fiscal.*', 'entrega.*',
     ],
   },
   {
@@ -54,6 +54,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'sucursal.ver', 'producto.ver', 'precio.ver', 'stock.ver', 'stock.editar', 'conteo.ver', 'conteo.crear',
       'venta.ver', 'venta.crear', 'venta.cancelar', 'venta.imprimir', 'descuento.aprobar',
       'devolucion.*', 'cliente.ver', 'cliente.crear', 'caja.*', 'arqueo.*', 'documento_fiscal.ver', 'documento_fiscal.imprimir',
+      'credito_cliente.ver', 'credito_cliente.aprobar', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear',
     ],
   },
   {
@@ -63,7 +64,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
     alcance: 'propia',
     permisos: [
       'producto.ver', 'precio.ver', 'stock.ver', 'venta.ver', 'venta.crear', 'venta.imprimir',
-      'cliente.ver', 'cliente.crear', 'caja.ver', 'caja.crear', 'arqueo.crear', 'documento_fiscal.imprimir',
+      'cliente.ver', 'cliente.crear', 'caja.ver', 'caja.crear', 'arqueo.crear', 'documento_fiscal.imprimir', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear',
     ],
   },
   {

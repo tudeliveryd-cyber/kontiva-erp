@@ -11,6 +11,7 @@ import { PdvController, PdvPreciosController, VentasController } from './operaci
 import { ListasPrecioController } from './catalogo/listas.controller';
 import { PedidosController, PresupuestosController } from './operacion/pedidos.controller';
 import { FacturacionController } from './sifen/facturacion.controller';
+import { CobrosController, CuentasCobrarController } from './finanzas/cobrar.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from './compras/compras.controller';
 import { EmisorSifen } from './sifen/emisor.service';
 import { DevolucionesController } from './operacion/devoluciones.controller';
@@ -67,6 +68,8 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     ComprasController,
     CuentasPagarController,
     PagosProveedorController,
+    CuentasCobrarController,
+    CobrosController,
     VentasController,
     TransferenciasController,
     DevolucionesController,

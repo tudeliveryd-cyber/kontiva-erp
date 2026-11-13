@@ -9,6 +9,8 @@ import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 import type { ClienteTabla } from '../db/tipos';
 import type { Selectable } from 'kysely';
+import Decimal from 'decimal.js';
+import { tiene } from '../comun/contexto';
 
 const aDto = (c: Selectable<ClienteTabla>) => ({
   id: c.id,
@@ -18,8 +20,16 @@ const aDto = (c: Selectable<ClienteTabla>) => ({
   email: c.email,
   direccion: c.direccion,
   listaPrecioId: c.lista_precio_id,
+  limiteCredito: c.limite_credito,
+  plazoCreditoDias: c.plazo_credito_dias,
   activo: c.activo,
 });
+
+/** Deuda abierta del cliente (cuentas a cobrar pendientes). */
+export async function saldoCliente(tx: Tx, clienteId: string) {
+  const r = await tx.selectFrom('cuenta_cobrar').select((eb) => eb.fn.coalesce(eb.fn.sum<string>('saldo'), eb.val('0')).as('s')).where('cliente_id', '=', clienteId).where('estado', 'in', ['pendiente', 'parcial']).executeTakeFirstOrThrow();
+  return new Decimal(r.s);
+}
 
 /** Lista especial del cliente: debe existir y estar activa; la predeterminada equivale a ninguna. */
 async function listaValida(tx: Tx, id: string | null | undefined): Promise<string | null> {
@@ -27,6 +37,15 @@ async function listaValida(tx: Tx, id: string | null | undefined): Promise<strin
   const l = await tx.selectFrom('lista_precio').select(['id', 'predeterminada', 'activa']).where('id', '=', id).executeTakeFirst();
   if (!l || !l.activa) throw invalido('La lista de precios no existe o está inactiva');
   return l.predeterminada ? null : l.id;
+}
+
+/** Límite y plazo de crédito: solo los cambia quien tiene credito_cliente.editar. */
+function credito(ctx: Ctx, d: { limiteCredito?: number; plazoCreditoDias?: number }) {
+  if ((d.limiteCredito !== undefined || d.plazoCreditoDias !== undefined) && !tiene(ctx, 'credito_cliente.editar')) return {};
+  return {
+    ...(d.limiteCredito !== undefined && { limite_credito: new Decimal(d.limiteCredito).toFixed(2) }),
+    ...(d.plazoCreditoDias !== undefined && { plazo_credito_dias: d.plazoCreditoDias }),
+  };
 }
 
 async function obtener(tx: Tx, id: string) {
@@ -46,14 +65,21 @@ export class ClientesController {
     return this.db.enEmpresa(ctx.empresaId, async (tx) => {
       let q = tx.selectFrom('cliente').selectAll().where('activo', '=', true);
       if (f.q) q = q.where((eb) => eb.or([eb('nombre', 'ilike', `%${f.q}%`), eb('documento', 'ilike', `${f.q}%`), eb('telefono', 'ilike', `%${f.q}%`)]));
-      return (await q.orderBy('nombre').limit(f.limite).execute()).map(aDto);
+      const filas = await q.orderBy('nombre').limit(f.limite).execute();
+      const conCredito = filas.filter((c) => Number(c.limite_credito) > 0).map((c) => c.id);
+      const saldos = conCredito.length
+        ? new Map(
+            (await tx.selectFrom('cuenta_cobrar').select(['cliente_id', (eb) => eb.fn.sum<string>('saldo').as('s')]).where('cliente_id', 'in', conCredito).where('estado', 'in', ['pendiente', 'parcial']).groupBy('cliente_id').execute()).map((r) => [r.cliente_id, r.s]),
+          )
+        : new Map<string, string>();
+      return filas.map((c) => ({ ...aDto(c), saldo: new Decimal(saldos.get(c.id) ?? 0).toFixed(2) }));
     });
   }
 
   @Requiere('cliente', 'ver')
   @Get(':id')
   ver(@Contexto() ctx: Ctx, @Param('id', ParseUUIDPipe) id: string) {
-    return this.db.enEmpresa(ctx.empresaId, async (tx) => aDto(await obtener(tx, id)));
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => ({ ...aDto(await obtener(tx, id)), saldo: (await saldoCliente(tx, id)).toFixed(2) }));
   }
 
   @Requiere('cliente', 'crear')
@@ -63,7 +89,7 @@ export class ClientesController {
     return this.db.enEmpresa(ctx.empresaId, async (tx) => {
       const c = await tx
         .insertInto('cliente')
-        .values({ empresa_id: ctx.empresaId, nombre: d.nombre, documento: d.documento, telefono: d.telefono ?? null, email: d.email ?? null, direccion: d.direccion ?? null, lista_precio_id: await listaValida(tx, d.listaPrecioId), creado_por: ctx.usuarioId })
+        .values({ empresa_id: ctx.empresaId, nombre: d.nombre, documento: d.documento, telefono: d.telefono ?? null, email: d.email ?? null, direccion: d.direccion ?? null, lista_precio_id: await listaValida(tx, d.listaPrecioId), ...credito(ctx, d), creado_por: ctx.usuarioId })
         .returningAll()
         .executeTakeFirstOrThrow();
       await auditar(tx, { ...ctx, ...o }, { accion: 'crear', entidad: 'cliente', entidadId: c.id, despues: aDto(c) });
@@ -80,7 +106,7 @@ export class ClientesController {
       const lista = d.listaPrecioId === undefined ? antes.lista_precio_id : await listaValida(tx, d.listaPrecioId);
       const c = await tx
         .updateTable('cliente')
-        .set({ nombre: d.nombre, documento: d.documento, telefono: d.telefono ?? null, email: d.email ?? null, direccion: d.direccion ?? null, lista_precio_id: lista, ...(d.activo !== undefined && { activo: d.activo }) })
+        .set({ nombre: d.nombre, documento: d.documento, telefono: d.telefono ?? null, email: d.email ?? null, direccion: d.direccion ?? null, lista_precio_id: lista, ...credito(ctx, d), ...(d.activo !== undefined && { activo: d.activo }) })
         .where('id', '=', id)
         .returningAll()
         .executeTakeFirstOrThrow();

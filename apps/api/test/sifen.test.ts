@@ -221,6 +221,16 @@ describe('Facturación electrónica (SIFEN)', () => {
     expect(valor(d.body.xml, 'dNumIDRec')).toBe('4567890');
   });
 
+  it('venta a crédito: factura con condición crédito a plazo y la entrega inicial', async () => {
+    const cl = await http(app).post('/api/clientes').set(h).send({ nombre: 'Cliente Crédito', documento: '3456789', limiteCredito: 1000000, plazoCreditoDias: 30 }).expect(201);
+    const v = await vender({ clienteId: cl.body.id, credito: 12000, pagos: [{ medio: 'efectivo', moneda: 'PYG', monto: 10000 }] }).expect(201);
+    const d = await http(app).get(`/api/facturacion/documentos/${v.body.documentoElectronico.id}`).set(h).expect(200);
+    expect(valor(d.body.xml, 'iCondOpe')).toBe('2');
+    expect(valor(d.body.xml, 'dPlazoCre')).toBe('30 días');
+    expect(valor(d.body.xml, 'dMonEnt')).toBe('10000');
+    expect(verificarFirma(d.body.xml)).toBe(true);
+  });
+
   it('SIFEN caído: el documento queda pendiente con reintento', async () => {
     sifen.falla = true;
     const r = await procesar();

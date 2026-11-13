@@ -77,6 +77,9 @@ export function Ticket({ venta, empresa }: { venta: Venta; empresa: { nombre: st
           <span>{numero(p.montoPyg)}</span>
         </div>
       ))}
+      {Number(venta.credito) > 0 && (
+        <div className="t-fila"><span>A crédito{venta.cuentaCobrar ? ` · vence ${venta.cuentaCobrar.vencimiento.split('-').reverse().join('/')}` : ''}</span><span>{numero(venta.credito)}</span></div>
+      )}
       {venta.vuelto.map((v, i) => (
         <div className="t-fila" key={`v${i}`}>
           <span>Vuelto</span>

@@ -51,6 +51,7 @@ export async function leerDevolucion(tx: Tx, id: string) {
     .where('n.devolucion_id', '=', id)
     .executeTakeFirst();
   const feConf = nc ? await tx.selectFrom('fe_configuracion').select('timbrado_fecha').executeTakeFirst() : undefined;
+  const aplicado = await tx.selectFrom('cobro_aplicacion').select((eb) => eb.fn.sum<string>('monto').as('m')).where('devolucion_id', '=', id).executeTakeFirst();
   return {
     id: d.id,
     numero: Number(d.numero),
@@ -76,6 +77,8 @@ export async function leerDevolucion(tx: Tx, id: string) {
     sucursalId: d.sucursal_id,
     medio: d.medio,
     total: d.total,
+    descontadoDeuda: new Decimal(aplicado?.m ?? 0).toFixed(2),
+    reintegrado: new Decimal(d.total).minus(aplicado?.m ?? 0).toFixed(2),
     motivo: d.motivo,
     fecha: d.creado_en,
     usuario: d.usuario,
@@ -171,9 +174,13 @@ export class DevolucionesController {
       });
       const total = detalle.reduce((a, x) => a.plus(x.total), new Decimal(0));
 
-      if (d.medio === 'efectivo') {
+      // Venta a crédito con deuda pendiente: la devolución primero descuenta de la deuda; solo el resto se reintegra.
+      const cuenta = await tx.selectFrom('cuenta_cobrar').select(['id', 'saldo']).where('venta_id', '=', venta.id).where('estado', 'in', ['pendiente', 'parcial']).forUpdate().executeTakeFirst();
+      const aCuenta = cuenta ? Decimal.min(new Decimal(cuenta.saldo), total) : new Decimal(0);
+      const reintegro = total.minus(aCuenta);
+      if (d.medio === 'efectivo' && reintegro.gt(0)) {
         const caja_ = (await esperado(tx, sesion.id)).find((e) => e.moneda === 'PYG' && e.medio === 'efectivo');
-        if (new Decimal(caja_?.monto ?? 0).lt(total)) throw conflicto('SALDO_INSUFICIENTE', 'No hay suficiente efectivo en la caja para reintegrar');
+        if (new Decimal(caja_?.monto ?? 0).lt(reintegro)) throw conflicto('SALDO_INSUFICIENTE', 'No hay suficiente efectivo en la caja para reintegrar');
       }
 
       const numero = await siguienteNumero(tx, 'devolucion');
@@ -193,10 +200,15 @@ export class DevolucionesController {
         detalle.filter((x) => controla.get(x.varianteId)).map((x) => ({ varianteId: x.varianteId, cantidad: x.cantidad, tipo: 'devolucion' as const, origenId: dev.id, motivo: d.motivo, costo: x.costo })),
         false,
       );
-      if (total.gt(0)) {
+      if (cuenta && aCuenta.gt(0)) {
+        const nuevo = new Decimal(cuenta.saldo).minus(aCuenta);
+        await tx.insertInto('cobro_aplicacion').values({ empresa_id: ctx.empresaId, cobro_id: null, devolucion_id: dev.id, cuenta_cobrar_id: cuenta.id, monto: aCuenta.toFixed(2) }).execute();
+        await tx.updateTable('cuenta_cobrar').set({ saldo: nuevo.toFixed(2), estado: nuevo.isZero() ? 'cobrada' : 'parcial' }).where('id', '=', cuenta.id).execute();
+      }
+      if (reintegro.gt(0)) {
         await tx
           .insertInto('movimiento_caja')
-          .values({ empresa_id: ctx.empresaId, sesion_id: sesion.id, tipo: 'devolucion', medio: d.medio, moneda: 'PYG', monto: total.neg().toFixed(2), venta_id: venta.id, motivo: d.motivo, autorizado_por: autorizadoPor, creado_por: ctx.usuarioId })
+          .values({ empresa_id: ctx.empresaId, sesion_id: sesion.id, tipo: 'devolucion', medio: d.medio, moneda: 'PYG', monto: reintegro.neg().toFixed(2), venta_id: venta.id, motivo: d.motivo, autorizado_por: autorizadoPor, creado_por: ctx.usuarioId })
           .execute();
       }
       if (fiscal) {

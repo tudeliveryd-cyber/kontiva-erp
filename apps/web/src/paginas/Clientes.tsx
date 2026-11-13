@@ -6,6 +6,8 @@ import { Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componen
 import { api } from '../lib/api';
 import type { Cliente } from '../lib/operacion';
 import type { ListaPrecio } from './Precios';
+import { EstadoCuentaCliente } from './Cobrar';
+import { dinero } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 
 export function Clientes() {
@@ -47,6 +49,7 @@ export function Clientes() {
                   <th>RUC / Cédula</th>
                   <th>Teléfono</th>
                   <th>Correo</th>
+                  {puede('cuenta_cobrar.ver') && <th className="der">Deuda</th>}
                 </tr>
               </thead>
               <tbody>
@@ -56,6 +59,7 @@ export function Clientes() {
                     <td className="num">{c.documento ?? '—'}</td>
                     <td className="tenue">{c.telefono ?? '—'}</td>
                     <td className="tenue">{c.email ?? '—'}</td>
+                    {puede('cuenta_cobrar.ver') && <td className="der num">{Number(c.saldo) > 0 ? dinero(c.saldo!) : '—'}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -74,9 +78,15 @@ function FichaCliente({ cliente, alCerrar }: { cliente: Cliente | null; alCerrar
   const editable = cliente ? puede('cliente.editar') : puede('cliente.crear');
   const [d, setD] = useState({ nombre: cliente?.nombre ?? '', documento: cliente?.documento ?? '', telefono: cliente?.telefono ?? '', email: cliente?.email ?? '', direccion: cliente?.direccion ?? '' });
   const [listaPrecioId, setListaPrecioId] = useState(cliente?.listaPrecioId ?? '');
+  const [credito, setCredito] = useState({ limite: cliente ? String(Math.round(Number(cliente.limiteCredito))) : '0', plazo: String(cliente?.plazoCreditoDias ?? 30) });
+  const [verCuenta, setVerCuenta] = useState(false);
   const listas = useQuery({ queryKey: ['listas-precio'], queryFn: () => api<ListaPrecio[]>('/listas-precio'), enabled: puede('precio.ver') });
   const adicionales = listas.data?.filter((l) => !l.predeterminada && (l.activa || l.id === listaPrecioId)) ?? [];
-  const cuerpo = { ...d, ...(puede('precio.ver') && { listaPrecioId: listaPrecioId || null }) };
+  const cuerpo = {
+    ...d,
+    ...(puede('precio.ver') && { listaPrecioId: listaPrecioId || null }),
+    ...(puede('credito_cliente.editar') && { limiteCredito: Number(credito.limite) || 0, plazoCreditoDias: Number(credito.plazo) || 30 }),
+  };
   const guardar = useMutation({
     mutationFn: () => (cliente ? api(`/clientes/${cliente.id}`, { metodo: 'PATCH', cuerpo }) : api('/clientes', { metodo: 'POST', cuerpo })),
     onSuccess: () => {
@@ -104,6 +114,23 @@ function FichaCliente({ cliente, alCerrar }: { cliente: Cliente | null; alCerrar
         </div>
         {campo('email', 'Correo', { tipo: 'email' })}
         {campo('direccion', 'Dirección')}
+        {(puede('credito_cliente.editar') || puede('credito_cliente.ver')) && (
+          <div className="fila-campos">
+            <Campo etiqueta="Límite de crédito (Gs.)" id="clc" ayuda="0 = sin crédito. Permite vender a cuenta en el PDV hasta este monto.">
+              <input id="clc" className="entrada num" disabled={!puede('credito_cliente.editar')} value={credito.limite === '' ? '' : Number(credito.limite).toLocaleString('es-PY')} onChange={(e) => setCredito({ ...credito, limite: e.target.value.replace(/[^0-9]/g, '') })} />
+            </Campo>
+            <Campo etiqueta="Plazo de pago (días)" id="clp2">
+              <input id="clp2" className="entrada num" disabled={!puede('credito_cliente.editar')} value={credito.plazo} onChange={(e) => setCredito({ ...credito, plazo: e.target.value.replace(/[^0-9]/g, '') })} />
+            </Campo>
+          </div>
+        )}
+        {cliente && puede('cuenta_cobrar.ver') && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span>Deuda actual: <b>{dinero(cliente.saldo ?? 0)}</b></span>
+            <button className="btn" onClick={() => setVerCuenta(true)}>Estado de cuenta</button>
+          </div>
+        )}
+        {verCuenta && cliente && <EstadoCuentaCliente clienteId={cliente.id} alCerrar={() => setVerCuenta(false)} />}
         {adicionales.length > 0 && (
           <Campo etiqueta="Lista de precios" id="clp" ayuda="En la caja, al elegir este cliente se cobran los precios de su lista.">
             <select id="clp" className="entrada" disabled={!editable} value={listaPrecioId} onChange={(e) => setListaPrecioId(e.target.value)}>

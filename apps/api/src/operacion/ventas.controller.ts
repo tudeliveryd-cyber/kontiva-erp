@@ -16,6 +16,7 @@ import { devueltoPorLinea } from './devoluciones.controller';
 import { leerPedido } from './pedidos.controller';
 import { cargarFe, emitirFactura, numeroComprobante } from '../sifen/emision';
 import { cancelarEnSifen } from '../sifen/emisor.service';
+import { saldoCliente } from '../catalogo/clientes.controller';
 import { HttpStatus } from '@nestjs/common';
 import QRCode from 'qrcode';
 
@@ -68,6 +69,8 @@ export async function leerVenta(tx: Tx, id: string) {
     vendedor: { id: v.creado_por, nombre: v.vendedor },
     cliente: v.cliente_id ? { id: v.cliente_id, nombre: v.cliente_nombre, documento: v.cliente_documento } : null,
     pedidoId: v.pedido_id,
+    credito: v.credito,
+    cuentaCobrar: Number(v.credito) > 0 ? ((await tx.selectFrom('cuenta_cobrar').select(['id', 'saldo', 'vencimiento', 'estado']).where('venta_id', '=', v.id).executeTakeFirst()) ?? null) : null,
     documentoElectronico: de
       ? { id: de.id, cdc: de.cdc, numero: numeroComprobante(de), timbrado: de.timbrado, timbradoInicio: feConf?.timbrado_fecha ?? null, estado: de.estado, qr: de.qr_url, qrImagen, ambiente: de.ambiente, totalIva: de.total_iva, mensaje: de.respuesta_mensaje }
       : null,
@@ -314,7 +317,25 @@ export class VentasController {
         });
         const calc = calcularItems(lineas.map((l) => ({ cantidad: l.cantidad, precioUnitario: l.precio, descuento: l.descuento ?? 0, tasaIva: Number(l.v.tasa_iva) as 0 | 5 | 10 })));
         const cot = aCotizaciones(await cotizacionesVigentes(tx, caja.sucursal_id));
-        const pagos = calcularPagos(calc.total, d.pagos, cot, d.vueltoMoneda);
+        // Venta a crédito: la parte a crédito va a la cuenta del cliente; el resto se cobra en caja.
+        const credito = new Decimal(d.credito ?? 0).toDecimalPlaces(0);
+        let creditoAutorizadoPor: string | null = null;
+        let plazoCredito = 30;
+        if (credito.gt(calc.total)) throw invalido('El crédito no puede superar el total de la venta');
+        if (credito.gt(0)) {
+          if (!d.clienteId) throw invalido('La venta a crédito necesita un cliente');
+          const cl = await tx.selectFrom('cliente').select(['limite_credito', 'plazo_credito_dias']).where('id', '=', d.clienteId).forUpdate().executeTakeFirstOrThrow();
+          plazoCredito = cl.plazo_credito_dias;
+          const deuda = await saldoCliente(tx, d.clienteId);
+          const disponible = Decimal.max(new Decimal(cl.limite_credito).minus(deuda), 0);
+          if (credito.gt(disponible) && !tiene(ctx, 'credito_cliente.aprobar')) {
+            creditoAutorizadoPor = await this.auth.verificarAutorizacion(ctx, autorizacion, 'credito_cliente.aprobar');
+            if (!creditoAutorizadoPor) {
+              throw new ErrorNegocio(HttpStatus.FORBIDDEN, 'CREDITO_EXCEDIDO', `El crédito supera lo disponible del cliente (${disponible.toFixed(0)}): requiere autorización de un supervisor`, { disponible: disponible.toFixed(2) });
+            }
+          }
+        }
+        const pagos = calcularPagos(calc.total.minus(credito), d.pagos, cot, d.vueltoMoneda);
 
         // Stock: filas existentes y bloqueadas en orden; validación según la configuración.
         const conStock = [...new Set(lineas.filter((l) => l.v.controla_stock).map((l) => l.varianteId))].sort();
@@ -369,6 +390,7 @@ export class VentasController {
             iva5: calc.iva5.toFixed(2),
             vuelto: vueltoPyg.toFixed(2),
             vuelto_moneda: d.vueltoMoneda,
+            credito: credito.toFixed(2),
             autorizado_por: autorizadoPor,
             creado_por: ctx.usuarioId,
             anulada_en: null,
@@ -397,7 +419,8 @@ export class VentasController {
             })),
           )
           .execute();
-        await tx
+        if (pagos.detalle.length)
+          await tx
           .insertInto('venta_pago')
           .values(
             pagos.detalle.map((p, i) => ({
@@ -427,13 +450,23 @@ export class VentasController {
           ...pagos.detalle.map((p) => ({ tipo: 'venta' as const, medio: p.medio, moneda: p.moneda, monto: p.monto })),
           ...pagos.vuelto.map((v) => ({ tipo: 'vuelto' as const, medio: 'efectivo' as const, moneda: v.moneda, monto: v.monto.neg() })),
         ];
-        await tx
+        if (movCaja.length)
+          await tx
           .insertInto('movimiento_caja')
           .values(movCaja.map((m) => ({ empresa_id: ctx.empresaId, sesion_id: sesion.id, tipo: m.tipo, medio: m.medio, moneda: m.moneda, monto: m.monto.toFixed(2), venta_id: venta.id, motivo: null, autorizado_por: null, creado_por: ctx.usuarioId })))
           .execute();
 
         // Factura electrónica: con la configuración activa y la caja con punto de expedición.
         const fe = caja.punto_expedicion ? await cargarFe(tx) : null;
+        if (credito.gt(0)) {
+          const fecha = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
+          const vence = new Date(`${fecha}T12:00:00Z`);
+          vence.setUTCDate(vence.getUTCDate() + plazoCredito);
+          await tx
+            .insertInto('cuenta_cobrar')
+            .values({ empresa_id: ctx.empresaId, cliente_id: d.clienteId!, venta_id: venta.id, sucursal_id: caja.sucursal_id, descripcion: `Venta N.º ${numero} (${caja.nombre})`, fecha, vencimiento: vence.toISOString().slice(0, 10), monto: credito.toFixed(2), saldo: credito.toFixed(2), autorizado_por: creditoAutorizadoPor, creado_por: ctx.usuarioId })
+            .execute();
+        }
         if (fe) await emitirFactura(tx, ctx, fe, venta.id);
 
         await auditar(tx, { ...ctx, ...o }, {
@@ -593,7 +626,14 @@ export class VentasController {
 
       // Contrapartida exacta de lo que entró (pagos) y salió (vuelto) en caja por esta venta.
       const movs = await tx.selectFrom('movimiento_caja').select(['medio', 'moneda', 'monto']).where('venta_id', '=', id).where('tipo', 'in', ['venta', 'vuelto']).execute();
-      await tx
+      // La parte a crédito: la cuenta del cliente se anula si todavía no tiene cobros.
+      const cc = await tx.selectFrom('cuenta_cobrar').select(['id', 'monto', 'saldo', 'estado']).where('venta_id', '=', id).forUpdate().executeTakeFirst();
+      if (cc && cc.estado !== 'anulada') {
+        if (!new Decimal(cc.saldo).eq(cc.monto)) throw conflicto('VENTA_CON_COBROS', 'La venta a crédito ya tiene cobros: anule primero los cobros');
+        await tx.updateTable('cuenta_cobrar').set({ estado: 'anulada', saldo: '0' }).where('id', '=', cc.id).execute();
+      }
+      if (movs.length)
+        await tx
         .insertInto('movimiento_caja')
         .values(movs.map((m) => ({ empresa_id: ctx.empresaId, sesion_id: v.sesion_caja_id, tipo: 'anulacion' as const, medio: m.medio, moneda: m.moneda, monto: new Decimal(m.monto).neg().toFixed(2), venta_id: id, motivo: d.motivo, autorizado_por: autorizadaPor, creado_por: ctx.usuarioId })))
         .execute();

@@ -283,7 +283,7 @@ export async function emitirFactura(tx: Tx, ctx: Ctx, fe: FeActiva, ventaId: str
   const v = await tx
     .selectFrom('venta as v')
     .innerJoin('caja as c', 'c.id', 'v.caja_id')
-    .select(['v.total', 'v.vuelto', 'v.creado_en', 'v.sucursal_id', 'c.punto_expedicion'])
+    .select(['v.total', 'v.vuelto', 'v.credito', 'v.creado_en', 'v.sucursal_id', 'c.punto_expedicion'])
     .where('v.id', '=', ventaId)
     .executeTakeFirstOrThrow();
   if (!v.punto_expedicion) throw invalido('La caja no tiene punto de expedición');
@@ -311,13 +311,24 @@ export async function emitirFactura(tx: Tx, ctx: Ctx, fe: FeActiva, ventaId: str
       const tipo = MEDIOS[p.medio] ?? 99;
       return {
         tipo,
-        monto: monto.toFixed(0),
+        // Número (no texto): la librería suma las entregas para dMonEnt.
+        monto: Number(monto.toFixed(0)),
         moneda: 'PYG',
         ...(tipo === 3 && { infoTarjeta: { tipo: 99, tipoDescripcion: 'Tarjeta', medioPago: 1 } }),
         ...(tipo === 99 && { tipoDescripcion: 'Otro' }),
       };
     })
-    .filter((e) => Number(e.monto) > 0);
+    .filter((e) => e.monto > 0);
+  // Venta con parte a crédito: condición crédito a plazo (lo pagado en el acto va como entrega inicial).
+  const credito = new Decimal(v.credito ?? 0);
+  let condicion: Record<string, unknown>;
+  if (credito.gt(0)) {
+    const cuenta = await tx.selectFrom('cuenta_cobrar').select(['fecha', 'vencimiento']).where('venta_id', '=', ventaId).executeTakeFirst();
+    const dias = cuenta ? Math.max(1, Math.round((Date.parse(cuenta.vencimiento) - Date.parse(cuenta.fecha)) / 86400000)) : 30;
+    condicion = { tipo: 2, ...(entregas.length && { entregas }), credito: { tipo: 1, plazo: `${dias} días` } };
+  } else {
+    condicion = { tipo: 1, entregas: entregas.length ? entregas : [{ tipo: 1, monto: Number(new Decimal(v.total).toFixed(0)), moneda: 'PYG' }] };
+  }
   const id = await emitirDocumento(tx, ctx, fe, {
     tipo: 1,
     sucursalId: v.sucursal_id,
@@ -336,7 +347,7 @@ export async function emitirFactura(tx: Tx, ctx: Ctx, fe: FeActiva, ventaId: str
     })),
     extra: {
       factura: { presencia: 1 },
-      condicion: { tipo: 1, entregas: entregas.length ? entregas : [{ tipo: 1, monto: new Decimal(v.total).toFixed(0), moneda: 'PYG' }] },
+      condicion,
     },
     totalEsperado: new Decimal(v.total),
     ventaId,

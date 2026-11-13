@@ -249,6 +249,9 @@ export interface BaseDatos {
   cuenta_pagar: CuentaPagarTabla;
   pago_proveedor: PagoProveedorTabla;
   pago_aplicacion: PagoAplicacionTabla;
+  cuenta_cobrar: CuentaCobrarTabla;
+  cobro_cliente: CobroClienteTabla;
+  cobro_aplicacion: CobroAplicacionTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -412,6 +415,8 @@ export interface ClienteTabla {
   email: string | null;
   direccion: string | null;
   lista_precio_id: string | null;
+  limite_credito: NumGen;
+  plazo_credito_dias: Generated<number>;
   activo: Generated<boolean>;
   creado_en: Creado;
   creado_por: string | null;
@@ -456,7 +461,7 @@ export interface MovimientoCajaTabla {
   empresa_id: string;
   id: Generated<string>;
   sesion_id: string;
-  tipo: 'apertura' | 'venta' | 'vuelto' | 'anulacion' | 'devolucion' | 'retiro' | 'ingreso' | 'pago_proveedor';
+  tipo: 'apertura' | 'venta' | 'vuelto' | 'anulacion' | 'devolucion' | 'retiro' | 'ingreso' | 'pago_proveedor' | 'cobro';
   medio: Medio;
   moneda: Moneda;
   monto: Num;
@@ -488,6 +493,7 @@ export interface VentaTabla {
   cliente_id: string | null;
   lista_precio_id: string | null;
   pedido_id: string | null;
+  credito: NumGen;
   estado: Generated<'confirmada' | 'anulada'>;
   comprobante: Generated<'interno' | 'factura'>;
   subtotal: Num;
@@ -837,4 +843,48 @@ export interface PagoAplicacionTabla {
   pago_id: string;
   cuenta_pagar_id: string;
   monto: Num;
+}
+
+export interface CuentaCobrarTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  cliente_id: string;
+  venta_id: string | null;
+  sucursal_id: string;
+  descripcion: string;
+  fecha: Fecha;
+  vencimiento: Fecha;
+  monto: Num;
+  saldo: Num;
+  estado: Generated<'pendiente' | 'parcial' | 'cobrada' | 'anulada'>;
+  autorizado_por: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+
+export interface CobroClienteTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: ColumnType<string, number, never>;
+  cliente_id: string;
+  fecha: Fecha;
+  medio: 'efectivo' | 'tarjeta' | 'transferencia' | 'cheque' | 'otro';
+  sesion_caja_id: string | null;
+  monto: Num;
+  referencia: string | null;
+  nota: string | null;
+  estado: Generated<'confirmado' | 'anulado'>;
+  creado_por: string;
+  creado_en: Creado;
+  anulado_por: string | null;
+  anulado_en: Date | null;
+}
+
+export interface CobroAplicacionTabla {
+  empresa_id: string;
+  cobro_id: string | null;
+  devolucion_id: string | null;
+  cuenta_cobrar_id: string;
+  monto: Num;
+  creado_en: Creado;
 }

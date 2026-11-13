@@ -155,6 +155,9 @@ export const clienteEntrada = z.object({
   email: email.nullable().optional().or(z.literal('').transform(() => null)),
   direccion: textoOpcional(300),
   listaPrecioId: uuid.nullable().optional(),
+  /** Solo con credito_cliente.editar. 0 = sin crédito. */
+  limiteCredito: z.coerce.number().min(0).max(1e13).optional(),
+  plazoCreditoDias: z.coerce.number().int().min(1).max(365).optional(),
   activo: z.boolean().optional(),
 });
 
@@ -243,10 +246,11 @@ export const ventaEntrada = z.object({
         referencia: textoOpcional(80),
       }),
     )
-    .min(1, 'Registre al menos un pago')
     .max(10),
   vueltoMoneda: z.enum(['PYG', 'USD', 'BRL']).default('PYG'),
-});
+  /** Parte del total que queda en la cuenta corriente del cliente (venta a crédito). */
+  credito: z.coerce.number().min(0).max(1e13).optional(),
+}).refine((v) => v.pagos.length > 0 || (v.credito ?? 0) > 0, { message: 'Registre al menos un pago', path: ['pagos'] });
 export type VentaEntrada = z.infer<typeof ventaEntrada>;
 
 export const anularVentaEntrada = z.object({ motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
@@ -424,4 +428,19 @@ export const cuentaPagarEntrada = z.object({
   fecha: fechaObligatoria,
   vencimiento: fechaObligatoria,
   monto: z.coerce.number().positive().max(1e13),
+});
+
+// ---------------------------------------------------------------------------
+// Fase 2 · cuentas a cobrar
+// ---------------------------------------------------------------------------
+
+export const cobroEntrada = z.object({
+  clienteId: uuid,
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+  medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'cheque', 'otro']),
+  /** Caja abierta propia donde entra el dinero (obligatoria en efectivo). */
+  cajaId: uuid.nullable().optional(),
+  referencia: textoOpcional(80),
+  nota: textoOpcional(500),
+  aplicaciones: z.array(z.object({ cuentaId: uuid, monto: z.coerce.number().positive().max(1e13) })).min(1, 'Elija qué cuentas cobra').max(200),
 });

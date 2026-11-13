@@ -19,6 +19,7 @@ import { PdvController, PdvPreciosController, VentasController } from '../src/op
 import { ListasPrecioController } from '../src/catalogo/listas.controller';
 import { PedidosController, PresupuestosController } from '../src/operacion/pedidos.controller';
 import { FacturacionController } from '../src/sifen/facturacion.controller';
+import { CobrosController, CuentasCobrarController } from '../src/finanzas/cobrar.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
@@ -60,6 +61,8 @@ const CONTROLADORES = [
   ComprasController,
   CuentasPagarController,
   PagosProveedorController,
+  CuentasCobrarController,
+  CobrosController,
 ];
 
 interface Ruta {
@@ -168,6 +171,12 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/cuentas-pagar'] = coB.body.cuenta.id;
     const pgB = await http(app).post('/api/pagos-proveedor').set(hB).send({ proveedorId: pvB.body.id, fecha: '2026-11-12', medio: 'transferencia', aplicaciones: [{ cuentaId: coB.body.cuenta.id, monto: 100 }] }).expect(201);
     idsDeB['/api/pagos-proveedor'] = pgB.body.id;
+    // Crédito en B: venta fiada y un cobro.
+    await http(app).patch(`/api/clientes/${cl.body.id}`).set(hB).send({ nombre: 'Cliente de B', limiteCredito: 1000000 }).expect(200);
+    const vcB = await http(app).post('/api/ventas').set(hB).send({ claveIdempotencia: `cr-${Date.now()}`, cajaId: vb.cajaId, clienteId: cl.body.id, items: [{ varianteId: vb.varianteId, cantidad: 1 }], pagos: [], credito: 11000 }).expect(201);
+    idsDeB['/api/cuentas-cobrar'] = cl.body.id;
+    const kB = await http(app).post('/api/cobros').set(hB).send({ clienteId: cl.body.id, fecha: '2026-11-12', medio: 'transferencia', aplicaciones: [{ cuentaId: vcB.body.cuentaCobrar.id, monto: 1000 }] }).expect(201);
+    idsDeB['/api/cobros'] = kB.body.id;
   });
   afterAll(() => app.close());
 
@@ -248,6 +257,7 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/ordenes-compra/:id/cancelar': { motivo: 'Intento ajeno' },
           'POST /api/compras/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/pagos-proveedor/:id/anular': { motivo: 'Intento ajeno' },
+          'POST /api/cobros/:id/anular': { motivo: 'Intento ajeno' },
         };
         const cuerpos: Record<string, object> = { patch: { nombre: 'Intento ajeno' }, put: { permisos: [] } };
         const cuerpo = porRuta[`${r.metodo.toUpperCase()} ${r.ruta}`] ?? cuerpos[r.metodo] ?? {};

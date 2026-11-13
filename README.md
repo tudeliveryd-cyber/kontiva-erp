@@ -13,7 +13,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | --- | --- | --- |
 | 0 | Cimientos: autenticación, multiempresa con RLS, permisos, auditoría, Panel Master | Lista · ver pendientes menores abajo |
 | 1 | Operación central: productos, inventario, PDV, caja | Circuito central listo · ver pendientes abajo |
-| 2 | Compras y finanzas | Compras y cuentas a pagar listas · en curso |
+| 2 | Compras y finanzas | Compras, cuentas a pagar y a cobrar listas · en curso |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Pendiente |
 | 5 | Verticales por rubro e integraciones | Pendiente |
@@ -95,8 +95,15 @@ Producto comercial de **Araújo Tech Sistemas**.
   pagos parciales o de varias cuentas a la vez, en efectivo desde la caja o por otro medio, y anulación
   de pagos con reintegro a la caja si sigue abierta.
 
+- **Ventas a crédito**: límite y plazo por cliente (credito_cliente.editar); en el PDV, todo o parte de la venta
+  a la cuenta del cliente, sin pasar por la caja; superar el límite pide el PIN de un supervisor
+  (credito_cliente.aprobar). Con factura electrónica: condición crédito a plazo con la entrega inicial.
+- **Cuentas a cobrar**: resumen, atraso en días, estado de cuenta con saldo corrido, recordatorio por
+  WhatsApp, cobros de una o varias cuentas (en efectivo entra a la caja y aparece en el arqueo), anulación
+  de cobros. Una devolución de una venta a crédito descuenta primero de la deuda; anular una venta a crédito
+  anula su cuenta si no tiene cobros.
+
 ### Fase 2 · pendiente
-- Ventas a crédito y cuentas a cobrar (cobros, límite de crédito por cliente).
 - Cuentas bancarias, conciliación y flujo de caja; plan de cuentas y asientos automáticos.
 
 ### Fase 3 · hecho (factura electrónica)

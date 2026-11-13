@@ -422,6 +422,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           total={total}
           lineas={lineas}
           clienteId={cliente?.id ?? null}
+          cliente={cliente}
           pedidoId={pedido?.id ?? null}
           autorizacion={autorizacion?.token}
           alCerrar={() => {
@@ -454,7 +455,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                 descuento: Number(i.descuento),
               })),
             );
-            setCliente(p.cliente?.id ? { id: p.cliente.id, nombre: p.cliente.nombre, documento: p.cliente.documento, telefono: p.cliente.telefono, email: p.cliente.email, direccion: p.cliente.direccion, listaPrecioId: p.lista?.id ?? null, activo: true } : null);
+            setCliente(p.cliente?.id ? { id: p.cliente.id, nombre: p.cliente.nombre, documento: p.cliente.documento, telefono: p.cliente.telefono, email: p.cliente.email, direccion: p.cliente.direccion, listaPrecioId: p.lista?.id ?? null, limiteCredito: '0', plazoCreditoDias: 30, activo: true } : null);
             setListaCliente(p.lista?.nombre ?? null);
             setAutorizacion(null);
             setSel(null);
@@ -536,8 +537,15 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   );
 }
 
-function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; pedidoId: string | null; autorizacion?: string; alCerrar: () => void; alVender: (v: Venta) => void }) {
+function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; alCerrar: () => void; alVender: (v: Venta) => void }) {
   const [pagos, setPagos] = useState<PagoUI[]>([{ medio: 'efectivo', moneda: 'PYG', monto: String(props.total) }]);
+  // Venta a crédito (cuenta corriente del cliente).
+  const [credito, setCredito] = useState('');
+  const [tokenCredito, setTokenCredito] = useState<string | null>(null);
+  const [pidePinCredito, setPidePinCredito] = useState(false);
+  const montoCredito = Math.min(Number(credito) || 0, props.total);
+  const aCobrar = props.total - montoCredito;
+  const disponible = props.cliente ? Math.max(Number(props.cliente.limiteCredito) - Number(props.cliente.saldo ?? 0), 0) : 0;
   const [vueltoMoneda, setVueltoMoneda] = useState<Moneda>('PYG');
   // La clave se fija al abrir el cobro: si la red falla y se reintenta, no se duplica la venta.
   const [clave] = useState(nuevaClave);
@@ -546,20 +554,21 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
   const resultado = useMemo(() => {
     try {
       const validos = pagos.filter((p) => Number(p.monto) > 0);
-      if (!validos.length) return { error: 'Ingrese el monto recibido' };
-      return { r: calcularPagos(props.total, validos, props.cot, vueltoMoneda) };
+      if (!validos.length && aCobrar > 0) return { error: 'Ingrese el monto recibido' };
+      return { r: calcularPagos(aCobrar, validos, props.cot, vueltoMoneda) };
     } catch (e) {
       return { error: e instanceof ErrorCalculo ? e.message : 'Revise los montos' };
     }
-  }, [pagos, vueltoMoneda, props.total, props.cot]);
+  }, [pagos, vueltoMoneda, aCobrar, props.cot]);
 
   const vender = useMutation({
     mutationFn: () =>
       api<Venta>('/ventas', {
         metodo: 'POST',
-        encabezados: props.autorizacion ? { 'X-Autorizacion': props.autorizacion } : undefined,
+        encabezados: tokenCredito ? { 'X-Autorizacion': tokenCredito } : props.autorizacion ? { 'X-Autorizacion': props.autorizacion } : undefined,
         cuerpo: {
           claveIdempotencia: clave,
+          ...(montoCredito > 0 && { credito: montoCredito }),
           cajaId: props.c.caja.id,
           clienteId: props.clienteId,
           ...(props.pedidoId && { pedidoId: props.pedidoId }),
@@ -569,11 +578,28 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
         },
       }),
     onSuccess: props.alVender,
+    onError: (e) => {
+      if (e instanceof FalloApi && e.codigo === 'CREDITO_EXCEDIDO') setPidePinCredito(true);
+    },
   });
 
   const set = (i: number, cambio: Partial<PagoUI>) => setPagos((ps) => ps.map((p, j) => (j === i ? { ...p, ...cambio } : p)));
   const falta = resultado.r ? 0 : null;
   const confirmar = () => resultado.r && !vender.isPending && vender.mutate();
+
+  if (pidePinCredito) {
+    return (
+      <DialogoAutorizacion
+        permiso="credito_cliente.aprobar"
+        titulo="Autorizar crédito sobre el límite"
+        alAutorizar={(t) => {
+          setTokenCredito(t);
+          setPidePinCredito(false);
+        }}
+        alCerrar={() => setPidePinCredito(false)}
+      />
+    );
+  }
 
   return (
     <Cajon
@@ -598,6 +624,27 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
         }}
       >
         <ErrorApi error={vender.error} />
+        {tokenCredito && <Aviso tipo="info">Crédito autorizado por un supervisor. Confirme la venta.</Aviso>}
+        {props.cliente && (
+          <div className="credito-cobro">
+            <div style={{ flex: 1 }}>
+              <Campo etiqueta={`A crédito (cuenta de ${props.cliente.nombre})`} id="cr" ayuda={Number(props.cliente.limiteCredito) > 0 ? `Disponible ${dinero(disponible)} de ${dinero(props.cliente.limiteCredito)}` : 'El cliente no tiene límite de crédito: requiere autorización'}>
+                <input id="cr" className="entrada num" inputMode="numeric" placeholder="0" value={credito ? Number(credito).toLocaleString('es-PY') : ''} onChange={(e) => setCredito(e.target.value.replace(/[^0-9]/g, ''))} />
+              </Campo>
+            </div>
+            <button
+              type="button"
+              className="btn"
+              style={{ marginTop: 22 }}
+              onClick={() => {
+                setCredito(String(props.total));
+                setPagos([{ medio: 'efectivo', moneda: 'PYG', monto: '' }]);
+              }}
+            >
+              Todo a crédito
+            </button>
+          </div>
+        )}
         {pagos.map((p, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <Campo etiqueta="Medio" id={`m${i}`}>
@@ -631,7 +678,7 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
           </div>
         ))}
         <div className="pagos-rapidos">
-          {[50000, 100000].filter((b) => b >= props.total).slice(0, 2).map((b) => (
+          {[50000, 100000].filter((b) => aCobrar > 0 && b >= aCobrar).slice(0, 2).map((b) => (
             <button type="button" key={b} className="btn chico" onClick={() => setPagos([{ medio: 'efectivo', moneda: 'PYG', monto: String(b) }])}>
               Recibe {dinero(b)}
             </button>
@@ -657,6 +704,14 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
         <div className="pdv-total resumen-cobro">
           <span>Total</span>
           <b className="num">{dinero(props.total)}</b>
+          {montoCredito > 0 && (
+            <>
+              <span>A crédito</span>
+              <b className="num">{dinero(montoCredito)}</b>
+              <span>A cobrar ahora</span>
+              <b className="num">{dinero(aCobrar)}</b>
+            </>
+          )}
           {resultado.r ? (
             <>
               <span>Recibido</span>

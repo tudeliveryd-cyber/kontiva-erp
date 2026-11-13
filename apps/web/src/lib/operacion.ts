@@ -50,6 +50,9 @@ export interface Cliente {
   email: string | null;
   direccion: string | null;
   listaPrecioId: string | null;
+  limiteCredito: string;
+  plazoCreditoDias: number;
+  saldo?: string;
   activo: boolean;
 }
 
@@ -88,6 +91,8 @@ export interface Venta {
   estado: 'confirmada' | 'anulada';
   comprobante: 'interno' | 'factura';
   fecha: string;
+  credito: string;
+  cuentaCobrar: { id: string; saldo: string; vencimiento: string; estado: string } | null;
   documentoElectronico: {
     id: string;
     cdc: string;

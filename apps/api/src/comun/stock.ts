@@ -80,7 +80,7 @@ export async function moverStock(tx: Tx, ctx: Pick<Ctx, 'empresaId' | 'usuarioId
 }
 
 /** Próximo número correlativo de un documento (bloquea la empresa: sin huecos ni repetidos). */
-export async function siguienteNumero(tx: Tx, tabla: 'transferencia' | 'devolucion' | 'orden_compra' | 'compra' | 'pago_proveedor'): Promise<number> {
+export async function siguienteNumero(tx: Tx, tabla: 'transferencia' | 'devolucion' | 'orden_compra' | 'compra' | 'pago_proveedor' | 'cobro_cliente'): Promise<number> {
   await tx.selectFrom('empresa').select('id').forUpdate().executeTakeFirstOrThrow();
   const r = await tx.selectFrom(tabla).select((eb) => eb.fn.max<string>('numero').as('n')).executeTakeFirstOrThrow();
   return Number(r.n ?? 0) + 1;

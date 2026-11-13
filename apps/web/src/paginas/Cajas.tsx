@@ -244,13 +244,13 @@ function FichaSesion({ caja, alCerrar }: { caja: CajaFila; alCerrar: () => void 
               </div>
               {s.movimientos.length > 0 && (
                 <div className="seccion-form">
-                  <h3>Fondo, retiros e ingresos</h3>
+                  <h3>Fondo, retiros, ingresos, cobros y pagos</h3>
                   <table>
                     <tbody>
                       {s.movimientos.map((m, i) => (
                         <tr key={i}>
                           <td className="peq">{fechaHora(m.creado_en)}</td>
-                          <td>{m.tipo === 'apertura' ? 'Fondo inicial' : m.tipo === 'retiro' ? 'Retiro' : 'Ingreso'}</td>
+                          <td>{m.tipo === 'apertura' ? 'Fondo inicial' : m.tipo === 'retiro' ? 'Retiro' : m.tipo === 'cobro' ? 'Cobro de cuenta' : m.tipo === 'pago_proveedor' ? 'Pago a proveedor' : 'Ingreso'}</td>
                           <td className="tenue peq">{m.motivo}</td>
                           <td className="der num">{dinero(m.monto, m.moneda)}</td>
                         </tr>
