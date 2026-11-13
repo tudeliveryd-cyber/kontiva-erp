@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Minus, Percent, Plus, Printer, Search, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, Minus, Percent, Plus, Printer, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { calcularItems, calcularPagos, ErrorCalculo, type Cotizaciones } from '@kontiva/shared';
@@ -9,6 +9,7 @@ import { Aviso, Cajon, Campo, Cargando, ErrorApi, Vacio } from '../componentes/u
 import { api, FalloApi } from '../lib/api';
 import { cantidad as fmtCant, dinero, NOMBRE_MEDIO, NOMBRE_MONEDA, nuevaClave, type Cliente, type Medio, type Moneda, type Venta } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { fechaCorta, type DocComercial } from './Pedidos';
 
 interface ContextoPdv {
   caja: { id: string; nombre: string };
@@ -107,7 +108,8 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const [listaCliente, setListaCliente] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [nota, setNota] = useState<string | null>(null);
-  const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | null>(null);
+  const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | 'pedidos' | null>(null);
+  const [pedido, setPedido] = useState<DocComercial | null>(null);
   const [autorizacion, setAutorizacion] = useState<{ token: string; nombre: string } | null>(null);
   const [vendida, setVendida] = useState<Venta | null>(null);
   const buscador = useRef<HTMLInputElement>(null);
@@ -197,6 +199,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     setCliente(null);
     setListaCliente(null);
     setNota(null);
+    setPedido(null);
     setAutorizacion(null);
     setVendida(null);
     setSel(null);
@@ -221,6 +224,9 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
       } else if (e.key === 'F4') {
         e.preventDefault();
         setDialogo('cliente');
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        setDialogo('pedidos');
       } else if (e.key === 'F8' && sel !== null) {
         e.preventDefault();
         setDialogo(c.puede.descuento || autorizacion ? 'descuento' : 'autorizar');
@@ -379,16 +385,19 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           <button className="btn cobrar" disabled={!lineas.length || !calc} onClick={() => setDialogo('cobro')}>
             Cobrar <span className="tecla">F2</span>
           </button>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn" style={{ flex: 1 }} onClick={() => setDialogo('cliente')}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn" style={{ flex: '1 1 200px', minWidth: 0 }} onClick={() => setDialogo('cliente')}>
               <UserRound size={16} /> {cliente ? cliente.nombre : 'Cliente'}
               {listaCliente && <span className="insignia i-p" style={{ padding: '1px 7px' }}>{listaCliente}</span>}
               <span className="tecla">F4</span>
             </button>
-            <button className="btn" style={{ flex: 1 }} disabled={sel === null} onClick={() => setDialogo(c.puede.descuento || autorizacion ? 'descuento' : 'autorizar')}>
+            <button className="btn" style={{ flex: '1 1 120px' }} disabled={sel === null} onClick={() => setDialogo(c.puede.descuento || autorizacion ? 'descuento' : 'autorizar')}>
               <Percent size={16} /> Descuento <span className="tecla">F8</span>
             </button>
           </div>
+          <button className="btn" onClick={() => setDialogo('pedidos')}>
+            <ClipboardCheck size={16} /> {pedido ? `Pedido N.º ${pedido.numero}` : 'Cobrar un pedido'} <span className="tecla">F6</span>
+          </button>
           {autorizacion && <Aviso tipo="info">Descuento autorizado por {autorizacion.nombre}</Aviso>}
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {lineas.length > 0 && (
@@ -397,7 +406,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
               </button>
             )}
             <div className="tenue peq">
-              {yo?.usuario.nombre} · Supr: quitar línea · F2 cobrar · F4 cliente · F8 descuento
+              {yo?.usuario.nombre} · Supr: quitar línea · F2 cobrar · F4 cliente · F6 pedido · F8 descuento
             </div>
             <button className="btn chico" onClick={() => navigate('/ventas')}>
               Ventas de la caja
@@ -413,6 +422,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           total={total}
           lineas={lineas}
           clienteId={cliente?.id ?? null}
+          pedidoId={pedido?.id ?? null}
           autorizacion={autorizacion?.token}
           alCerrar={() => {
             setDialogo(null);
@@ -421,6 +431,41 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           alVender={(v) => {
             setDialogo(null);
             setVendida(v);
+          }}
+        />
+      )}
+      {dialogo === 'pedidos' && (
+        <ElegirPedido
+          cajaId={c.caja.id}
+          alElegir={(p) => {
+            if (lineas.length && !confirm('Se reemplazan los productos cargados por los del pedido. ¿Continuar?')) return;
+            setPedido(p);
+            setLineas(
+              p.items.map((i) => ({
+                varianteId: i.varianteId,
+                descripcion: i.descripcion,
+                sku: i.sku,
+                unidad: i.unidad,
+                tasaIva: i.tasaIva,
+                precio: i.precioUnitario,
+                controlaStock: false,
+                stock: null,
+                cantidad: String(Number(i.cantidad)),
+                descuento: Number(i.descuento),
+              })),
+            );
+            setCliente(p.cliente?.id ? { id: p.cliente.id, nombre: p.cliente.nombre, documento: p.cliente.documento, telefono: p.cliente.telefono, email: p.cliente.email, direccion: p.cliente.direccion, listaPrecioId: p.lista?.id ?? null, activo: true } : null);
+            setListaCliente(p.lista?.nombre ?? null);
+            setAutorizacion(null);
+            setSel(null);
+            setAviso(null);
+            setNota(`Pedido N.º ${p.numero} cargado${p.cliente ? ` · ${p.cliente.nombre}` : ''}: se cobra con sus precios y descuentos`);
+            setDialogo(null);
+            enfocar();
+          }}
+          alCerrar={() => {
+            setDialogo(null);
+            enfocar();
           }}
         />
       )}
@@ -491,7 +536,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   );
 }
 
-function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; autorizacion?: string; alCerrar: () => void; alVender: (v: Venta) => void }) {
+function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; pedidoId: string | null; autorizacion?: string; alCerrar: () => void; alVender: (v: Venta) => void }) {
   const [pagos, setPagos] = useState<PagoUI[]>([{ medio: 'efectivo', moneda: 'PYG', monto: String(props.total) }]);
   const [vueltoMoneda, setVueltoMoneda] = useState<Moneda>('PYG');
   // La clave se fija al abrir el cobro: si la red falla y se reintenta, no se duplica la venta.
@@ -517,6 +562,7 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
           claveIdempotencia: clave,
           cajaId: props.c.caja.id,
           clienteId: props.clienteId,
+          ...(props.pedidoId && { pedidoId: props.pedidoId }),
           items: props.lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })),
           pagos: pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio: p.medio, moneda: p.moneda, monto: Number(p.monto) })),
           vueltoMoneda,
@@ -701,6 +747,36 @@ function Descuento({ linea, totalLinea, alAplicar, alCerrar }: { linea: Linea; t
           {linea.descuento > 0 && <button type="button" className="btn" onClick={() => alAplicar(0)}>Quitar descuento</button>}
         </div>
       </form>
+    </Cajon>
+  );
+}
+
+function ElegirPedido({ cajaId, alElegir, alCerrar }: { cajaId: string; alElegir: (p: DocComercial) => void; alCerrar: () => void }) {
+  const [q, setQ] = useState('');
+  const lista = useQuery({ queryKey: ['pdv-pedidos', cajaId, q], queryFn: () => api<DocComercial[]>(`/pdv/pedidos?cajaId=${cajaId}&q=${encodeURIComponent(q)}`), placeholderData: (p) => p });
+  return (
+    <Cajon titulo="Cobrar un pedido" alCerrar={alCerrar}>
+      <input className="entrada" autoFocus placeholder="Cliente o número de pedido" value={q} onChange={(e) => setQ(e.target.value)} />
+      {lista.isLoading ? (
+        <Cargando />
+      ) : !lista.data?.length ? (
+        <Vacio titulo="No hay pedidos pendientes en esta sucursal" />
+      ) : (
+        <div className="lista-empresas">
+          {lista.data.map((p) => (
+            <button key={p.id} onClick={() => alElegir(p)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                <b>N.º {p.numero} · {p.cliente?.nombre ?? 'Sin cliente'}</b>
+                <b className="num">{dinero(p.total)}</b>
+              </div>
+              <div className="tenue peq">
+                {p.estado === 'preparado' ? 'Preparado' : 'Pendiente'} · {p.items.length} {p.items.length === 1 ? 'producto' : 'productos'}
+                {p.entregaPrevista && ` · entrega ${fechaCorta(p.entregaPrevista)}`}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </Cajon>
   );
 }

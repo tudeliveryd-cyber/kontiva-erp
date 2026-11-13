@@ -85,3 +85,10 @@ export async function siguienteNumero(tx: Tx, tabla: 'transferencia' | 'devoluci
   const r = await tx.selectFrom(tabla).select((eb) => eb.fn.max<string>('numero').as('n')).executeTakeFirstOrThrow();
   return Number(r.n ?? 0) + 1;
 }
+
+/** Numeración propia de presupuestos y de pedidos. */
+export async function siguienteNumeroPedido(tx: Tx, tipo: 'presupuesto' | 'pedido'): Promise<number> {
+  await tx.selectFrom('empresa').select('id').forUpdate().executeTakeFirstOrThrow();
+  const r = await tx.selectFrom('pedido').select((eb) => eb.fn.max<string>('numero').as('n')).where('tipo', '=', tipo).executeTakeFirstOrThrow();
+  return Number(r.n ?? 0) + 1;
+}

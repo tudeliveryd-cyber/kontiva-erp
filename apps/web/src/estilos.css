@@ -212,10 +212,29 @@ select.entrada { padding-right: 8px; }
 .t-linea { border-top: 1px dashed #000; margin: 6px 0; }
 @media print {
   @page { size: 80mm auto; margin: 0; }
+  @page a4 { size: A4; margin: 14mm; }
   body * { visibility: hidden; }
-  .ticket, .ticket * { visibility: visible; }
+  .ticket, .ticket *, .doc-a4, .doc-a4 * { visibility: visible; }
   .ticket { position: absolute; left: 0; top: 0; padding: 2mm; }
+  .doc-a4 { page: a4; position: absolute; left: 0; top: 0; width: 100%; border: 0 !important; padding: 0 !important; box-shadow: none !important; }
 }
+
+/* ----- Presupuesto / pedido para imprimir (A4) ----- */
+.doc-a4 { background: #fff; color: #111; border: 1px solid var(--linea); border-radius: 8px; padding: 28px; font-size: 13px; line-height: 1.45; }
+.doc-a4 .doc-cab { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 16px; border-bottom: 2px solid #111; }
+.doc-a4 .doc-cab h1 { margin: 0; font-size: 18px; }
+.doc-a4 .doc-tipo { text-align: right; }
+.doc-a4 .doc-tipo b { display: block; font-size: 16px; letter-spacing: .04em; text-transform: uppercase; }
+.doc-a4 .doc-datos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; padding: 14px 0; border-bottom: 1px solid #ddd; }
+.doc-a4 .doc-datos span { color: #666; }
+.doc-a4 table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.doc-a4 th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #555; border-bottom: 1px solid #111; padding: 6px 4px; }
+.doc-a4 td { padding: 7px 4px; border-bottom: 1px solid #eee; }
+.doc-a4 .der { text-align: right; }
+.doc-a4 .doc-totales { margin-left: auto; width: 280px; margin-top: 14px; }
+.doc-a4 .doc-totales div { display: flex; justify-content: space-between; padding: 3px 0; }
+.doc-a4 .doc-totales .total { font-size: 16px; font-weight: 700; border-top: 2px solid #111; padding-top: 8px; margin-top: 4px; }
+.doc-a4 .doc-pie { margin-top: 28px; padding-top: 10px; border-top: 1px solid #ddd; color: #666; font-size: 11px; display: flex; justify-content: space-between; gap: 16px; }
 
 /* ----- PDV ----- */
 .pdv { height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
@@ -244,3 +263,10 @@ select.entrada { padding-right: 8px; }
 .pagos-rapidos { display: flex; gap: 6px; flex-wrap: wrap; }
 .resumen-cobro { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 15px; }
 .resumen-cobro b { text-align: right; }
+
+/* ----- Menú flotante de búsqueda ----- */
+.menu-flotante { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid var(--linea); border-radius: var(--radio); box-shadow: 0 8px 24px rgba(20, 10, 30, .12); max-height: 300px; overflow-y: auto; padding: 4px; }
+.menu-flotante button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 0; padding: 9px 10px; border-radius: 6px; font: inherit; cursor: pointer; }
+.menu-flotante button:hover { background: var(--p1); }
+.btn-icono { background: none; border: 0; color: var(--t3); display: inline-flex; padding: 6px; border-radius: 6px; cursor: pointer; }
+.btn-icono:hover { color: var(--bad); background: var(--badb); }

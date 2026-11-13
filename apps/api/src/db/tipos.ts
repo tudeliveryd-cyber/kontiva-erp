@@ -231,6 +231,8 @@ export interface BaseDatos {
   transferencia_item: TransferenciaItemTabla;
   devolucion: DevolucionTabla;
   devolucion_item: DevolucionItemTabla;
+  pedido: PedidoTabla;
+  pedido_item: PedidoItemTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -468,6 +470,7 @@ export interface VentaTabla {
   clave_idempotencia: string;
   cliente_id: string | null;
   lista_precio_id: string | null;
+  pedido_id: string | null;
   estado: Generated<'confirmada' | 'anulada'>;
   comprobante: Generated<'interno'>;
   subtotal: Num;
@@ -565,4 +568,47 @@ export interface DevolucionItemTabla {
   variante_id: string;
   cantidad: Num;
   total: Num;
+}
+
+export type TipoPedido = 'presupuesto' | 'pedido';
+export type EstadoPedido = 'vigente' | 'aceptado' | 'rechazado' | 'anulado' | 'pendiente' | 'preparado' | 'entregado' | 'cancelado';
+
+export interface PedidoTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  tipo: TipoPedido;
+  numero: ColumnType<string, number, never>;
+  sucursal_id: string;
+  cliente_id: string | null;
+  cliente_nombre: string | null;
+  lista_precio_id: string | null;
+  estado: EstadoPedido;
+  valido_hasta: ColumnType<string | null, string | null | undefined, string | null>;
+  entrega_prevista: ColumnType<string | null, string | null | undefined, string | null>;
+  nota: string | null;
+  subtotal: NumGen;
+  descuento: NumGen;
+  total: NumGen;
+  origen_id: string | null;
+  venta_id: string | null;
+  autorizado_por: string | null;
+  motivo_cierre: string | null;
+  cerrado_por: string | null;
+  cerrado_en: Date | null;
+  creado_por: string;
+  creado_en: Creado;
+  actualizado_en: Actualizado;
+}
+
+export interface PedidoItemTabla {
+  empresa_id: string;
+  pedido_id: string;
+  linea: number;
+  variante_id: string;
+  descripcion: string;
+  cantidad: Num;
+  precio_unitario: Num;
+  descuento: NumGen;
+  total: Num;
+  tasa_iva: number;
 }

@@ -220,6 +220,8 @@ export const ventaEntrada = z.object({
   claveIdempotencia: z.string().min(8).max(80),
   cajaId: uuid,
   clienteId: uuid.nullable().optional(),
+  /** Pedido que se entrega con esta venta: rigen sus precios y descuentos. */
+  pedidoId: uuid.nullable().optional(),
   items: z
     .array(
       z.object({
@@ -275,3 +277,40 @@ export const devolucionEntrada = z.object({
   motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
   items: z.array(z.object({ linea: z.number().int().positive(), cantidad: z.coerce.number().positive().max(1e9) })).min(1, 'Elija qué se devuelve').max(500),
 });
+
+// ---------------------------------------------------------------------------
+// Presupuestos y pedidos
+// ---------------------------------------------------------------------------
+
+const fecha = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
+  .nullable()
+  .optional()
+  .or(z.literal('').transform(() => null));
+
+export const pedidoEntrada = z
+  .object({
+    sucursalId: uuid,
+    clienteId: uuid.nullable().optional(),
+    clienteNombre: z.string().trim().max(200).nullable().optional().transform((v) => (v ? v : null)),
+    validoHasta: fecha,
+    entregaPrevista: fecha,
+    nota: textoOpcional(1000),
+    items: z
+      .array(
+        z.object({
+          varianteId: uuid,
+          cantidad,
+          /** Solo con permiso precio.editar; si no, el precio de lista del cliente. */
+          precioUnitario: dinero.optional(),
+          descuento: dinero.optional(),
+        }),
+      )
+      .min(1, 'Agregue al menos un producto')
+      .max(500),
+  });
+export type PedidoEntrada = z.infer<typeof pedidoEntrada>;
+
+export const cerrarPedidoEntrada = z.object({ motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
+export const estadoPedidoEntrada = z.object({ estado: z.enum(['pendiente', 'preparado']) });

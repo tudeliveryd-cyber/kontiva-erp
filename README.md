@@ -72,12 +72,15 @@ Producto comercial de **Araújo Tech Sistemas**.
 - **Listas de precios**: listas adicionales (mayorista, revendedor…) asignadas a clientes, precio por sucursal,
   carga por porcentaje sobre el precio normal con redondeo; el PDV cobra la lista del cliente elegido
   y el servidor recalcula siempre el precio (si un producto no está en la lista, rige el normal).
-- **Pruebas**: 332 en total (314 de API, 18 compartidas); incluye 20 cajas vendiendo el mismo producto
+- **Presupuestos y pedidos**: presupuesto con la lista de precios del cliente (o a alguien no registrado),
+  validez, impresión A4 / PDF y envío por WhatsApp; al aceptarlo se genera el pedido con los precios
+  cotizados. El pedido se marca preparado y se cobra en el PDV (F6): rigen sus precios y descuentos
+  sin volver a pedir PIN, y queda entregado; si se anula la venta vuelve a pendiente.
+- **Pruebas**: 382 en total (364 de API, 18 compartidas); incluye 20 cajas vendiendo el mismo producto
   a la vez con stock final exacto.
 
 ### Fase 1 · pendiente
 - Venta sin internet (cola local cifrada con numeración reservada) y agente local para impresora, gaveta y balanza.
-- Presupuestos y pedidos.
 - Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
 
 ## Estructura

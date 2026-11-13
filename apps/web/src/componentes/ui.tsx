@@ -70,7 +70,7 @@ export function Cargando() {
   return <div className="vacio">Cargando…</div>;
 }
 
-export function Cajon(props: { titulo: string; alCerrar: () => void; children: ReactNode; pie?: ReactNode }) {
+export function Cajon(props: { titulo: string; alCerrar: () => void; children: ReactNode; pie?: ReactNode; ancho?: number }) {
   useEffect(() => {
     const f = (e: KeyboardEvent) => e.key === 'Escape' && props.alCerrar();
     window.addEventListener('keydown', f);
@@ -78,7 +78,7 @@ export function Cajon(props: { titulo: string; alCerrar: () => void; children: R
   }, [props]);
   return (
     <div className="fondo" onMouseDown={(e) => e.target === e.currentTarget && props.alCerrar()}>
-      <div className="cajon" role="dialog" aria-modal="true" aria-label={props.titulo}>
+      <div className="cajon" role="dialog" aria-modal="true" aria-label={props.titulo} style={props.ancho ? { width: `min(${props.ancho}px, 100%)` } : undefined}>
         <div className="cajon-cab">
           <h2>{props.titulo}</h2>
           <button onClick={props.alCerrar} aria-label="Cerrar">

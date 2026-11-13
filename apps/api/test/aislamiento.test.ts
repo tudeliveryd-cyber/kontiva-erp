@@ -17,6 +17,7 @@ import { StockController } from '../src/catalogo/stock.controller';
 import { CajasController, CotizacionesController } from '../src/operacion/cajas.controller';
 import { PdvController, PdvPreciosController, VentasController } from '../src/operacion/ventas.controller';
 import { ListasPrecioController } from '../src/catalogo/listas.controller';
+import { PedidosController, PresupuestosController } from '../src/operacion/pedidos.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
 import { prepararVenta } from './ayudas';
@@ -46,6 +47,8 @@ const CONTROLADORES = [
   PdvController,
   PdvPreciosController,
   ListasPrecioController,
+  PresupuestosController,
+  PedidosController,
   VentasController,
   TransferenciasController,
   DevolucionesController,
@@ -139,6 +142,10 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/devoluciones'] = dv.body.id;
     const lp = await http(app).post('/api/listas-precio').set(hB).send({ nombre: 'Mayorista B' }).expect(201);
     idsDeB['/api/listas-precio'] = lp.body.id;
+    const pr = await http(app).post('/api/presupuestos').set(hB).send({ sucursalId: b.sucursalId, items: [{ varianteId: vb.varianteId, cantidad: 1 }] }).expect(201);
+    idsDeB['/api/presupuestos'] = pr.body.id;
+    const pe = await http(app).post('/api/pedidos').set(hB).send({ sucursalId: b.sucursalId, clienteNombre: 'Cliente B', items: [{ varianteId: vb.varianteId, cantidad: 1 }] }).expect(201);
+    idsDeB['/api/pedidos'] = pe.body.id;
   });
   afterAll(() => app.close());
 
@@ -205,6 +212,12 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'PATCH /api/listas-precio/:id': { nombre: 'Intento ajeno' },
           'PUT /api/listas-precio/:id/precios': { items: [{ varianteId: '00000000-0000-7000-8000-000000000000', precio: 1 }] },
           'POST /api/listas-precio/:id/ajuste': { porcentaje: -10 },
+          'PATCH /api/presupuestos/:id': { sucursalId: '00000000-0000-7000-8000-000000000000', items: [{ varianteId: '00000000-0000-7000-8000-000000000000', cantidad: 1 }] },
+          'PATCH /api/pedidos/:id': { sucursalId: '00000000-0000-7000-8000-000000000000', clienteNombre: 'X', items: [{ varianteId: '00000000-0000-7000-8000-000000000000', cantidad: 1 }] },
+          'POST /api/presupuestos/:id/rechazar': { motivo: 'Intento ajeno' },
+          'POST /api/presupuestos/:id/anular': { motivo: 'Intento ajeno' },
+          'POST /api/pedidos/:id/cancelar': { motivo: 'Intento ajeno' },
+          'POST /api/pedidos/:id/estado': { estado: 'preparado' },
         };
         const cuerpos: Record<string, object> = { patch: { nombre: 'Intento ajeno' }, put: { permisos: [] } };
         const cuerpo = porRuta[`${r.metodo.toUpperCase()} ${r.ruta}`] ?? cuerpos[r.metodo] ?? {};

@@ -13,6 +13,7 @@ import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 import { cotizacionesVigentes, obtenerCaja, sesionAbierta } from './cajas.controller';
 import { devueltoPorLinea } from './devoluciones.controller';
+import { leerPedido } from './pedidos.controller';
 import { HttpStatus } from '@nestjs/common';
 
 function aCotizaciones(filas: { moneda: 'USD' | 'BRL'; compra: string; venta: string }[]): Cotizaciones {
@@ -55,6 +56,7 @@ export async function leerVenta(tx: Tx, id: string) {
     sucursal: { id: v.sucursal_id, nombre: v.sucursal, codigo: v.sucursal_codigo, direccion: v.sucursal_direccion },
     vendedor: { id: v.creado_por, nombre: v.vendedor },
     cliente: v.cliente_id ? { id: v.cliente_id, nombre: v.cliente_nombre, documento: v.cliente_documento } : null,
+    pedidoId: v.pedido_id,
     subtotal: v.subtotal,
     descuento: v.descuento,
     total: v.total,
@@ -182,6 +184,29 @@ export class PdvPreciosController {
       return { lista: lista ? { id: lista, nombre } : null, precios: Object.fromEntries(precios) };
     });
   }
+
+  /** Pedidos abiertos de la sucursal de la caja, para cargarlos en el carrito y cobrarlos. */
+  @Requiere('venta', 'crear')
+  @Get('pedidos')
+  pedidos(@Contexto() ctx: Ctx, @Query() query: unknown) {
+    const f = validar(z.object({ cajaId: z.string().uuid(), q: z.string().trim().max(100).optional() }), query);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const caja = await obtenerCaja(tx, ctx, f.cajaId);
+      let q = tx
+        .selectFrom('pedido as p')
+        .leftJoin('cliente as c', 'c.id', 'p.cliente_id')
+        .select('p.id')
+        .where('p.tipo', '=', 'pedido')
+        .where('p.estado', 'in', ['pendiente', 'preparado'])
+        .where('p.sucursal_id', '=', caja.sucursal_id);
+      if (f.q) {
+        const n = /^\d+$/.test(f.q) ? f.q : null;
+        q = q.where((eb) => eb.or([eb('c.nombre', 'ilike', `%${f.q}%`), eb('p.cliente_nombre', 'ilike', `%${f.q}%`), ...(n ? [eb('p.numero', '=', n)] : [])]));
+      }
+      const ids = await q.orderBy('p.estado', 'desc').orderBy('p.creado_en').limit(50).execute();
+      return Promise.all(ids.map(async (r) => (await leerPedido(tx, r.id))!));
+    });
+  }
 }
 
 @Controller('ventas')
@@ -234,9 +259,32 @@ export class VentasController {
         const lista = await listaDeCliente(tx, d.clienteId);
         const precios = await preciosVigentes(tx, ids, caja.sucursal_id, lista);
 
+        // Pedido que se entrega: rigen sus precios y sus descuentos (ya autorizados al tomarlo).
+        let pedido: { id: string; numero: string } | null = null;
+        const descuentoPedido = new Map<string, Decimal>(); // descuento por unidad
+        if (d.pedidoId) {
+          const p = await tx.selectFrom('pedido').select(['id', 'numero', 'estado', 'sucursal_id', 'cliente_id']).where('id', '=', d.pedidoId).where('tipo', '=', 'pedido').forUpdate().executeTakeFirst();
+          if (!p) throw noEncontrado('Pedido');
+          if (p.estado !== 'pendiente' && p.estado !== 'preparado') throw conflicto('PEDIDO_CERRADO', 'El pedido ya fue entregado o cancelado');
+          if (p.sucursal_id !== caja.sucursal_id) throw invalido('El pedido es de otra sucursal');
+          if (p.cliente_id && d.clienteId !== p.cliente_id) throw invalido('La venta debe ser al cliente del pedido');
+          const its = await tx.selectFrom('pedido_item').select(['variante_id', 'cantidad', 'precio_unitario', 'descuento']).where('pedido_id', '=', p.id).execute();
+          for (const it of its) {
+            precios.set(it.variante_id, it.precio_unitario);
+            if (Number(it.descuento) > 0) descuentoPedido.set(it.variante_id, new Decimal(it.descuento).div(it.cantidad));
+          }
+          pedido = p;
+        }
+
         // Cambios de precio y descuentos: permiso propio o PIN de supervisor.
         const cambiaPrecio = d.items.some((i) => i.precioUnitario !== undefined && new Decimal(i.precioUnitario).toFixed(2) !== new Decimal(precios.get(i.varianteId) ?? 0).toFixed(2));
-        const hayDescuento = d.items.some((i) => (i.descuento ?? 0) > 0);
+        // El descuento del pedido (proporcional a la cantidad) no vuelve a pedir autorización.
+        const hayDescuento = d.items.some((i) => {
+          const desc = new Decimal(i.descuento ?? 0);
+          if (desc.lte(0)) return false;
+          const permitido = (descuentoPedido.get(i.varianteId) ?? new Decimal(0)).mul(i.cantidad).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+          return desc.gt(permitido);
+        });
         let autorizadoPor: string | null = null;
         if (cambiaPrecio && !tiene(ctx, 'precio.editar')) throw prohibido('No tiene permiso para cambiar precios');
         if (hayDescuento && !tiene(ctx, 'descuento.aprobar')) {
@@ -296,6 +344,7 @@ export class VentasController {
             clave_idempotencia: d.claveIdempotencia,
             cliente_id: d.clienteId ?? null,
             lista_precio_id: lista,
+            pedido_id: pedido?.id ?? null,
             subtotal: calc.subtotal.toFixed(2),
             descuento: calc.descuento.toFixed(2),
             total: calc.total.toFixed(2),
@@ -374,8 +423,12 @@ export class VentasController {
           entidad: 'venta',
           entidadId: venta.id,
           autorizadoPor,
-          despues: { numero, caja: caja.nombre, total: calc.total.toFixed(0), items: lineas.length, descuento: calc.descuento.toFixed(0) },
+          despues: { numero, caja: caja.nombre, total: calc.total.toFixed(0), items: lineas.length, descuento: calc.descuento.toFixed(0), ...(pedido && { pedido: Number(pedido.numero) }) },
         });
+        if (pedido) {
+          await tx.updateTable('pedido').set({ estado: 'entregado', venta_id: venta.id, cerrado_por: ctx.usuarioId, cerrado_en: new Date() }).where('id', '=', pedido.id).execute();
+          await auditar(tx, { ...ctx, ...o }, { accion: 'entregado', entidad: 'pedido', entidadId: pedido.id, despues: { ventaId: venta.id, venta: numero } });
+        }
         return (await leerVenta(tx, venta.id))!;
       });
     } catch (e) {
@@ -499,6 +552,11 @@ export class VentasController {
         .execute();
       await tx.updateTable('venta').set({ estado: 'anulada', anulada_en: new Date(), anulada_por: ctx.usuarioId, anulacion_autorizada_por: autorizadaPor, motivo_anulacion: d.motivo }).where('id', '=', id).execute();
       await auditar(tx, { ...ctx, ...o }, { accion: 'anular_venta', entidad: 'venta', entidadId: id, autorizadoPor: autorizadaPor, despues: { numero: Number(v.numero), total: v.total, motivo: d.motivo } });
+      // El pedido entregado con esta venta vuelve a quedar pendiente.
+      if (v.pedido_id) {
+        await tx.updateTable('pedido').set({ estado: 'pendiente', venta_id: null, cerrado_por: null, cerrado_en: null }).where('id', '=', v.pedido_id).execute();
+        await auditar(tx, { ...ctx, ...o }, { accion: 'pendiente', entidad: 'pedido', entidadId: v.pedido_id, despues: { motivo: `Venta N.º ${Number(v.numero)} anulada` } });
+      }
       return (await leerVenta(tx, id))!;
     });
   }

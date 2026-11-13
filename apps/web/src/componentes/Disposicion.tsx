@@ -1,5 +1,7 @@
 import {
   ArrowLeftRight,
+  ClipboardCheck,
+  FileText,
   Tags,
   Boxes,
   Package,
@@ -26,6 +28,8 @@ export function Disposicion() {
   const operacion = [
     { a: '/cajas', icono: Store, texto: 'Cajas y PDV', visible: puede('caja.ver') },
     { a: '/ventas', icono: Receipt, texto: 'Ventas', visible: puede('venta.ver') },
+    { a: '/presupuestos', icono: FileText, texto: 'Presupuestos', visible: puede('presupuesto.ver') },
+    { a: '/pedidos', icono: ClipboardCheck, texto: 'Pedidos', visible: puede('pedido.ver') },
     { a: '/productos', icono: Package, texto: 'Productos', visible: puede('producto.ver') },
     { a: '/precios', icono: Tags, texto: 'Listas de precios', visible: puede('precio.ver') },
     { a: '/stock', icono: Boxes, texto: 'Stock', visible: puede('stock.ver') },
