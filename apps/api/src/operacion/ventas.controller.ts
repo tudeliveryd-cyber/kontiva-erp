@@ -44,6 +44,16 @@ export async function leerVenta(tx: Tx, id: string) {
     tx.selectFrom('venta_pago').selectAll().where('venta_id', '=', id).orderBy('linea').execute(),
   ]);
   const devuelto = await devueltoPorLinea(tx, id);
+  const receta = await tx.selectFrom('receta').selectAll().where('venta_id', '=', id).executeTakeFirst();
+  // Lotes de los que salió cada producto (trazabilidad).
+  const lotes = await tx
+    .selectFrom('movimiento_lote as m')
+    .innerJoin('lote as l', 'l.id', 'm.lote_id')
+    .select(['m.variante_id', 'l.codigo', 'l.vencimiento', (eb) => eb.fn.sum<string>('m.cantidad').as('cantidad')])
+    .where('m.origen_id', '=', id)
+    .where('m.tipo', '=', 'venta')
+    .groupBy(['m.variante_id', 'l.codigo', 'l.vencimiento'])
+    .execute();
   const de = await tx
     .selectFrom('documento_electronico')
     .select(['id', 'cdc', 'establecimiento', 'punto', 'numero', 'timbrado', 'estado', 'qr_url', 'ambiente', 'total_iva', 'respuesta_mensaje'])
@@ -95,7 +105,12 @@ export async function leerVenta(tx: Tx, id: string) {
       total: i.total,
       tasaIva: Number(i.tasa_iva),
       cantidadDevuelta: (devuelto.get(i.linea)?.cantidad ?? new Decimal(0)).toFixed(4),
+      condicionVenta: i.condicion_venta,
+      lotes: lotes.filter((l) => l.variante_id === i.variante_id).map((l) => ({ codigo: l.codigo, vencimiento: l.vencimiento, cantidad: new Decimal(l.cantidad).neg().toFixed(4) })),
     })),
+    receta: receta
+      ? { medico: receta.medico, matricula: receta.matricula, paciente: receta.paciente, pacienteDocumento: receta.paciente_documento, fecha: receta.fecha, numero: receta.numero, retenida: receta.retenida }
+      : null,
     devoluciones: devoluciones.map((d) => ({ id: d.id, numero: Number(d.numero), total: d.total, fecha: d.creado_en })),
     pagos: pagos.map((p) => ({ medio: p.medio, moneda: p.moneda, monto: p.monto, cotizacion: p.cotizacion, montoPyg: p.monto_pyg, referencia: p.referencia })),
     autorizadoPor: v.autorizado_por,
@@ -149,7 +164,7 @@ export class PdvController {
         .selectFrom('variante as v')
         .innerJoin('producto as p', 'p.id', 'v.producto_id')
         .leftJoin('stock as s', (j) => j.onRef('s.variante_id', '=', 'v.id').on('s.deposito_id', '=', caja.deposito_id))
-        .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad'])
+        .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad', 'p.principio_activo', 'p.concentracion', 'p.condicion_venta'])
         .select((eb) => eb.selectFrom('codigo_barras as cb').whereRef('cb.variante_id', '=', 'v.id').select(sql<string[]>`coalesce(array_agg(cb.codigo), '{}')`.as('c')).as('codigos'))
         .where('p.activo', '=', true)
         .where('v.activa', '=', true)
@@ -169,6 +184,9 @@ export class PdvController {
           precio: precios.get(r.id) ?? '0.00',
           controlaStock: r.controla_stock,
           stock: r.controla_stock ? (r.cantidad ?? '0.0000') : null,
+          principioActivo: r.principio_activo,
+          concentracion: r.concentracion,
+          condicionVenta: r.condicion_venta,
         })),
       };
     });
@@ -190,7 +208,7 @@ export class PdvController {
           .selectFrom('variante as v')
           .innerJoin('producto as p', 'p.id', 'v.producto_id')
           .leftJoin('stock as s', (j) => j.onRef('s.variante_id', '=', 'v.id').on('s.deposito_id', '=', caja.deposito_id))
-          .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad'])
+          .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad', 'p.principio_activo', 'p.concentracion', 'p.condicion_venta'])
           .where('p.activo', '=', true)
           .where('v.activa', '=', true);
 
@@ -205,8 +223,8 @@ export class PdvController {
       const porCodigo = filas.length > 0;
       if (!porCodigo) {
         filas = await base()
-          .where((eb) => eb.or([eb(sql`lower(v.sku)`, '=', f.q.toLowerCase()), eb('p.nombre', 'ilike', `%${f.q.replace(/[%_\\]/g, '\\$&')}%`)]))
-          .orderBy(sql`similarity(p.nombre, ${f.q})`, 'desc')
+          .where((eb) => eb.or([eb(sql`lower(v.sku)`, '=', f.q.toLowerCase()), eb('p.nombre', 'ilike', `%${f.q.replace(/[%_\\]/g, '\\$&')}%`), eb('p.principio_activo', 'ilike', `%${f.q.replace(/[%_\\]/g, '\\$&')}%`)]))
+          .orderBy(sql`greatest(similarity(p.nombre, ${f.q}), similarity(coalesce(p.principio_activo, ''), ${f.q}))`, 'desc')
           .orderBy('p.nombre')
           .limit(20)
           .execute();
@@ -230,6 +248,51 @@ export class PdvController {
           precio: precios.get(r.id) ?? '0.00',
           controlaStock: r.controla_stock,
           stock: r.controla_stock ? (r.cantidad ?? '0.0000') : null,
+          principioActivo: r.principio_activo,
+          concentracion: r.concentracion,
+          condicionVenta: r.condicion_venta,
+        })),
+      };
+    });
+  }
+
+  /** Productos con el mismo principio activo (y concentración, si la tiene): alternativas para ofrecer. */
+  @Requiere('venta', 'crear')
+  @Get('equivalentes')
+  equivalentes(@Contexto() ctx: Ctx, @Query() query: unknown) {
+    const f = validar(z.object({ cajaId: z.string().uuid(), varianteId: z.string().uuid() }), query);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const caja = await obtenerCaja(tx, ctx, f.cajaId);
+      const base = await tx.selectFrom('variante as v').innerJoin('producto as p', 'p.id', 'v.producto_id').select(['p.id', 'p.principio_activo', 'p.concentracion']).where('v.id', '=', f.varianteId).executeTakeFirst();
+      if (!base) throw noEncontrado('Producto');
+      if (!base.principio_activo) return { principioActivo: null, items: [] };
+      let q = tx
+        .selectFrom('variante as v')
+        .innerJoin('producto as p', 'p.id', 'v.producto_id')
+        .leftJoin('stock as s', (j) => j.onRef('s.variante_id', '=', 'v.id').on('s.deposito_id', '=', caja.deposito_id))
+        .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad', 'p.principio_activo', 'p.concentracion', 'p.condicion_venta'])
+        .where('p.activo', '=', true)
+        .where('v.activa', '=', true)
+        .where('v.id', '<>', f.varianteId)
+        .where(sql`lower(p.principio_activo)`, '=', base.principio_activo.toLowerCase());
+      if (base.concentracion) q = q.where(sql`lower(coalesce(p.concentracion, ''))`, '=', base.concentracion.toLowerCase());
+      const filas = await q.orderBy(sql`coalesce(s.cantidad, 0) > 0`, 'desc').orderBy('p.nombre').limit(30).execute();
+      const precios = await preciosVigentes(tx, filas.map((r) => r.id), caja.sucursal_id, null);
+      return {
+        principioActivo: base.principio_activo,
+        concentracion: base.concentracion,
+        items: filas.map((r) => ({
+          varianteId: r.id,
+          descripcion: r.variante ? `${r.producto} · ${r.variante}` : r.producto,
+          sku: r.sku,
+          unidad: r.unidad,
+          tasaIva: Number(r.tasa_iva) as 0 | 5 | 10,
+          precio: precios.get(r.id) ?? '0.00',
+          controlaStock: r.controla_stock,
+          stock: r.controla_stock ? (r.cantidad ?? '0.0000') : null,
+          principioActivo: r.principio_activo,
+          concentracion: r.concentracion,
+          condicionVenta: r.condicion_venta,
         })),
       };
     });
@@ -329,11 +392,21 @@ export class VentasController {
         const variantes = await tx
           .selectFrom('variante as v')
           .innerJoin('producto as p', 'p.id', 'v.producto_id')
-          .select(['v.id', 'v.nombre', 'v.costo', 'p.nombre as producto', 'p.tasa_iva', 'p.controla_stock', 'p.unidad', 'p.activo', 'v.activa'])
+          .select(['v.id', 'v.nombre', 'v.costo', 'p.nombre as producto', 'p.tasa_iva', 'p.controla_stock', 'p.unidad', 'p.activo', 'v.activa', 'p.condicion_venta'])
           .where('v.id', 'in', ids)
           .execute();
         const porId = new Map(variantes.map((v) => [v.id, v]));
         if (variantes.length !== ids.length || variantes.some((v) => !v.activo || !v.activa)) throw invalido('Algún producto no existe o está inactivo');
+        // Medicamentos bajo receta: la venta lleva los datos de la receta; los de receta archivada, la receta retenida.
+        const conReceta = variantes.filter((v) => v.condicion_venta !== 'libre');
+        if (conReceta.length) {
+          if (!d.receta) throw new ErrorNegocio(HttpStatus.BAD_REQUEST, 'RECETA_REQUERIDA', `Venta bajo receta: ${conReceta.map((v) => v.producto).join(', ')}`);
+          const archivada = conReceta.filter((v) => v.condicion_venta === 'receta_archivada');
+          if (archivada.length && (!d.receta.retenida || !d.receta.pacienteDocumento))
+            throw new ErrorNegocio(HttpStatus.BAD_REQUEST, 'RECETA_ARCHIVADA', `${archivada.map((v) => v.producto).join(', ')}: la receta queda retenida y se registra la cédula del paciente`);
+          const hoyVenta = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(registradaOffline ?? new Date());
+          if (d.receta.fecha > hoyVenta) throw invalido('La fecha de la receta es posterior a la venta');
+        }
         const lista = await listaDeCliente(tx, d.clienteId);
         const precios = await preciosVigentes(tx, ids, caja.sucursal_id, lista);
 
@@ -494,9 +567,17 @@ export class VentasController {
               total: calc.lineas[i]!.total.toFixed(2),
               tasa_iva: l.v.tasa_iva,
               costo_unitario: l.v.costo,
+              condicion_venta: l.v.condicion_venta === 'libre' ? null : l.v.condicion_venta,
             })),
           )
           .execute();
+        if (d.receta && conReceta.length) {
+          const r = d.receta;
+          await tx
+            .insertInto('receta')
+            .values({ empresa_id: ctx.empresaId, venta_id: venta.id, medico: r.medico, matricula: r.matricula, paciente: r.paciente, paciente_documento: r.pacienteDocumento ?? null, fecha: r.fecha, numero: r.numero ?? null, retenida: r.retenida, creado_por: ctx.usuarioId })
+            .execute();
+        }
         if (pagos.detalle.length)
           await tx
           .insertInto('venta_pago')

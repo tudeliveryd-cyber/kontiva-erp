@@ -76,6 +76,7 @@ export const RECURSOS = {
   flujo_caja: { nombre: 'Flujo de caja', modulo: 'finanzas', acciones: ['ver', 'exportar'], confidencial: true },
   contabilidad: { nombre: 'Asientos y cierres', modulo: 'finanzas', acciones: ['ver', 'crear', 'aprobar', 'exportar'] },
   informe_ventas: { nombre: 'Informes de ventas y tablero', modulo: 'informes', acciones: ['ver', 'exportar'] },
+  receta: { nombre: 'Recetario de farmacia', modulo: 'informes', acciones: ['ver', 'exportar'] },
   informe_ganancias: { nombre: 'Informe de ganancias', modulo: 'informes', acciones: ['ver', 'exportar'], confidencial: true },
 
   // Fiscal (Fase 3)

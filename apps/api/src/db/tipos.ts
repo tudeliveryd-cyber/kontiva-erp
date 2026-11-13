@@ -264,6 +264,7 @@ export interface BaseDatos {
   liquidacion: LiquidacionTabla;
   liquidacion_item: LiquidacionItemTabla;
   novedad: NovedadTabla;
+  receta: RecetaTabla;
   lote: LoteTabla;
   stock_lote: StockLoteTabla;
   movimiento_lote: MovimientoLoteTabla;
@@ -387,6 +388,11 @@ export interface ProductoTabla {
   tasa_iva: NumGen;
   controla_stock: Generated<boolean>;
   controla_lote: Generated<boolean>;
+  principio_activo: string | null;
+  concentracion: string | null;
+  forma: string | null;
+  registro_sanitario: string | null;
+  condicion_venta: Generated<'libre' | 'receta' | 'receta_archivada'>;
   activo: Generated<boolean>;
   creado_en: Creado;
   creado_por: string | null;
@@ -549,6 +555,7 @@ export interface VentaItemTabla {
   total: Num;
   tasa_iva: Num;
   costo_unitario: NumGen;
+  condicion_venta: Generated<'receta' | 'receta_archivada' | null>;
 }
 
 export interface VentaPagoTabla {
@@ -1181,5 +1188,19 @@ export interface MovimientoLoteTabla {
   cantidad: Num;
   origen_id: string | null;
   creado_por: string | null;
+  creado_en: Creado;
+}
+export interface RecetaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  venta_id: string;
+  medico: string;
+  matricula: string;
+  paciente: string;
+  paciente_documento: string | null;
+  fecha: Fecha;
+  numero: string | null;
+  retenida: Generated<boolean>;
+  creado_por: string;
   creado_en: Creado;
 }

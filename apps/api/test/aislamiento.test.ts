@@ -23,6 +23,7 @@ import { CobrosController, CuentasCobrarController } from '../src/finanzas/cobra
 import { CuentasBancariasController, MovimientosBancariosController } from '../src/finanzas/bancos.controller';
 import { FlujoCajaController } from '../src/finanzas/flujo.controller';
 import { ContabilidadController } from '../src/contabilidad/contabilidad.controller';
+import { RecetarioController } from '../src/informes/recetario.controller';
 import { MarcacionesController, NovedadesController, VacacionesController } from '../src/rrhh/asistencia.controller';
 import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from '../src/rrhh/rrhh.controller';
 import { InformesController } from '../src/informes/informes.controller';
@@ -78,6 +79,7 @@ const CONTROLADORES = [
   LiquidacionesController,
   NovedadesController,
   MarcacionesController,
+  RecetarioController,
   VacacionesController,
   InformesController,
 ];

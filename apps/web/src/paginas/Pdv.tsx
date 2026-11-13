@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardCheck, CloudOff, Minus, Percent, Plus, Printer, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, CloudOff, FileText, Minus, Percent, Pill, Plus, Printer, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { calcularItems, calcularPagos, ErrorCalculo, type ConfigBalanza, type Cotizaciones } from '@kontiva/shared';
@@ -35,6 +35,18 @@ interface ItemBusqueda {
   stock: string | null;
   /** Cantidad leída de una etiqueta de balanza. */
   cantidad?: string;
+  /** Farmacia. */
+  principioActivo?: string | null;
+  concentracion?: string | null;
+  condicionVenta?: 'libre' | 'receta' | 'receta_archivada';
+}
+
+export interface RecetaVenta { medico: string; matricula: string; paciente: string; pacienteDocumento: string; fecha: string; numero: string; retenida: boolean }
+const conReceta = (l: { condicionVenta?: string }) => l.condicionVenta === 'receta' || l.condicionVenta === 'receta_archivada';
+function InsigniaReceta({ condicion }: { condicion?: string }) {
+  if (condicion === 'receta_archivada') return <span className="insignia i-bad" style={{ marginLeft: 6 }}>Receta archivada</span>;
+  if (condicion === 'receta') return <span className="insignia i-warn" style={{ marginLeft: 6 }}>Bajo receta</span>;
+  return null;
 }
 
 interface Linea extends ItemBusqueda {
@@ -128,7 +140,9 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const [listaCliente, setListaCliente] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [nota, setNota] = useState<string | null>(null);
-  const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | 'pedidos' | null>(null);
+  const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | 'pedidos' | 'receta' | 'equivalentes' | null>(null);
+  const [receta, setReceta] = useState<RecetaVenta | null>(null);
+  const [equivDe, setEquivDe] = useState<ItemBusqueda | null>(null);
   const [pedido, setPedido] = useState<DocComercial | null>(null);
   const [autorizacion, setAutorizacion] = useState<{ token: string; nombre: string } | null>(null);
   const [vendida, setVendida] = useState<Venta | null>(null);
@@ -173,8 +187,13 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
       setSel(ls.length);
       return [...ls, { ...it, cantidad: it.cantidad ?? '1', descuento: 0 }];
     });
-    if (it.controlaStock && it.stock !== null && Number(it.stock) <= 0 && !c.permiteStockNegativo) setAviso(`Sin stock: ${it.descripcion}`);
-    else setAviso(null);
+    if (it.controlaStock && it.stock !== null && Number(it.stock) <= 0 && !c.permiteStockNegativo) {
+      setAviso(`Sin stock: ${it.descripcion}`);
+      setEquivDe(it.principioActivo ? it : null);
+    } else {
+      setAviso(null);
+      setEquivDe(null);
+    }
     setNota(null);
     setQ('');
     setResultados(null);
@@ -246,8 +265,12 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     setProvisoria(null);
     setSel(null);
     setAviso(null);
+    setReceta(null);
+    setEquivDe(null);
     enfocar();
   };
+  /** Con medicamentos bajo receta, primero los datos de la receta. */
+  const pedirCobro = () => setDialogo(lineas.some(conReceta) && !receta ? 'receta' : 'cobro');
 
   // Atajos de teclado del PDV.
   useEffect(() => {
@@ -262,7 +285,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
       if (dialogo) return;
       if (e.key === 'F2' && lineas.length) {
         e.preventDefault();
-        setDialogo('cobro');
+        pedirCobro();
       } else if (e.key === 'F4') {
         e.preventDefault();
         setDialogo('cliente');
@@ -375,6 +398,8 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                     <span style={{ flex: 1 }}>
                       <b style={{ fontWeight: 600 }}>{r.descripcion}</b>
                       {r.sku && <span className="tenue peq"> · {r.sku}</span>}
+                      <InsigniaReceta condicion={r.condicionVenta} />
+                      {r.principioActivo && <span className="tenue peq" style={{ display: 'block' }}>{r.principioActivo}{r.concentracion ? ` ${r.concentracion}` : ''}</span>}
                     </span>
                     {r.stock !== null && <span className={`peq ${Number(r.stock) <= 0 ? 'insignia i-bad' : 'tenue'}`}>stock {fmtCant(r.stock)}</span>}
                     <b className="num">{dinero(r.precio)}</b>
@@ -385,7 +410,12 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           </div>
           {aviso && (
             <div style={{ padding: '10px 18px 0' }}>
-              <Aviso tipo="error">{aviso}</Aviso>
+              <Aviso tipo="error">
+                {aviso}
+                {equivDe && aviso.startsWith('Sin stock') && (
+                  <button className="btn chico" style={{ marginLeft: 10 }} onClick={() => setDialogo('equivalentes')}><Pill size={14} /> Ver equivalentes</button>
+                )}
+              </Aviso>
             </div>
           )}
           {!aviso && nota && (
@@ -413,8 +443,9 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                     return (
                       <tr key={i} className={`clic ${sel === i ? 'sel' : ''}`} onClick={() => setSel(i)}>
                         <td>
-                          <div style={{ fontWeight: 600 }}>{l.descripcion}</div>
+                          <div style={{ fontWeight: 600 }}>{l.descripcion}<InsigniaReceta condicion={l.condicionVenta} /></div>
                           <div className="tenue peq">
+                            {l.principioActivo && `${l.principioActivo}${l.concentracion ? ` ${l.concentracion}` : ''} · `}
                             {l.tasaIva === 0 ? 'Exento' : `IVA ${l.tasaIva} %`}
                             {l.descuento > 0 && <span className="insignia i-warn" style={{ marginLeft: 6 }}>Descuento {dinero(l.descuento)}</span>}
                           </div>
@@ -439,7 +470,12 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                         </td>
                         <td className="der num">{dinero(l.precio)}</td>
                         <td className="der num" style={{ fontWeight: 600 }}>{total !== undefined ? dinero(total) : '—'}</td>
-                        <td className="der">
+                        <td className="der" style={{ whiteSpace: 'nowrap' }}>
+                          {l.principioActivo && (
+                            <button className="enlace" aria-label="Equivalentes" title="Productos con el mismo principio activo" style={{ marginRight: 10 }} onClick={(e) => { e.stopPropagation(); setEquivDe(l); setDialogo('equivalentes'); }}>
+                              <Pill size={16} />
+                            </button>
+                          )}
                           <button className="enlace" aria-label="Quitar" onClick={(e) => { e.stopPropagation(); quitar(i); }}>
                             <Trash2 size={16} />
                           </button>
@@ -465,7 +501,12 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
             )}
             {calc && Number(calc.descuento) > 0 && <div className="tenue peq" style={{ marginTop: 8 }}>Descuentos: {dinero(calc.descuento.toNumber())}</div>}
           </div>
-          <button className="btn cobrar" disabled={!lineas.length || !calc} onClick={() => setDialogo('cobro')}>
+          {receta && lineas.some(conReceta) && (
+            <button className="btn" onClick={() => setDialogo('receta')} title="Editar la receta">
+              <FileText size={16} /> Receta: {receta.paciente} · {receta.medico}
+            </button>
+          )}
+          <button className="btn cobrar" disabled={!lineas.length || !calc} onClick={pedirCobro}>
             Cobrar <span className="tecla">F2</span>
           </button>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -508,6 +549,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           cliente={cliente}
           pedidoId={pedido?.id ?? null}
           autorizacion={autorizacion?.token}
+          receta={lineas.some(conReceta) ? receta : null}
           alCerrar={() => {
             setDialogo(null);
             enfocar();
@@ -524,6 +566,37 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
             if (agente?.automatico) imprimir(ticketProvisorio(p, c.empresa, c.caja.nombre, c.sucursal.nombre, yo?.usuario.nombre), p.pagos.some((x) => x.medio === 'efectivo'));
             off.setEnLinea(false);
             void off.refrescarCola();
+          }}
+        />
+      )}
+      {dialogo === 'receta' && (
+        <DialogoReceta
+          actual={receta}
+          archivada={lineas.some((l) => l.condicionVenta === 'receta_archivada')}
+          productos={lineas.filter(conReceta).map((l) => l.descripcion)}
+          alCerrar={() => {
+            setDialogo(null);
+            enfocar();
+          }}
+          alGuardar={(r) => {
+            setReceta(r);
+            setDialogo('cobro');
+          }}
+        />
+      )}
+      {dialogo === 'equivalentes' && equivDe && (
+        <Equivalentes
+          cajaId={c.caja.id}
+          de={equivDe}
+          catalogo={off.enLinea ? null : off.catalogo}
+          alElegir={(it) => {
+            setDialogo(null);
+            setEquivDe(null);
+            agregar(it);
+          }}
+          alCerrar={() => {
+            setDialogo(null);
+            enfocar();
           }}
         />
       )}
@@ -655,7 +728,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   );
 }
 
-function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; alCerrar: () => void; alVender: (v: Venta) => void; catalogoGuardado: boolean; alVenderSinConexion: (p: VentaProvisoria) => void }) {
+function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; receta: RecetaVenta | null; alCerrar: () => void; alVender: (v: Venta) => void; catalogoGuardado: boolean; alVenderSinConexion: (p: VentaProvisoria) => void }) {
   const [pagos, setPagos] = useState<PagoUI[]>([{ medio: 'efectivo', moneda: 'PYG', monto: String(props.total) }]);
   // Venta a crédito (cuenta corriente del cliente).
   const [credito, setCredito] = useState('');
@@ -688,6 +761,7 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
     items: props.lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })),
     pagos: pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio: p.medio, moneda: p.moneda, monto: Number(p.monto) })),
     vueltoMoneda,
+    ...(props.receta && { receta: { ...props.receta, pacienteDocumento: props.receta.pacienteDocumento || null, numero: props.receta.numero || null } }),
   });
   /**
    * Sin conexión se puede vender al contado, sin pedido y sin descuentos que pidan PIN (el PIN lo valida el servidor).
@@ -1040,6 +1114,88 @@ function ConfigImpresora({ actual, alCerrar, alGuardar }: { actual: ConfigAgente
         </div>
         {estado && <Aviso tipo={estado.ok ? 'ok' : 'error'}>{estado.texto}</Aviso>}
       </div>
+    </Cajon>
+  );
+}
+
+const hoyLocal = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
+
+/** Datos de la receta para los medicamentos bajo receta; la de psicotrópicos queda retenida con la cédula del paciente. */
+function DialogoReceta({ actual, archivada, productos, alCerrar, alGuardar }: { actual: RecetaVenta | null; archivada: boolean; productos: string[]; alCerrar: () => void; alGuardar: (r: RecetaVenta) => void }) {
+  const [r, setR] = useState<RecetaVenta>(actual ?? { medico: '', matricula: '', paciente: '', pacienteDocumento: '', fecha: hoyLocal(), numero: '', retenida: archivada });
+  const t = (k: keyof RecetaVenta) => ({ value: r[k] as string, onChange: (e: { target: { value: string } }) => setR({ ...r, [k]: e.target.value }) });
+  const valida = r.medico.trim().length >= 3 && r.matricula.trim().length >= 1 && r.paciente.trim().length >= 3 && !!r.fecha && r.fecha <= hoyLocal() && (!archivada || (r.retenida && r.pacienteDocumento.trim().length >= 3));
+  return (
+    <Cajon titulo="Receta" alCerrar={alCerrar}>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); if (valida) alGuardar(r); }}>
+        <p className="tenue peq" style={{ margin: 0 }}>Bajo receta: {productos.join(', ')}.</p>
+        <div className="fila-campos">
+          <Campo etiqueta="Médico" id="rc-m"><input id="rc-m" className="entrada" autoFocus {...t('medico')} /></Campo>
+          <Campo etiqueta="Registro profesional" id="rc-r"><input id="rc-r" className="entrada" {...t('matricula')} /></Campo>
+        </div>
+        <div className="fila-campos">
+          <Campo etiqueta="Paciente" id="rc-p"><input id="rc-p" className="entrada" {...t('paciente')} /></Campo>
+          <Campo etiqueta={archivada ? 'Cédula del paciente' : 'Cédula (opcional)'} id="rc-d"><input id="rc-d" className="entrada num" {...t('pacienteDocumento')} /></Campo>
+        </div>
+        <div className="fila-campos">
+          <Campo etiqueta="Fecha de la receta" id="rc-f"><input id="rc-f" type="date" className="entrada" max={hoyLocal()} {...t('fecha')} /></Campo>
+          <Campo etiqueta="N.º de receta (opcional)" id="rc-n"><input id="rc-n" className="entrada" {...t('numero')} /></Campo>
+        </div>
+        {archivada ? (
+          <label className="casilla">
+            <input type="checkbox" checked={r.retenida} onChange={(e) => setR({ ...r, retenida: e.target.checked })} /> La receta queda retenida en la farmacia (receta archivada)
+          </label>
+        ) : (
+          <label className="casilla">
+            <input type="checkbox" checked={r.retenida} onChange={(e) => setR({ ...r, retenida: e.target.checked })} /> Se retiene la receta
+          </label>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn pri" disabled={!valida}>Continuar al cobro</button>
+          <button type="button" className="btn" onClick={alCerrar}>Volver</button>
+        </div>
+      </form>
+    </Cajon>
+  );
+}
+
+/** Alternativas con el mismo principio activo y concentración, primero las que tienen stock. */
+function Equivalentes({ cajaId, de, catalogo, alElegir, alCerrar }: { cajaId: string; de: ItemBusqueda; catalogo: { items: (ItemBusqueda & { codigos: string[] })[] } | null; alElegir: (i: ItemBusqueda) => void; alCerrar: () => void }) {
+  const q = useQuery({
+    queryKey: ['equivalentes', de.varianteId, !!catalogo],
+    queryFn: async () => {
+      if (catalogo) {
+        const n = (x?: string | null) => (x ?? '').trim().toLowerCase();
+        return {
+          items: catalogo.items
+            .filter((i) => i.varianteId !== de.varianteId && n(i.principioActivo) === n(de.principioActivo) && (!de.concentracion || n(i.concentracion) === n(de.concentracion)))
+            .sort((a, b) => Number(Number(b.stock ?? 1) > 0) - Number(Number(a.stock ?? 1) > 0)),
+        };
+      }
+      return api<{ items: ItemBusqueda[] }>(`/pdv/equivalentes?cajaId=${cajaId}&varianteId=${de.varianteId}`);
+    },
+  });
+  return (
+    <Cajon titulo={`Equivalentes · ${de.principioActivo ?? ''}${de.concentracion ? ` ${de.concentracion}` : ''}`} alCerrar={alCerrar}>
+      <ErrorApi error={q.error} />
+      {!q.data ? (
+        <Cargando />
+      ) : !q.data.items.length ? (
+        <Vacio titulo="Sin equivalentes">No hay otros productos con el mismo principio activo y concentración.</Vacio>
+      ) : (
+        <div className="pdv-resultados" style={{ position: 'static', boxShadow: 'none' }}>
+          {q.data.items.map((r) => (
+            <button key={r.varianteId} onClick={() => alElegir(r)}>
+              <span style={{ flex: 1 }}>
+                <b style={{ fontWeight: 600 }}>{r.descripcion}</b>
+                <InsigniaReceta condicion={r.condicionVenta} />
+              </span>
+              {r.stock !== null && <span className={`peq ${Number(r.stock) <= 0 ? 'insignia i-bad' : 'tenue'}`}>stock {fmtCant(r.stock)}</span>}
+              <b className="num">{dinero(r.precio)}</b>
+            </button>
+          ))}
+        </div>
+      )}
     </Cajon>
   );
 }

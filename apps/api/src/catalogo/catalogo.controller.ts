@@ -20,7 +20,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
     .leftJoin('marca as m', 'm.id', 'p.marca_id')
     .select([
       'p.id', 'p.nombre', 'p.descripcion', 'p.categoria_id', 'p.marca_id', 'p.tipo', 'p.unidad', 'p.tasa_iva',
-      'p.controla_stock', 'p.controla_lote', 'p.activo', 'p.creado_en', 'c.nombre as categoria', 'm.nombre as marca',
+      'p.controla_stock', 'p.controla_lote', 'p.principio_activo', 'p.concentracion', 'p.forma', 'p.registro_sanitario', 'p.condicion_venta', 'p.activo', 'p.creado_en', 'c.nombre as categoria', 'm.nombre as marca',
     ])
     .where('p.id', '=', id)
     .executeTakeFirst();
@@ -49,6 +49,11 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
     tasaIva: Number(p.tasa_iva),
     controlaStock: p.controla_stock,
     controlaLote: p.controla_lote,
+    principioActivo: p.principio_activo,
+    concentracion: p.concentracion,
+    forma: p.forma,
+    registroSanitario: p.registro_sanitario,
+    condicionVenta: p.condicion_venta,
     activo: p.activo,
     creadoEn: p.creado_en,
     variantes: variantes.map((v) => ({
@@ -90,6 +95,7 @@ export class ProductosController {
         q = q.where((eb) =>
           eb.or([
             eb('p.nombre', 'ilike', patron),
+            eb('p.principio_activo', 'ilike', patron),
             eb.exists(eb.selectFrom('variante as v').select('v.id').whereRef('v.producto_id', '=', 'p.id').where('v.sku', 'ilike', patron)),
             eb.exists(
               eb.selectFrom('codigo_barras as cb').innerJoin('variante as v2', 'v2.id', 'cb.variante_id').select('cb.codigo').whereRef('v2.producto_id', '=', 'p.id').where('cb.codigo', '=', f.q!),
@@ -168,6 +174,11 @@ export class ProductosController {
       tasa_iva: d.tasaIva,
       controla_stock: d.tipo === 'servicio' ? false : d.controlaStock,
       controla_lote: d.tipo !== 'servicio' && d.controlaStock && d.controlaLote,
+      principio_activo: d.principioActivo ?? null,
+      concentracion: d.concentracion ?? null,
+      forma: d.forma ?? null,
+      registro_sanitario: d.registroSanitario ?? null,
+      condicion_venta: d.condicionVenta,
       activo: d.activo,
     };
   }

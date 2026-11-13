@@ -125,7 +125,13 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
     tasaIva: String(producto?.tasaIva ?? 10),
     controlaStock: producto?.controlaStock ?? true,
     controlaLote: producto?.controlaLote ?? false,
+    principioActivo: producto?.principioActivo ?? '',
+    concentracion: producto?.concentracion ?? '',
+    forma: producto?.forma ?? '',
+    registroSanitario: producto?.registroSanitario ?? '',
+    condicionVenta: producto?.condicionVenta ?? 'libre',
   });
+  const [medicamento, setMedicamento] = useState(!!(producto?.principioActivo || (producto?.condicionVenta && producto.condicionVenta !== 'libre')));
   const [variantes, setVariantes] = useState<VarianteForm[]>(
     producto?.variantes.filter((v) => v.activa).map((v) => ({ id: v.id, nombre: v.nombre ?? '', sku: v.sku ?? '', codigos: v.codigos.join(', '), precio: String(Number(v.precio)), costo: v.costo ? String(Number(v.costo)) : '', stockMinimo: v.stockMinimo && Number(v.stockMinimo) ? String(Number(v.stockMinimo)) : '', activa: true })) ?? [
       { nombre: '', sku: '', codigos: '', precio: '', costo: '', stockMinimo: '', activa: true },
@@ -151,6 +157,9 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
         tasaIva: Number(d.tasaIva),
         controlaStock: d.tipo === 'servicio' ? false : d.controlaStock,
         controlaLote: d.tipo !== 'servicio' && d.controlaStock && d.controlaLote,
+        ...(medicamento
+          ? { principioActivo: d.principioActivo.trim() || null, concentracion: d.concentracion.trim() || null, forma: d.forma.trim() || null, registroSanitario: d.registroSanitario.trim() || null, condicionVenta: d.condicionVenta }
+          : { principioActivo: null, concentracion: null, forma: null, registroSanitario: null, condicionVenta: 'libre' }),
         variantes: variantes.map((v) => ({
           ...(v.id ? { id: v.id } : {}),
           nombre: v.nombre || null,
@@ -252,7 +261,37 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
             <span className="tenue peq">(la compra pide lote o vencimiento; se vende primero lo que vence antes y nunca lo vencido)</span>
           </label>
         )}
+        {d.tipo === 'producto' && (
+          <label className="casilla">
+            <input type="checkbox" disabled={!editable} checked={medicamento} onChange={(e) => setMedicamento(e.target.checked)} /> Es un medicamento
+          </label>
+        )}
       </div>
+
+      {medicamento && d.tipo === 'producto' && (
+        <div className="seccion-form">
+          <h3>Medicamento</h3>
+          <div className="form">
+            <div className="fila-campos">
+              <Campo etiqueta="Principio activo" id="pr-pa"><input id="pr-pa" className="entrada" disabled={!editable} placeholder="Paracetamol" value={d.principioActivo} onChange={(e) => setD({ ...d, principioActivo: e.target.value })} /></Campo>
+              <Campo etiqueta="Concentración" id="pr-co"><input id="pr-co" className="entrada" disabled={!editable} placeholder="500 mg" value={d.concentracion} onChange={(e) => setD({ ...d, concentracion: e.target.value })} /></Campo>
+              <Campo etiqueta="Forma" id="pr-fo"><input id="pr-fo" className="entrada" disabled={!editable} placeholder="Comprimido, jarabe" value={d.forma} onChange={(e) => setD({ ...d, forma: e.target.value })} /></Campo>
+            </div>
+            <div className="fila-campos">
+              <Campo etiqueta="Condición de venta" id="pr-cv">
+                <select id="pr-cv" className="entrada" disabled={!editable} value={d.condicionVenta} onChange={(e) => setD({ ...d, condicionVenta: e.target.value as typeof d.condicionVenta })}>
+                  <option value="libre">Venta libre</option>
+                  <option value="receta">Bajo receta</option>
+                  <option value="receta_archivada">Bajo receta archivada (psicotrópicos y estupefacientes)</option>
+                </select>
+              </Campo>
+              <Campo etiqueta="Registro sanitario (DNVS)" id="pr-rs"><input id="pr-rs" className="entrada" disabled={!editable} value={d.registroSanitario} onChange={(e) => setD({ ...d, registroSanitario: e.target.value })} /></Campo>
+            </div>
+            {d.condicionVenta !== 'libre' && <p className="tenue peq" style={{ margin: 0 }}>El PDV pide los datos de la receta{d.condicionVenta === 'receta_archivada' ? ', la cédula del paciente y que la receta quede retenida' : ''}. La venta queda en el libro recetario.</p>}
+            {!d.controlaLote && <p className="tenue peq" style={{ margin: 0 }}>Recomendado: active "Controlar lotes y vencimientos" para la trazabilidad por lote.</p>}
+          </div>
+        </div>
+      )}
 
       <div className="seccion-form">
         <h3>{varias ? 'Variantes' : 'Precio y códigos'}</h3>

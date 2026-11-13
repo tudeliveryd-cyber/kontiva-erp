@@ -19,6 +19,9 @@ export interface ItemCatalogo {
   precio: string;
   controlaStock: boolean;
   stock: string | null;
+  principioActivo?: string | null;
+  concentracion?: string | null;
+  condicionVenta?: 'libre' | 'receta' | 'receta_archivada';
 }
 export interface Catalogo {
   generado: string;
@@ -99,7 +102,7 @@ export function buscarEnCatalogo(c: Catalogo, q: string, balanza?: ConfigBalanza
   const porCodigo = c.items.filter((i) => i.codigos.includes(t));
   if (porCodigo.length) return { porCodigo: true, items: porCodigo };
   const n = normalizar(t);
-  const items = c.items.filter((i) => (i.sku && i.sku.toLowerCase() === n) || normalizar(i.descripcion).includes(n)).slice(0, 20);
+  const items = c.items.filter((i) => (i.sku && i.sku.toLowerCase() === n) || normalizar(i.descripcion).includes(n) || (!!i.principioActivo && normalizar(i.principioActivo).includes(n))).slice(0, 20);
   return { porCodigo: false, items };
 }
 

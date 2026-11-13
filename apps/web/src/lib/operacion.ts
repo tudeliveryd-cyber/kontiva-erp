@@ -25,6 +25,11 @@ export interface Producto {
   tasaIva: 0 | 5 | 10;
   controlaStock: boolean;
   controlaLote?: boolean;
+  principioActivo?: string | null;
+  concentracion?: string | null;
+  forma?: string | null;
+  registroSanitario?: string | null;
+  condicionVenta?: 'libre' | 'receta' | 'receta_archivada';
   activo: boolean;
   variantes: (Variante & { id: string })[];
 }
@@ -122,7 +127,8 @@ export interface Venta {
   iva10: string;
   iva5: string;
   vuelto: { moneda: Moneda; monto: string }[];
-  items: { linea: number; descripcion: string; cantidad: string; precioUnitario: string; descuento: string; total: string; tasaIva: number; cantidadDevuelta: string }[];
+  items: { linea: number; descripcion: string; cantidad: string; precioUnitario: string; descuento: string; total: string; tasaIva: number; cantidadDevuelta: string; condicionVenta?: 'receta' | 'receta_archivada' | null; lotes?: { codigo: string; vencimiento: string | null; cantidad: string }[] }[];
+  receta?: { medico: string; matricula: string; paciente: string; pacienteDocumento: string | null; fecha: string; numero: string | null; retenida: boolean } | null;
   devoluciones: { id: string; numero: number; total: string; fecha: string }[];
   pagos: { medio: Medio; moneda: Moneda; monto: string; cotizacion: string; montoPyg: string; referencia: string | null }[];
   anulacion: { fecha: string; por: string; motivo: string; autorizadaPor: string | null } | null;

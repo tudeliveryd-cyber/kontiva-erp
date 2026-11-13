@@ -134,6 +134,35 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
           <Ticket venta={venta} empresa={{ nombre: yo.empresa.nombre, razonSocial: yo.empresa.razonSocial, ruc: yo.empresa.ruc }} />
         </div>
       )}
+      {!nota && (venta.receta || venta.items.some((i) => i.lotes?.length)) && (
+        <dl className="datos" style={{ margin: 0 }}>
+          {venta.receta && (
+            <>
+              <dt>Receta</dt>
+              <dd>
+                {venta.receta.medico} (reg. {venta.receta.matricula}) · paciente {venta.receta.paciente}{venta.receta.pacienteDocumento && `, C.I. ${venta.receta.pacienteDocumento}`}
+                <div className="tenue peq">
+                  Fecha {venta.receta.fecha.split('-').reverse().join('/')}{venta.receta.numero && ` · N.º ${venta.receta.numero}`}{venta.receta.retenida && ' · receta retenida'}
+                </div>
+              </dd>
+            </>
+          )}
+          {venta.items.some((i) => i.lotes?.length) && (
+            <>
+              <dt>Lotes</dt>
+              <dd>
+                {venta.items
+                  .filter((i) => i.lotes?.length)
+                  .map((i) => (
+                    <div key={i.linea} className="peq">
+                      {i.descripcion}: {i.lotes!.map((l) => `${l.codigo === 'S/L' ? 'sin lote' : l.codigo}${l.vencimiento ? ` (vence ${l.vencimiento.split('-').reverse().join('/')})` : ''}${i.lotes!.length > 1 ? ` × ${Number(l.cantidad)}` : ''}`).join(', ')}
+                    </div>
+                  ))}
+              </dd>
+            </>
+          )}
+        </dl>
+      )}
       {modo === 'ver' && !nota && (
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => window.print()}>

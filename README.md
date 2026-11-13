@@ -16,7 +16,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
-| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos listos |
+| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia |
 
 ### Fase 0 · hecho
 - **Autenticación**: Argon2id, bloqueo progresivo tras 5 intentos, token de acceso de 15 min + renovación rotativa
@@ -234,6 +234,17 @@ Fase 2 completa.
 - **Conteo por lote**, alta de lotes encontrados y baja de vencidos; lo que entra sin lote va a "S/L". Al activar el
   control en un producto con stock, el saldo existente pasa a "S/L" de cada depósito.
 - **Vencimientos**: informe de lotes vencidos y por vencer con valor al costo, y alertas en el tablero.
+
+### Fase 5 · hecho (farmacia)
+- **Medicamentos**: principio activo, concentración, forma, registro sanitario (DNVS) y condición de venta: libre,
+  bajo receta o bajo receta archivada (psicotrópicos y estupefacientes).
+- **PDV**: busca también por principio activo; marca los productos bajo receta; antes de cobrar pide médico,
+  registro profesional, paciente y fecha de la receta (con conexión o sin ella); la receta archivada exige la
+  cédula del paciente y que la receta quede retenida. Equivalentes con el mismo principio activo y concentración
+  (primero los que tienen stock), también desde el aviso de "sin stock".
+- **Libro recetario** (permiso `receta`, en el menú de las empresas del rubro farmacia): ventas bajo receta con los
+  datos de la receta, medicamentos y lotes; filtros por fecha, sucursal, paciente, médico y solo archivadas;
+  CSV e impresión. El detalle de cada venta muestra la receta y los lotes vendidos.
 
 ## Estructura
 

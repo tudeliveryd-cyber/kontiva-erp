@@ -128,6 +128,12 @@ export const productoEntrada = z.object({
   tasaIva: z.coerce.number().refine((v) => v === 0 || v === 5 || v === 10, 'IVA 10, 5 o exento').default(10),
   controlaStock: z.boolean().default(true),
   controlaLote: z.boolean().default(false),
+  /** Farmacia: datos del medicamento y condición de venta (DNVS). */
+  principioActivo: textoOpcional(200),
+  concentracion: textoOpcional(60),
+  forma: textoOpcional(60),
+  registroSanitario: textoOpcional(40),
+  condicionVenta: z.enum(['libre', 'receta', 'receta_archivada']).default('libre'),
   activo: z.boolean().default(true),
   variantes: z.array(varianteEntrada).min(1).max(200),
 });
@@ -262,6 +268,19 @@ export const ventaEntrada = z.object({
   vueltoMoneda: z.enum(['PYG', 'USD', 'BRL']).default('PYG'),
   /** Parte del total que queda en la cuenta corriente del cliente (venta a crédito). */
   credito: z.coerce.number().min(0).max(1e13).optional(),
+  /** Receta de los medicamentos de venta bajo receta (obligatoria si la venta tiene alguno). */
+  receta: z
+    .object({
+      medico: z.string().trim().min(3, 'Nombre del médico').max(120),
+      matricula: z.string().trim().min(1, 'Registro profesional del médico').max(30),
+      paciente: z.string().trim().min(3, 'Nombre del paciente').max(120),
+      pacienteDocumento: z.string().trim().min(3).max(20).nullable().optional().or(z.literal('').transform(() => null)),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de la receta'),
+      numero: z.string().trim().max(30).nullable().optional().or(z.literal('').transform(() => null)),
+      retenida: z.boolean().default(false),
+    })
+    .nullable()
+    .optional(),
   /** Venta hecha en el PDV sin conexión: momento real; los precios de los ítems son los que tenía la caja. */
   offline: z.object({ registradaEn: z.string().datetime({ offset: true }) }).optional(),
 }).refine((v) => v.pagos.length > 0 || (v.credito ?? 0) > 0, { message: 'Registre al menos un pago', path: ['pagos'] });
