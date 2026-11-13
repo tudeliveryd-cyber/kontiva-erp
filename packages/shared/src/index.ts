@@ -5,3 +5,4 @@ export * from './esquemas';
 export * from './venta';
 export * from './importacion';
 export * from './rrhh';
+export * from './ticket';

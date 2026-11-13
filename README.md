@@ -89,8 +89,13 @@ Producto comercial de **Araújo Tech Sistemas**.
   Decisión: la numeración definitiva la asigna el servidor al sincronizar (no se reservan números en el
   equipo), y la cola no se cifra: no guarda credenciales y una clave en el mismo equipo no protegería.
 
+- **Agente local del PDV** (`apps/agente`): imprime el ticket o KuDE en la impresora térmica con ESC/POS
+  (red, USB compartida en Windows, CUPS o dispositivo), con tildes, QR nativo, corte de papel, y abre el cajón
+  en las ventas con efectivo. Clave por equipo, solo 127.0.0.1, verificación de origen y de red privada de
+  Chrome. Se configura en el PDV (botón Impresora); sin agente se usa la impresión del navegador.
+
 ### Fase 1 · pendiente
-- Agente local para impresora, gaveta y balanza.
+- Balanza en el agente local (lectura por puerto serie).
 - Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
 
 ### Fase 2 · hecho (compras y cuentas a pagar)

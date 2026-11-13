@@ -1,0 +1,12 @@
+# KONTIVA ERP · agente local del PDV como servicio de usuario en Linux (systemd).
+# Copiar en ~/.config/systemd/user/ y ejecutar:
+#   systemctl --user daemon-reload && systemctl --user enable --now kontiva-agente
+[Unit]
+Description=KONTIVA ERP · agente local del PDV (impresora y cajón)
+
+[Service]
+ExecStart=/usr/bin/env node %h/kontiva-agente/main.js
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

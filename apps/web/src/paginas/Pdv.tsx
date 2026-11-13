@@ -10,6 +10,7 @@ import { api, FalloApi } from '../lib/api';
 import { cantidad as fmtCant, dinero, NOMBRE_MEDIO, NOMBRE_MONEDA, nuevaClave, type Cliente, type Medio, type Moneda, type Venta } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 import { buscarEnCatalogo, encolar, esErrorDeRed, usePdvOffline } from '../lib/offline';
+import { estadoAgente, guardarAgente, imprimirEnAgente, leerAgente, pruebaAgente, ticketDeVenta, ticketProvisorio, type ConfigAgente } from '../lib/impresora';
 import { fechaCorta, type DocComercial } from './Pedidos';
 
 interface ContextoPdv {
@@ -81,7 +82,7 @@ export function Pdv() {
   return <PuntoDeVenta c={c} />;
 }
 
-function CabeceraPdv({ c }: { c: ContextoPdv }) {
+function CabeceraPdv({ c, alImpresora }: { c: ContextoPdv; alImpresora?: () => void }) {
   return (
     <div className="pdv-cab">
       <Link to="/cajas" style={{ color: '#fff', display: 'flex' }} aria-label="Volver">
@@ -103,6 +104,11 @@ function CabeceraPdv({ c }: { c: ContextoPdv }) {
           ))
         )}
       </div>
+      {alImpresora && (
+        <button className="btn" style={{ height: 30, background: 'transparent', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }} onClick={alImpresora} title="Impresora térmica y cajón">
+          <Printer size={15} /> Impresora
+        </button>
+      )}
     </div>
   );
 }
@@ -125,6 +131,16 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const [vendida, setVendida] = useState<Venta | null>(null);
   const [provisoria, setProvisoria] = useState<VentaProvisoria | null>(null);
   const off = usePdvOffline(c.caja.id);
+  const [agente, setAgente] = useState<ConfigAgente | null>(leerAgente);
+  const [verImpresora, setVerImpresora] = useState(false);
+  /** Ticket por el agente local; sin agente, la impresión del navegador. */
+  const imprimir = (doc: Parameters<typeof imprimirEnAgente>[1] | null, conCajon: boolean) => {
+    if (!agente || !doc) {
+      window.print();
+      return;
+    }
+    imprimirEnAgente(agente, { ...doc, abrirCajon: conCajon && agente.cajon }).catch((e: Error) => setAviso(`Impresora: ${e.message}`));
+  };
   const buscador = useRef<HTMLInputElement>(null);
   const cot: Cotizaciones = useMemo(() => Object.fromEntries(c.cotizaciones.map((x) => [x.moneda, { compra: x.compra, venta: x.venta }])), [c.cotizaciones]);
 
@@ -266,7 +282,22 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
 
   return (
     <div className="pdv">
-      <CabeceraPdv c={c} />
+      <CabeceraPdv c={c} alImpresora={() => setVerImpresora(true)} />
+      {verImpresora && (
+        <ConfigImpresora
+          actual={agente}
+          alCerrar={() => {
+            setVerImpresora(false);
+            enfocar();
+          }}
+          alGuardar={(cfg) => {
+            guardarAgente(cfg);
+            setAgente(cfg);
+            setVerImpresora(false);
+            enfocar();
+          }}
+        />
+      )}
       {(!off.enLinea || off.cola.length > 0) && (
         <div className={`pdv-conexion${off.enLinea ? '' : ' sin'}`}>
           {!off.enLinea && (
@@ -481,11 +512,13 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           alVender={(v) => {
             setDialogo(null);
             setVendida(v);
+            if (agente?.automatico) imprimir(ticketDeVenta(v, c.empresa), v.pagos.some((p) => p.medio === 'efectivo'));
           }}
           catalogoGuardado={!!off.catalogo}
           alVenderSinConexion={(p) => {
             setDialogo(null);
             setProvisoria(p);
+            if (agente?.automatico) imprimir(ticketProvisorio(p, c.empresa, c.caja.nombre, c.sucursal.nombre, yo?.usuario.nombre), p.pagos.some((x) => x.medio === 'efectivo'));
             off.setEnLinea(false);
             void off.refrescarCola();
           }}
@@ -579,7 +612,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                   ))}
                 </div>
               )}
-              <button className="btn" onClick={() => window.print()}>
+              <button className="btn" onClick={() => imprimir(ticketProvisorio(provisoria, c.empresa, c.caja.nombre, c.sucursal.nombre, yo?.usuario.nombre), false)}>
                 <Printer size={16} /> Imprimir comprobante
               </button>
               <button className="btn pri" autoFocus onClick={nuevaVenta}>
@@ -605,7 +638,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                   ))}
                 </div>
               )}
-              <button className="btn" onClick={() => window.print()}>
+              <button className="btn" onClick={() => imprimir(ticketDeVenta(vendida, c.empresa), false)}>
                 <Printer size={16} /> Imprimir
               </button>
               <button className="btn pri" autoFocus onClick={nuevaVenta}>
@@ -957,6 +990,53 @@ function ElegirPedido({ cajaId, alElegir, alCerrar }: { cajaId: string; alElegir
           ))}
         </div>
       )}
+    </Cajon>
+  );
+}
+
+/** Impresora térmica del equipo: el agente local de KONTIVA (ESC/POS) imprime el ticket y abre el cajón. */
+function ConfigImpresora({ actual, alCerrar, alGuardar }: { actual: ConfigAgente | null; alCerrar: () => void; alGuardar: (c: ConfigAgente | null) => void }) {
+  const [f, setF] = useState<ConfigAgente>(actual ?? { url: 'http://127.0.0.1:9420', token: '', automatico: true, cajon: true });
+  const [estado, setEstado] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [probando, setProbando] = useState(false);
+  const probar = async (imprimirPrueba: boolean) => {
+    setProbando(true);
+    try {
+      const e = await estadoAgente(f);
+      if (imprimirPrueba) await pruebaAgente(f);
+      setEstado({ ok: true, texto: `${e.impresora} · ${e.ancho} columnas${imprimirPrueba ? ' · prueba impresa' : ''}` });
+    } catch (e) {
+      setEstado({ ok: false, texto: (e as Error).message });
+    } finally {
+      setProbando(false);
+    }
+  };
+  return (
+    <Cajon
+      titulo="Impresora térmica y cajón"
+      alCerrar={alCerrar}
+      pie={
+        <>
+          {actual && <button className="btn peligro" onClick={() => alGuardar(null)}>Quitar</button>}
+          <button className="btn" onClick={alCerrar}>Cancelar</button>
+          <button className="btn pri" disabled={!f.url || f.token.length < 8} onClick={() => alGuardar(f)}>Guardar</button>
+        </>
+      }
+    >
+      <div className="form">
+        <p className="tenue peq" style={{ margin: 0 }}>
+          Instale el agente de KONTIVA en esta computadora: imprime directo en la impresora de tickets (ESC/POS, por red o USB) y abre el cajón de dinero. Al iniciarlo muestra la clave que va abajo. Sin agente, se usa la impresión del navegador.
+        </p>
+        <Campo etiqueta="Dirección del agente" id="ag-u"><input id="ag-u" className="entrada mono" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value.trim() })} /></Campo>
+        <Campo etiqueta="Clave del agente" id="ag-t"><input id="ag-t" className="entrada mono" autoComplete="off" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value.trim() })} /></Campo>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={f.automatico} onChange={(e) => setF({ ...f, automatico: e.target.checked })} /> Imprimir el ticket al confirmar cada venta</label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={f.cajon} onChange={(e) => setF({ ...f, cajon: e.target.checked })} /> Abrir el cajón en las ventas con efectivo</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" disabled={probando || f.token.length < 8} onClick={() => void probar(false)}>Probar conexión</button>
+          <button className="btn" disabled={probando || f.token.length < 8} onClick={() => void probar(true)}><Printer size={16} /> Imprimir prueba</button>
+        </div>
+        {estado && <Aviso tipo={estado.ok ? 'ok' : 'error'}>{estado.texto}</Aviso>}
+      </div>
     </Cajon>
   );
 }

@@ -31,7 +31,13 @@ export async function crearApp(op: Opciones = { modulo: AppModule, prefijo: 'api
   app.use(
     helmet({
       contentSecurityPolicy: {
-        directives: { 'img-src': ["'self'", 'data:'], 'script-src': ["'self'"], 'style-src': ["'self'", "'unsafe-inline'"] },
+        directives: {
+          'img-src': ["'self'", 'data:'],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          // El PDV habla con el agente local de impresión (programa en la computadora de la caja).
+          'connect-src': ["'self'", 'http://127.0.0.1:*', 'http://localhost:*'],
+        },
       },
     }),
   );
