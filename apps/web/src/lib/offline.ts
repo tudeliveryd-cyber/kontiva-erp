@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { leerEtiquetaBalanza, type ConfigBalanza } from '@kontiva/shared';
 import { api, FalloApi } from './api';
 
 /**
@@ -84,8 +85,17 @@ export const esErrorDeRed = (e: unknown) => !(e instanceof FalloApi);
 const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /** Búsqueda local con el mismo criterio que la del servidor: código de barras exacto, luego SKU y nombre. */
-export function buscarEnCatalogo(c: Catalogo, q: string): { porCodigo: boolean; items: ItemCatalogo[] } {
+export function buscarEnCatalogo(c: Catalogo, q: string, balanza?: ConfigBalanza): { porCodigo: boolean; items: (ItemCatalogo & { cantidad?: string })[] } {
   const t = q.trim();
+  const etiqueta = leerEtiquetaBalanza(t, balanza);
+  if (etiqueta) {
+    const it = etiqueta.candidatos.map((k) => c.items.find((i) => i.codigos.includes(k))).find(Boolean);
+    if (it) {
+      const cantidad =
+        etiqueta.cantidad !== null ? etiqueta.cantidad.toFixed(3) : Number(it.precio) > 0 ? (etiqueta.importe! / Number(it.precio)).toFixed(3) : undefined;
+      return { porCodigo: true, items: [{ ...it, cantidad }] };
+    }
+  }
   const porCodigo = c.items.filter((i) => i.codigos.includes(t));
   if (porCodigo.length) return { porCodigo: true, items: porCodigo };
   const n = normalizar(t);

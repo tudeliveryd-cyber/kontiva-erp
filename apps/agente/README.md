@@ -9,11 +9,12 @@ El lector de código de barras no necesita el agente: funciona como teclado.
 
 ## Instalación
 
-Requiere Node.js 22 o superior.
-
-- **Windows**: `powershell -ExecutionPolicy Bypass -File instalar\instalar-windows.ps1` (lo copia, lo deja
-  iniciando con Windows y muestra la clave).
-- **Linux**: copiar `dist/` a `~/kontiva-agente/` y el servicio `instalar/kontiva-agente.service` a
+- **Windows**: descargar `kontiva-agente-windows` (artefacto de la integración continua: `kontiva-agente.exe`,
+  un solo archivo que no necesita Node.js) y ejecutar
+  `powershell -ExecutionPolicy Bypass -File instalar-windows.ps1`: lo copia, lo deja iniciando con Windows
+  (sin ventana) y muestra la clave.
+- **Linux**: `pnpm --filter @kontiva/agente empaquetar` genera `ejecutable/kontiva-agente`; o con Node.js 22,
+  copiar `dist/` a `~/kontiva-agente/` y el servicio `instalar/kontiva-agente.service` a
   `~/.config/systemd/user/`.
 
 La primera vez crea la configuración con una clave nueva y la muestra en pantalla:

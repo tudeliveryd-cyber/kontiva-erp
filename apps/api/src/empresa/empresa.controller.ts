@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Patch } from '@nestjs/common';
-import { empresaEditar } from '@kontiva/shared';
+import { BALANZA_PREDETERMINADA, empresaEditar, type ConfigBalanza } from '@kontiva/shared';
 import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, type Ctx, type Origen } from '../comun/contexto';
 import { Requiere } from '../comun/decoradores';
@@ -35,6 +35,7 @@ async function leerEmpresa(tx: Tx) {
     zonaHoraria: e.zona_horaria,
     creadoEn: e.creado_en,
     permiteStockNegativo: (e.configuracion as { permiteStockNegativo?: boolean }).permiteStockNegativo === true,
+    balanza: { ...BALANZA_PREDETERMINADA, ...((e.configuracion as { balanza?: Partial<ConfigBalanza> }).balanza ?? {}) },
     plan: {
       codigo: e.plan_codigo,
       limites: { usuarios: e.max_usuarios, sucursales: e.max_sucursales, cajas: e.max_cajas },
@@ -68,8 +69,11 @@ export class EmpresaController {
           ...(d.telefono !== undefined && { telefono: d.telefono || null }),
           ...(d.direccion !== undefined && { direccion: d.direccion || null }),
           ...(d.email !== undefined && { email: d.email || null }),
-          ...(d.permiteStockNegativo !== undefined && {
-            configuracion: sql`configuracion || ${JSON.stringify({ permiteStockNegativo: d.permiteStockNegativo })}::jsonb`,
+          ...((d.permiteStockNegativo !== undefined || d.balanza !== undefined) && {
+            configuracion: sql`configuracion || ${JSON.stringify({
+              ...(d.permiteStockNegativo !== undefined && { permiteStockNegativo: d.permiteStockNegativo }),
+              ...(d.balanza !== undefined && { balanza: d.balanza }),
+            })}::jsonb`,
           }),
         })
         .where('id', '=', ctx.empresaId)

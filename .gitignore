@@ -9,3 +9,4 @@ coverage/
 deploy/.env
 deploy/backups/
 .devcontainer/ACCESO.txt
+ejecutable/

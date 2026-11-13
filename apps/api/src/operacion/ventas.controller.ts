@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { anularVentaEntrada, calcularItems, calcularPagos, ErrorCalculo, ventaEntrada, type Cotizaciones } from '@kontiva/shared';
+import { anularVentaEntrada, BALANZA_PREDETERMINADA, calcularItems, leerEtiquetaBalanza, type ConfigBalanza, calcularPagos, ErrorCalculo, ventaEntrada, type Cotizaciones } from '@kontiva/shared';
 import Decimal from 'decimal.js';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -124,6 +124,7 @@ export class PdvController {
         sesion: sesion ? { id: sesion.id, propia: sesion.usuario_id === ctx.usuarioId, abiertaEn: sesion.abierta_en } : null,
         cotizaciones: await cotizacionesVigentes(tx, caja.sucursal_id),
         permiteStockNegativo: (empresa.configuracion as { permiteStockNegativo?: boolean }).permiteStockNegativo === true,
+        balanza: { ...BALANZA_PREDETERMINADA, ...((empresa.configuracion as { balanza?: Partial<ConfigBalanza> }).balanza ?? {}) },
         puede: {
           descuento: tiene(ctx, 'descuento.aprobar'),
           cambiarPrecio: tiene(ctx, 'precio.editar'),
@@ -192,10 +193,14 @@ export class PdvController {
           .where('p.activo', '=', true)
           .where('v.activa', '=', true);
 
+      // Etiqueta de balanza: el código trae el PLU y el peso (o el importe).
+      const empresa = await tx.selectFrom('empresa').select('configuracion').executeTakeFirstOrThrow();
+      const etiqueta = leerEtiquetaBalanza(f.q, (empresa.configuracion as { balanza?: ConfigBalanza }).balanza);
       let filas = await base()
         .innerJoin('codigo_barras as cb', 'cb.variante_id', 'v.id')
-        .where('cb.codigo', '=', f.q)
+        .where('cb.codigo', 'in', etiqueta ? etiqueta.candidatos : [f.q])
         .execute();
+      if (etiqueta && filas.length > 1) filas = filas.slice(0, 1);
       const porCodigo = filas.length > 0;
       if (!porCodigo) {
         filas = await base()
@@ -206,9 +211,16 @@ export class PdvController {
           .execute();
       }
       const precios = await preciosVigentes(tx, filas.map((r) => r.id), caja.sucursal_id, lista);
+      const cantidadEtiqueta = (id: string) => {
+        if (!etiqueta) return undefined;
+        if (etiqueta.cantidad !== null) return etiqueta.cantidad.toFixed(3);
+        const precio = Number(precios.get(id) ?? 0);
+        return precio > 0 ? (etiqueta.importe! / precio).toFixed(3) : undefined;
+      };
       return {
         porCodigo,
         items: filas.map((r) => ({
+          cantidad: porCodigo ? cantidadEtiqueta(r.id) : undefined,
           varianteId: r.id,
           descripcion: r.variante ? `${r.producto} · ${r.variante}` : r.producto,
           sku: r.sku,

@@ -6,3 +6,4 @@ export * from './venta';
 export * from './importacion';
 export * from './rrhh';
 export * from './ticket';
+export * from './balanza';

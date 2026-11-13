@@ -1,3 +1,4 @@
+import { configBalanza } from './balanza';
 import { z } from 'zod';
 import { ALCANCES, esPermisoValido } from './permisos';
 import { validarRuc } from './ruc';
@@ -38,6 +39,7 @@ export const autorizarEntrada = z.object({
 
 export const empresaEditar = z.object({
   permiteStockNegativo: z.boolean().optional(),
+  balanza: configBalanza.optional(),
   razonSocial: z.string().trim().min(2).max(200).optional(),
   nombreFantasia: z.string().trim().max(200).nullable().optional(),
   ruc: ruc.optional(),

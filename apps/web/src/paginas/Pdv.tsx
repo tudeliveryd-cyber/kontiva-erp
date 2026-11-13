@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ClipboardCheck, CloudOff, Minus, Percent, Plus, Printer, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { calcularItems, calcularPagos, ErrorCalculo, type Cotizaciones } from '@kontiva/shared';
+import { calcularItems, calcularPagos, ErrorCalculo, type ConfigBalanza, type Cotizaciones } from '@kontiva/shared';
 import { DialogoAutorizacion } from '../componentes/Autorizacion';
 import { Ticket, TicketProvisorio } from '../componentes/Ticket';
 import { Aviso, Cajon, Campo, Cargando, ErrorApi, Vacio } from '../componentes/ui';
@@ -20,6 +20,7 @@ interface ContextoPdv {
   sesion: { id: string; propia: boolean; abiertaEn: string } | null;
   cotizaciones: { moneda: 'USD' | 'BRL'; compra: string; venta: string }[];
   permiteStockNegativo: boolean;
+  balanza: ConfigBalanza;
   puede: { descuento: boolean; cambiarPrecio: boolean; anular: boolean };
 }
 
@@ -32,6 +33,8 @@ interface ItemBusqueda {
   precio: string;
   controlaStock: boolean;
   stock: string | null;
+  /** Cantidad leída de una etiqueta de balanza. */
+  cantidad?: string;
 }
 
 interface Linea extends ItemBusqueda {
@@ -161,14 +164,14 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const agregar = useCallback((it: ItemBusqueda) => {
     setLineas((ls) => {
       const i = ls.findIndex((l) => l.varianteId === it.varianteId && l.descuento === 0);
-      if (i >= 0 && it.unidad === 'unidad') {
+      if (i >= 0 && it.unidad === 'unidad' && !it.cantidad) {
         const n = [...ls];
         n[i] = { ...n[i]!, cantidad: String(Number(n[i]!.cantidad) + 1) };
         setSel(i);
         return n;
       }
       setSel(ls.length);
-      return [...ls, { ...it, cantidad: it.unidad === 'unidad' ? '1' : '1', descuento: 0 }];
+      return [...ls, { ...it, cantidad: it.cantidad ?? '1', descuento: 0 }];
     });
     if (it.controlaStock && it.stock !== null && Number(it.stock) <= 0 && !c.permiteStockNegativo) setAviso(`Sin stock: ${it.descripcion}`);
     else setAviso(null);
@@ -190,7 +193,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
         // Sin conexión: se busca en el catálogo guardado de la caja.
         if (!esErrorDeRed(e) || !off.catalogo) throw e;
         off.setEnLinea(false);
-        r = buscarEnCatalogo(off.catalogo, texto);
+        r = buscarEnCatalogo(off.catalogo, texto, c.balanza);
       }
       if (r.items.length === 0) {
         setAviso(`No se encontró "${texto}"`);

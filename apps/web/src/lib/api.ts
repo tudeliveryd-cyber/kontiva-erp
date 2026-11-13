@@ -1,3 +1,4 @@
+import type { ConfigBalanza } from '@kontiva/shared';
 /**
  * Cliente HTTP de KONTIVA.
  * - El token de acceso vive solo en memoria (nunca en localStorage).
@@ -195,6 +196,7 @@ export interface EmpresaDatos {
   email: string | null;
   direccion: string | null;
   permiteStockNegativo: boolean;
+  balanza: ConfigBalanza;
   plan: { codigo: string; limites: { usuarios: number | null; sucursales: number | null; cajas: number | null }; uso: { usuarios: number; sucursales: number } };
 }
 

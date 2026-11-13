@@ -93,9 +93,15 @@ Producto comercial de **Araújo Tech Sistemas**.
   (red, USB compartida en Windows, CUPS o dispositivo), con tildes, QR nativo, corte de papel, y abre el cajón
   en las ventas con efectivo. Clave por equipo, solo 127.0.0.1, verificación de origen y de red privada de
   Chrome. Se configura en el PDV (botón Impresora); sin agente se usa la impresión del navegador.
+  Se distribuye como un único `kontiva-agente.exe` (no requiere Node en la caja): `pnpm --filter
+  @kontiva/agente empaquetar`; la CI lo genera en Windows y lo publica como artefacto con el instalador.
+
+- **Balanza etiquetadora**: el PDV reconoce las etiquetas EAN-13 que comienzan con 2 (prefijo, PLU de 4 a 6
+  dígitos, peso o importe, dígito verificador) y carga el producto con su cantidad, con y sin conexión.
+  Se configura en Empresa, con prueba de lectura. El PLU se carga como código de barras del artículo.
 
 ### Fase 1 · pendiente
-- Balanza en el agente local (lectura por puerto serie).
+- Balanza conectada por puerto serie (las etiquetadoras ya funcionan sin el agente).
 - Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
 
 ### Fase 2 · hecho (compras y cuentas a pagar)

@@ -62,3 +62,37 @@ jobs:
           curl -fsS localhost:3001/api/master/salud
           curl -fsS localhost:3000/ | grep -q "KONTIVA ERP"
           curl -fsS localhost:3001/ | grep -q "KONTIVA Master"
+
+  # Agente local del PDV como ejecutable de Windows (kontiva-agente.exe), descargable desde la ejecución.
+  agente-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @kontiva/agente...
+      - name: Pruebas del agente
+        run: pnpm --filter @kontiva/agente test
+      - name: Ejecutable
+        run: pnpm --filter @kontiva/agente empaquetar
+      - name: Probar el ejecutable
+        shell: pwsh
+        run: |
+          '{"puerto":9425,"token":"prueba-ci-123456","origenes":[],"impresora":{"tipo":"prueba"},"ancho":48}' | Set-Content $env:RUNNER_TEMP\agente.json
+          $env:KONTIVA_AGENTE_CONFIG = "$env:RUNNER_TEMP\agente.json"
+          $p = Start-Process -FilePath apps\agente\ejecutable\kontiva-agente.exe -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 3
+          $r = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:9425/prueba -Headers @{ 'X-Agente-Token' = 'prueba-ci-123456' }
+          Stop-Process -Id $p.Id
+          if (-not $r.ok) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kontiva-agente-windows
+          path: |
+            apps/agente/ejecutable/kontiva-agente.exe
+            apps/agente/instalar/instalar-windows.ps1
+            apps/agente/README.md
+          retention-days: 90

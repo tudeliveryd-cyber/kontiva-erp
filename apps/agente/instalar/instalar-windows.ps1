@@ -1,17 +1,19 @@
 # KONTIVA ERP · instalación del agente local del PDV en Windows.
-# Requisito: Node.js 22 o superior (https://nodejs.org). Ejecutar en PowerShell desde la carpeta del agente:
-#   powershell -ExecutionPolicy Bypass -File instalar\instalar-windows.ps1
+# Con kontiva-agente.exe (no necesita Node.js). Ejecutar en PowerShell desde la carpeta descargada:
+#   powershell -ExecutionPolicy Bypass -File instalar-windows.ps1
 $ErrorActionPreference = 'Stop'
-$node = (Get-Command node -ErrorAction SilentlyContinue)
-if (-not $node) { Write-Error 'Instale Node.js 22 o superior desde https://nodejs.org y vuelva a ejecutar.' }
+$aqui = $PSScriptRoot
+$exe = @((Join-Path $aqui 'kontiva-agente.exe'), (Join-Path $aqui '..\ejecutable\kontiva-agente.exe')) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $exe) { Write-Error 'No se encontró kontiva-agente.exe junto a este instalador.' }
 $destino = Join-Path $env:LOCALAPPDATA 'KontivaAgente'
 New-Item -ItemType Directory -Force -Path $destino | Out-Null
-Copy-Item -Recurse -Force (Join-Path $PSScriptRoot '..\dist\*') $destino
+Get-Process kontiva-agente -ErrorAction SilentlyContinue | Stop-Process -Force
+Copy-Item -Force $exe (Join-Path $destino 'kontiva-agente.exe')
 # Inicio automático con Windows, sin ventana.
 $vbs = Join-Path $destino 'iniciar.vbs'
-Set-Content -Encoding ASCII -Path $vbs -Value "CreateObject(""WScript.Shell"").Run ""node """"$destino\main.js"""""", 0, False"
-$inicio = [Environment]::GetFolderPath('Startup')
-Copy-Item -Force $vbs (Join-Path $inicio 'KONTIVA agente.vbs')
-# Primera ejecución visible: crea la configuración y muestra la clave para el PDV.
-Write-Host 'Agente instalado. La configuración está en %APPDATA%\kontiva-agente\config.json'
-& node (Join-Path $destino 'main.js')
+Set-Content -Encoding ASCII -Path $vbs -Value "CreateObject(""WScript.Shell"").Run """"""$destino\kontiva-agente.exe"""""", 0, False"
+Copy-Item -Force $vbs (Join-Path ([Environment]::GetFolderPath('Startup')) 'KONTIVA agente.vbs')
+Write-Host 'Agente instalado. Inicia solo con Windows.'
+Write-Host 'Configuración: %APPDATA%\kontiva-agente\config.json (edite la impresora y reinicie la computadora o el agente).'
+Write-Host 'Primera ejecución: anote la clave que aparece abajo y cárguela en el PDV (botón Impresora). Cierre esta ventana para terminar.'
+& (Join-Path $destino 'kontiva-agente.exe')
