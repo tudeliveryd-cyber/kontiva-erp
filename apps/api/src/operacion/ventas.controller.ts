@@ -8,6 +8,7 @@ import { enSucursal, exigirSucursal, listaDeCliente, preciosVigentes } from '../
 import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, tiene, type Ctx, type Origen } from '../comun/contexto';
 import { Requiere } from '../comun/decoradores';
+import { moverLotes } from '../comun/lotes';
 import { conflicto, ErrorNegocio, invalido, noEncontrado, prohibido } from '../comun/errores';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
@@ -414,6 +415,7 @@ export class VentasController {
         // Stock: filas existentes y bloqueadas en orden; validación según la configuración.
         const conStock = [...new Set(lineas.filter((l) => l.v.controla_stock).map((l) => l.varianteId))].sort();
         const saldo = new Map<string, Decimal>();
+        let permiteStockNeg = false;
         if (conStock.length) {
           await tx
             .insertInto('stock')
@@ -430,9 +432,9 @@ export class VentasController {
             .execute();
           for (const f of filas) saldo.set(f.variante_id, new Decimal(f.cantidad));
           const empresa = await tx.selectFrom('empresa').select('configuracion').executeTakeFirstOrThrow();
-          const permiteNegativo = (empresa.configuracion as { permiteStockNegativo?: boolean }).permiteStockNegativo === true;
+          permiteStockNeg = (empresa.configuracion as { permiteStockNegativo?: boolean }).permiteStockNegativo === true;
           // Lo vendido sin conexión ya salió del local: se registra aunque el stock quede negativo.
-          if (!permiteNegativo && !registradaOffline) {
+          if (!permiteStockNeg && !registradaOffline) {
             const pedido = new Map<string, Decimal>();
             for (const l of lineas.filter((x) => x.v.controla_stock)) pedido.set(l.varianteId, (pedido.get(l.varianteId) ?? new Decimal(0)).plus(l.cantidad));
             const faltantes = [...pedido].filter(([id, cant]) => saldo.get(id)!.lt(cant)).map(([id, cant]) => ({ varianteId: id, descripcion: porId.get(id)!.producto, disponible: saldo.get(id)!.toFixed(4), pedido: cant.toFixed(4) }));
@@ -521,6 +523,14 @@ export class VentasController {
         for (const id of conStock) {
           await tx.updateTable('stock').set({ cantidad: saldo.get(id)!.toFixed(4), actualizado_en: new Date() }).where('variante_id', '=', id).where('deposito_id', '=', caja.deposito_id).execute();
         }
+        // Lotes: sale primero lo que vence antes; un lote vencido no se vende (salvo venta sin conexión ya hecha).
+        await moverLotes(
+          tx,
+          ctx,
+          caja.deposito_id,
+          lineas.filter((x) => x.v.controla_stock).map((l) => ({ varianteId: l.varianteId, cantidad: l.cantidad.neg(), tipo: 'venta' as const, origenId: venta.id })),
+          !permiteStockNeg && !registradaOffline,
+        );
 
         const movCaja = [
           ...pagos.detalle.map((p) => ({ tipo: 'venta' as const, medio: p.medio, moneda: p.moneda, monto: p.monto })),
@@ -706,6 +716,8 @@ export class VentasController {
           await tx.insertInto('movimiento_stock').values({ empresa_id: ctx.empresaId, variante_id: it.variante_id, deposito_id: caja.deposito_id, tipo: 'anulacion_venta', cantidad: new Decimal(it.cantidad).toFixed(4), saldo: nuevo.toFixed(4), costo_unitario: it.costo_unitario, origen_id: id, motivo: d.motivo, creado_por: ctx.usuarioId }).execute();
         }
         for (const [vid, cant] of saldo) await tx.updateTable('stock').set({ cantidad: cant.toFixed(4), actualizado_en: new Date() }).where('variante_id', '=', vid).where('deposito_id', '=', caja.deposito_id).execute();
+        // Vuelve a los mismos lotes de los que salió.
+        await moverLotes(tx, ctx, caja.deposito_id, conStock.map((it) => ({ varianteId: it.variante_id, cantidad: new Decimal(it.cantidad), tipo: 'anulacion_venta' as const, origenId: id, deOrigen: { origenIds: [id], tipos: ['venta'] } })), false);
       }
 
       // Contrapartida exacta de lo que entró (pagos) y salió (vuelto) en caja por esta venta.

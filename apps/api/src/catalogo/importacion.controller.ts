@@ -8,6 +8,7 @@ import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, tiene, type Ctx, type Origen } from '../comun/contexto';
 import { Requiere } from '../comun/decoradores';
 import { ErrorNegocio, noEncontrado } from '../comun/errores';
+import { moverLotes } from '../comun/lotes';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 
@@ -277,6 +278,7 @@ export class ImportacionController {
             .insertInto('movimiento_stock')
             .values({ empresa_id: ctx.empresaId, variante_id: p.varianteId!, deposito_id: deposito.id, tipo: d.tipoStock, cantidad: nuevo.minus(antes).toFixed(4), saldo: nuevo.toFixed(4), costo_unitario: null, origen_id: null, motivo: 'Importación desde planilla', creado_por: ctx.usuarioId })
             .execute();
+          await moverLotes(tx, ctx, deposito.id, [{ varianteId: p.varianteId!, cantidad: nuevo.minus(antes), tipo: d.tipoStock, origenId: null, incluirVencidos: true }], false);
         }
       }
 

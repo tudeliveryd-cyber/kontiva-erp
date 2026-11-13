@@ -183,6 +183,7 @@ export class DevolucionesController {
         if (new Decimal(caja_?.monto ?? 0).lt(reintegro)) throw conflicto('SALDO_INSUFICIENTE', 'No hay suficiente efectivo en la caja para reintegrar');
       }
 
+      const previas = (await tx.selectFrom('devolucion').select('id').where('venta_id', '=', venta.id).execute()).map((x) => x.id);
       const numero = await siguienteNumero(tx, 'devolucion');
       const dev = await tx
         .insertInto('devolucion')
@@ -197,7 +198,18 @@ export class DevolucionesController {
         tx,
         ctx,
         caja.deposito_id,
-        detalle.filter((x) => controla.get(x.varianteId)).map((x) => ({ varianteId: x.varianteId, cantidad: x.cantidad, tipo: 'devolucion' as const, origenId: dev.id, motivo: d.motivo, costo: x.costo })),
+        detalle
+          .filter((x) => controla.get(x.varianteId))
+          .map((x) => ({
+            varianteId: x.varianteId,
+            cantidad: x.cantidad,
+            tipo: 'devolucion' as const,
+            origenId: dev.id,
+            motivo: d.motivo,
+            costo: x.costo,
+            // Vuelve a los lotes de los que salió la venta, descontando lo ya devuelto antes.
+            deOrigen: { origenIds: [venta.id], tipos: ['venta' as const], descontar: { origenIds: previas, tipos: ['devolucion' as const] } },
+          })),
         false,
       );
       if (cuenta && aCuenta.gt(0)) {

@@ -4,8 +4,9 @@ import type { Tx } from '../db/database';
 import type { TipoMovimientoStock } from '../db/tipos';
 import type { Ctx } from './contexto';
 import { ErrorNegocio } from './errores';
+import { moverLotes, type MovimientoLote } from './lotes';
 
-export interface Movimiento {
+export interface Movimiento extends Pick<MovimientoLote, 'lote' | 'loteId' | 'deOrigen' | 'incluirVencidos'> {
   varianteId: string;
   cantidad: Decimal; // con signo: negativa = salida
   tipo: TipoMovimientoStock;
@@ -35,7 +36,8 @@ export async function moverStock(tx: Tx, ctx: Pick<Ctx, 'empresaId' | 'usuarioId
   const filas = await tx.selectFrom('stock').select(['variante_id', 'cantidad']).where('deposito_id', '=', depositoId).where('variante_id', 'in', ids).orderBy('variante_id').forUpdate().execute();
   const saldo = new Map(filas.map((f) => [f.variante_id, new Decimal(f.cantidad)]));
 
-  if (validarSalidas && !(await permiteStockNegativo(tx))) {
+  const validar = validarSalidas && !(await permiteStockNegativo(tx));
+  if (validar) {
     const neto = new Map<string, Decimal>();
     for (const m of movimientos) neto.set(m.varianteId, (neto.get(m.varianteId) ?? new Decimal(0)).plus(m.cantidad));
     const faltan = [...neto].filter(([id, d]) => d.isNegative() && saldo.get(id)!.plus(d).isNegative());
@@ -76,6 +78,8 @@ export async function moverStock(tx: Tx, ctx: Pick<Ctx, 'empresaId' | 'usuarioId
   for (const id of ids) {
     await tx.updateTable('stock').set({ cantidad: saldo.get(id)!.toFixed(4), actualizado_en: new Date() }).where('variante_id', '=', id).where('deposito_id', '=', depositoId).execute();
   }
+  // Productos con lote: el mismo movimiento se reparte por lote (FEFO en las salidas).
+  await moverLotes(tx, ctx, depositoId, movimientos.map((m) => ({ ...m, origenId: m.origenId ?? null })), validar);
   return saldo;
 }
 

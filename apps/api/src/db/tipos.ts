@@ -264,6 +264,9 @@ export interface BaseDatos {
   liquidacion: LiquidacionTabla;
   liquidacion_item: LiquidacionItemTabla;
   novedad: NovedadTabla;
+  lote: LoteTabla;
+  stock_lote: StockLoteTabla;
+  movimiento_lote: MovimientoLoteTabla;
   marcacion: MarcacionTabla;
   vacacion: VacacionTabla;
   liquidacion_final: LiquidacionFinalTabla;
@@ -383,6 +386,7 @@ export interface ProductoTabla {
   unidad: Generated<string>;
   tasa_iva: NumGen;
   controla_stock: Generated<boolean>;
+  controla_lote: Generated<boolean>;
   activo: Generated<boolean>;
   creado_en: Creado;
   creado_por: string | null;
@@ -826,6 +830,8 @@ export interface CompraItemTabla {
   tasa_iva: number;
   total: Num;
   orden_linea: number | null;
+  lote_codigo: string | null;
+  lote_vencimiento: FechaNula;
 }
 
 export interface CuentaPagarTabla {
@@ -1149,5 +1155,31 @@ export interface MarcacionTabla {
   hora: string;
   origen: 'reloj' | 'manual';
   creado_por: string;
+  creado_en: Creado;
+}
+export interface LoteTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  variante_id: string;
+  codigo: string;
+  vencimiento: FechaNula;
+  creado_en: Creado;
+}
+export interface StockLoteTabla {
+  empresa_id: string;
+  lote_id: string;
+  deposito_id: string;
+  cantidad: NumGen;
+}
+export interface MovimientoLoteTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  lote_id: string;
+  variante_id: string;
+  deposito_id: string;
+  tipo: TipoMovimientoStock;
+  cantidad: Num;
+  origen_id: string | null;
+  creado_por: string | null;
   creado_en: Creado;
 }

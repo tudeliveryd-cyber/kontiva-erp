@@ -189,6 +189,13 @@ export class InformesController {
           cantidad: bajo.rows.length,
           items: bajo.rows.slice(0, 10).map((x) => ({ varianteId: x.variante_id, nombre: x.variante ? `${x.producto} · ${x.variante}` : x.producto, deposito: x.deposito, cantidad: new Decimal(x.cantidad).toString(), minimo: new Decimal(x.minimo).toString() })),
         };
+        // Lotes con stock vencidos o que vencen en los próximos 30 días.
+        const ven = await sql<{ vencidos: string; por_vencer: string }>`
+          SELECT count(*) FILTER (WHERE l.vencimiento < ${hoy}::date) AS vencidos,
+                 count(*) FILTER (WHERE l.vencimiento >= ${hoy}::date AND l.vencimiento <= ${hoy}::date + 30) AS por_vencer
+          FROM stock_lote sl JOIN lote l ON l.id = sl.lote_id JOIN deposito d ON d.id = sl.deposito_id AND ${filtroSuc('d.sucursal_id', suc)}
+          WHERE sl.cantidad > 0 AND l.vencimiento IS NOT NULL`.execute(tx);
+        r.vencimientos = { vencidos: Number(ven.rows[0]!.vencidos), porVencer: Number(ven.rows[0]!.por_vencer) };
       }
       return r;
     });

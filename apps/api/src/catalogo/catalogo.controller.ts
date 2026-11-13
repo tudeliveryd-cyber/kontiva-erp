@@ -8,6 +8,7 @@ import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, tiene, type Ctx, type Origen } from '../comun/contexto';
 import { Requiere } from '../comun/decoradores';
 import { conflicto, invalido, noEncontrado, prohibido } from '../comun/errores';
+import { conciliarLotes } from '../comun/lotes';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 
@@ -19,7 +20,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
     .leftJoin('marca as m', 'm.id', 'p.marca_id')
     .select([
       'p.id', 'p.nombre', 'p.descripcion', 'p.categoria_id', 'p.marca_id', 'p.tipo', 'p.unidad', 'p.tasa_iva',
-      'p.controla_stock', 'p.activo', 'p.creado_en', 'c.nombre as categoria', 'm.nombre as marca',
+      'p.controla_stock', 'p.controla_lote', 'p.activo', 'p.creado_en', 'c.nombre as categoria', 'm.nombre as marca',
     ])
     .where('p.id', '=', id)
     .executeTakeFirst();
@@ -47,6 +48,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
     unidad: p.unidad,
     tasaIva: Number(p.tasa_iva),
     controlaStock: p.controla_stock,
+    controlaLote: p.controla_lote,
     activo: p.activo,
     creadoEn: p.creado_en,
     variantes: variantes.map((v) => ({
@@ -135,6 +137,8 @@ export class ProductosController {
       const antes = await leerProducto(tx, ctx, id);
       await tx.updateTable('producto').set(this.columnas(d)).where('id', '=', id).execute();
       await this.guardarVariantes(tx, ctx, id, d, false, antes);
+      // Al activar el control por lote, el stock existente queda en el lote "sin lote" de cada depósito.
+      if (!antes.controlaLote && this.columnas(d).controla_lote) await conciliarLotes(tx, ctx, antes.variantes.map((v) => v.id));
       const despues = await leerProducto(tx, ctx, id);
       await auditar(tx, { ...ctx, ...o }, { accion: 'editar', entidad: 'producto', entidadId: id, antes, despues });
       return despues;
@@ -163,6 +167,7 @@ export class ProductosController {
       unidad: d.unidad,
       tasa_iva: d.tasaIva,
       controla_stock: d.tipo === 'servicio' ? false : d.controlaStock,
+      controla_lote: d.tipo !== 'servicio' && d.controlaStock && d.controlaLote,
       activo: d.activo,
     };
   }

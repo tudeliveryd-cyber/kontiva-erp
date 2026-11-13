@@ -131,7 +131,7 @@ export class TransferenciasController {
       const motivo = `Transferencia N.º ${numero}`;
       await moverStock(tx, ctx, origen.id, d.items.map((i) => ({ varianteId: i.varianteId, cantidad: new Decimal(i.cantidad).neg(), tipo: 'transferencia_salida', origenId: t.id, motivo, costo: costo.get(i.varianteId) })));
       if (d.directa) {
-        await moverStock(tx, ctx, destino.id, d.items.map((i) => ({ varianteId: i.varianteId, cantidad: new Decimal(i.cantidad), tipo: 'transferencia_entrada', origenId: t.id, motivo, costo: costo.get(i.varianteId) })), false);
+        await moverStock(tx, ctx, destino.id, d.items.map((i) => ({ varianteId: i.varianteId, cantidad: new Decimal(i.cantidad), tipo: 'transferencia_entrada', origenId: t.id, motivo, costo: costo.get(i.varianteId), deOrigen: { origenIds: [t.id], tipos: ['transferencia_salida'] } })), false);
       }
       await auditar(tx, { ...ctx, ...o }, { accion: 'crear', entidad: 'transferencia', entidadId: t.id, despues: { numero, origen: origen.nombre, destino: destino.nombre, directa: d.directa, items: d.items.length } });
       return (await leerTransferencia(tx, t.id))!;
@@ -160,7 +160,7 @@ export class TransferenciasController {
       for (const it of t.items) {
         const cant = recibido.get(it.linea) ?? new Decimal(it.cantidad);
         await tx.updateTable('transferencia_item').set({ cantidad_recibida: cant.toFixed(4) }).where('transferencia_id', '=', id).where('linea', '=', it.linea).execute();
-        if (cant.gt(0)) movimientos.push({ varianteId: it.varianteId, cantidad: cant, tipo: 'transferencia_entrada' as const, origenId: id, motivo: `Transferencia N.º ${t.numero}` });
+        if (cant.gt(0)) movimientos.push({ varianteId: it.varianteId, cantidad: cant, tipo: 'transferencia_entrada' as const, origenId: id, motivo: `Transferencia N.º ${t.numero}`, deOrigen: { origenIds: [id], tipos: ['transferencia_salida' as const] } });
       }
       await moverStock(tx, ctx, t.destino.id, movimientos, false);
       await tx.updateTable('transferencia').set({ estado: 'recibida', recibida_por: ctx.usuarioId, recibida_en: new Date() }).where('id', '=', id).execute();
@@ -182,7 +182,7 @@ export class TransferenciasController {
       const t = await leerTransferencia(tx, id);
       if (!t || !visible(ctx, t)) throw noEncontrado('Transferencia');
       if (t.estado !== 'en_transito') throw conflicto('NO_EN_TRANSITO', 'Solo se cancela una transferencia en tránsito');
-      await moverStock(tx, ctx, t.origen.id, t.items.map((i) => ({ varianteId: i.varianteId, cantidad: new Decimal(i.cantidad), tipo: 'transferencia_entrada' as const, origenId: id, motivo: `Cancelación de transferencia N.º ${t.numero}` })), false);
+      await moverStock(tx, ctx, t.origen.id, t.items.map((i) => ({ varianteId: i.varianteId, cantidad: new Decimal(i.cantidad), tipo: 'transferencia_entrada' as const, origenId: id, motivo: `Cancelación de transferencia N.º ${t.numero}`, deOrigen: { origenIds: [id], tipos: ['transferencia_salida' as const] } })), false);
       await tx.updateTable('transferencia').set({ estado: 'cancelada', cancelada_por: ctx.usuarioId, cancelada_en: new Date(), motivo_cancelacion: d.motivo }).where('id', '=', id).execute();
       await auditar(tx, { ...ctx, ...o }, { accion: 'cancelar', entidad: 'transferencia', entidadId: id, despues: { numero: t.numero, motivo: d.motivo } });
       return (await leerTransferencia(tx, id))!;

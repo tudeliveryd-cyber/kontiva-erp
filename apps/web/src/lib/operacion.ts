@@ -24,6 +24,7 @@ export interface Producto {
   unidad: string;
   tasaIva: 0 | 5 | 10;
   controlaStock: boolean;
+  controlaLote?: boolean;
   activo: boolean;
   variantes: (Variante & { id: string })[];
 }
@@ -40,6 +41,7 @@ export interface FilaStock {
   sku: string | null;
   unidad: string;
   cantidad: string;
+  controlaLote?: boolean;
   costo?: string;
 }
 

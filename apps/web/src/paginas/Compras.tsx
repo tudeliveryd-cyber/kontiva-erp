@@ -34,6 +34,7 @@ interface ProductoCompra {
   unidad: string;
   tasaIva: 0 | 5 | 10;
   costo: string | null;
+  controlaLote?: boolean;
 }
 
 interface LineaCompra {
@@ -46,6 +47,9 @@ interface LineaCompra {
   descuento: string;
   ordenLinea?: number;
   maximo?: number;
+  controlaLote?: boolean;
+  loteCodigo?: string;
+  loteVencimiento?: string;
 }
 
 const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
@@ -61,7 +65,7 @@ function useDepositos() {
 }
 
 /** Editor de líneas de compra u orden: buscar productos, cantidades, costos (IVA incluido) y descuentos. */
-function Lineas({ lineas, setLineas, ruta, conDescuento }: { lineas: LineaCompra[]; setLineas: (f: (l: LineaCompra[]) => LineaCompra[]) => void; ruta: string; conDescuento: boolean }) {
+function Lineas({ lineas, setLineas, ruta, conDescuento, conLote = false }: { lineas: LineaCompra[]; setLineas: (f: (l: LineaCompra[]) => LineaCompra[]) => void; ruta: string; conDescuento: boolean; conLote?: boolean }) {
   const [q, setQ] = useState('');
   const [qDif, setQDif] = useState('');
   useEffect(() => {
@@ -71,9 +75,10 @@ function Lineas({ lineas, setLineas, ruta, conDescuento }: { lineas: LineaCompra
   const busqueda = useQuery({ queryKey: ['compra-productos', ruta, qDif], queryFn: () => api<ProductoCompra[]>(`${ruta}?q=${encodeURIComponent(qDif)}`), enabled: qDif.length > 0 });
   const agregar = (p: ProductoCompra) => {
     setLineas((ls) => {
-      const i = ls.findIndex((l) => l.varianteId === p.varianteId && !l.ordenLinea);
+      // Con lote, cada lote es una línea: el mismo producto se puede agregar de nuevo.
+      const i = ls.findIndex((l) => l.varianteId === p.varianteId && !l.ordenLinea && !(conLote && p.controlaLote));
       if (i >= 0) return ls.map((l, j) => (j === i ? { ...l, cantidad: String(Number(l.cantidad) + 1) } : l));
-      return [...ls, { varianteId: p.varianteId, descripcion: p.descripcion, unidad: p.unidad, tasaIva: p.tasaIva, cantidad: '1', costo: p.costo ? String(Math.round(Number(p.costo))) : '', descuento: '' }];
+      return [...ls, { varianteId: p.varianteId, descripcion: p.descripcion, unidad: p.unidad, tasaIva: p.tasaIva, cantidad: '1', costo: p.costo ? String(Math.round(Number(p.costo))) : '', descuento: '', controlaLote: p.controlaLote }];
     });
     setQ('');
     setQDif('');
@@ -128,6 +133,12 @@ function Lineas({ lineas, setLineas, ruta, conDescuento }: { lineas: LineaCompra
                 <td>
                   {l.descripcion}
                   <div className="tenue peq">IVA {l.tasaIva ? `${l.tasaIva} %` : 'exento'}{l.maximo !== undefined ? ` · pendiente en la orden: ${fmtCant(String(l.maximo))}` : ''}</div>
+                  {conLote && l.controlaLote && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <input className="entrada" aria-label="Lote" style={{ height: 30, width: 120 }} placeholder="Lote" value={l.loteCodigo ?? ''} onChange={(e) => cambiar(i, { loteCodigo: e.target.value.toUpperCase() })} />
+                      <input className="entrada" aria-label="Vencimiento" type="date" style={{ height: 30, width: 150 }} title="Vencimiento" value={l.loteVencimiento ?? ''} onChange={(e) => cambiar(i, { loteVencimiento: e.target.value })} />
+                    </div>
+                  )}
                 </td>
                 <td className="der">
                   <input className="entrada num" style={{ height: 32, textAlign: 'right' }} inputMode="decimal" value={l.cantidad} onChange={(e) => cambiar(i, { cantidad: e.target.value.replace(',', '.').replace(/[^0-9.]/g, '') })} />
@@ -161,7 +172,8 @@ function Lineas({ lineas, setLineas, ruta, conDescuento }: { lineas: LineaCompra
   );
 }
 
-const lineasValidas = (ls: LineaCompra[]) => ls.length > 0 && ls.every((l) => Number(l.cantidad) > 0 && l.costo !== '' && (l.maximo === undefined || Number(l.cantidad) <= l.maximo));
+const lineasValidas = (ls: LineaCompra[], conLote = false) =>
+  ls.length > 0 && ls.every((l) => Number(l.cantidad) > 0 && l.costo !== '' && (l.maximo === undefined || Number(l.cantidad) <= l.maximo) && (!conLote || !l.controlaLote || !!l.loteCodigo?.trim() || !!l.loteVencimiento));
 
 // ---------------------------------------------------------------------------
 // Proveedores
@@ -290,7 +302,7 @@ interface Orden {
   creadoEn: string;
   aprobada: { por: string | null; en: string } | null;
   motivoCancelacion: string | null;
-  items: { linea: number; varianteId: string; descripcion: string; cantidad: string; cantidadRecibida: string; pendiente: string; costoUnitario: string; tasaIva: 0 | 5 | 10; total: string }[];
+  items: { linea: number; varianteId: string; descripcion: string; cantidad: string; cantidadRecibida: string; pendiente: string; costoUnitario: string; tasaIva: 0 | 5 | 10; total: string; controlaLote?: boolean }[];
 }
 
 const ESTADO_ORDEN: Record<string, { texto: string; clase: string }> = {
@@ -535,7 +547,7 @@ interface Compra {
   creadoPor: string;
   creadoEn: string;
   anulacion: { por: string | null; en: string; motivo: string | null } | null;
-  items: { linea: number; descripcion: string; cantidad: string; costoUnitario: string | null; descuento: string | null; tasaIva: number; total: string | null }[];
+  items: { linea: number; descripcion: string; cantidad: string; costoUnitario: string | null; descuento: string | null; tasaIva: number; total: string | null; lote: { codigo: string; vencimiento: string | null } | null }[];
 }
 
 const TIPO_DOC: Record<string, string> = { factura: 'Factura', factura_electronica: 'Factura electrónica', remision: 'Nota de remisión', otro: 'Otro' };
@@ -608,7 +620,7 @@ function NuevaCompra({ orden, alCerrar }: { orden?: Orden; alCerrar: (id?: strin
   const [lineas, setLineas] = useState<LineaCompra[]>(
     orden?.items
       .filter((i) => Number(i.pendiente) > 0)
-      .map((i) => ({ varianteId: i.varianteId, descripcion: i.descripcion, unidad: 'unidad', tasaIva: i.tasaIva, cantidad: String(Number(i.pendiente)), costo: String(Math.round(Number(i.costoUnitario))), descuento: '', ordenLinea: i.linea, maximo: Number(i.pendiente) })) ?? [],
+      .map((i) => ({ varianteId: i.varianteId, descripcion: i.descripcion, unidad: 'unidad', tasaIva: i.tasaIva, cantidad: String(Number(i.pendiente)), costo: String(Math.round(Number(i.costoUnitario))), descuento: '', ordenLinea: i.linea, maximo: Number(i.pendiente), controlaLote: i.controlaLote })) ?? [],
   );
   useEffect(() => {
     if (!depositoId && depositos.data?.[0]) setDepositoId(depositos.data[0].id);
@@ -638,7 +650,14 @@ function NuevaCompra({ orden, alCerrar }: { orden?: Orden; alCerrar: (id?: strin
           vencimiento: condicion === 'credito' ? vencimiento || null : null,
           pago: condicion === 'contado' && pago.registrar ? { medio: pago.medio, cajaId: pago.medio === 'efectivo' ? pago.cajaId || propias[0]?.id || null : null, cuentaBancariaId: pago.medio !== 'efectivo' && pago.cuentaBancariaId ? pago.cuentaBancariaId : null, referencia: pago.referencia || null } : null,
           nota: nota || null,
-          items: lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), costoUnitario: Number(l.costo), ...(Number(l.descuento) > 0 && { descuento: Number(l.descuento) }), ...(l.ordenLinea && { ordenLinea: l.ordenLinea }) })),
+          items: lineas.map((l) => ({
+            varianteId: l.varianteId,
+            cantidad: Number(l.cantidad),
+            costoUnitario: Number(l.costo),
+            ...(Number(l.descuento) > 0 && { descuento: Number(l.descuento) }),
+            ...(l.ordenLinea && { ordenLinea: l.ordenLinea }),
+            ...(l.controlaLote && { lote: { codigo: l.loteCodigo?.trim() || null, vencimiento: l.loteVencimiento || null } }),
+          })),
         },
       }),
     onSuccess: (c) => {
@@ -661,7 +680,7 @@ function NuevaCompra({ orden, alCerrar }: { orden?: Orden; alCerrar: (id?: strin
       ancho={900}
       titulo={orden ? `Recibir la orden N.º ${orden.numero}` : 'Cargar compra'}
       alCerrar={() => alCerrar()}
-      pie={<><button className="btn" onClick={() => alCerrar()}>Cancelar</button><button className="btn pri" disabled={!proveedorId || !depositoId || !docValido || !lineasValidas(lineas) || !pagoValido || guardar.isPending} onClick={() => guardar.mutate()}>Confirmar compra</button></>}
+      pie={<><button className="btn" onClick={() => alCerrar()}>Cancelar</button><button className="btn pri" disabled={!proveedorId || !depositoId || !docValido || !lineasValidas(lineas, true) || !pagoValido || guardar.isPending} onClick={() => guardar.mutate()}>Confirmar compra</button></>}
     >
       <ErrorApi error={guardar.error} />
       <div className="form">
@@ -749,7 +768,8 @@ function NuevaCompra({ orden, alCerrar }: { orden?: Orden; alCerrar: (id?: strin
           </div>
         )}
         {!pagoValido && <Aviso tipo="error">Para pagar en efectivo abra su caja en "Cajas y PDV".</Aviso>}
-        <Lineas lineas={lineas} setLineas={setLineas} ruta="/compras/productos" conDescuento />
+        <Lineas lineas={lineas} setLineas={setLineas} ruta="/compras/productos" conDescuento conLote />
+        {lineas.some((l) => l.controlaLote && !l.loteCodigo?.trim() && !l.loteVencimiento) && <p className="tenue peq" style={{ margin: 0 }}>Los productos con control de lote necesitan el lote o el vencimiento (al menos uno).</p>}
         <Campo etiqueta="Nota (opcional)" id="co-n">
           <input id="co-n" className="entrada" value={nota} onChange={(e) => setNota(e.target.value)} />
         </Campo>
@@ -795,7 +815,10 @@ function FichaCompra({ id, alCerrar }: { id: string; alCerrar: () => void }) {
         <tbody>
           {d.items.map((i) => (
             <tr key={i.linea}>
-              <td>{i.descripcion}</td>
+              <td>
+                {i.descripcion}
+                {i.lote && <div className="tenue peq">Lote {i.lote.codigo}{i.lote.vencimiento && ` · vence ${i.lote.vencimiento.split('-').reverse().join('/')}`}</div>}
+              </td>
               <td className="der num">{fmtCant(i.cantidad)}</td>
               <td className="der num">{i.costoUnitario ? dinero(i.costoUnitario) : '—'}</td>
               <td className="der num">{i.total ? dinero(i.total) : '—'}</td>

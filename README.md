@@ -16,7 +16,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
-| 5 | Verticales por rubro e integraciones | Pendiente |
+| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos listos |
 
 ### Fase 0 · hecho
 - **Autenticación**: Argon2id, bloqueo progresivo tras 5 intentos, token de acceso de 15 min + renovación rotativa
@@ -223,6 +223,17 @@ Fase 2 completa.
   (asignación por código o cédula; reimportar no duplica), y se pueden cargar o quitar marcaciones a mano.
   Al comparar con el horario se proponen ausencias, llegadas tardías (más de 10 minutos) y horas extra (por
   media hora, al 100 % en domingos); la empresa revisa y registra las que correspondan.
+
+### Fase 5 · hecho (lotes y vencimientos)
+- **Control por lote** opcional por producto. La compra pide el lote o el vencimiento de cada línea (sin código
+  queda `VTO-AAAAMMDD`); el mismo lote no admite dos vencimientos.
+- **FEFO**: la venta y la transferencia toman primero el lote que vence antes y nunca uno vencido (la venta se
+  rechaza con `LOTE_VENCIDO` si solo queda vencido); la venta sin conexión ya hecha se registra igual.
+- **Reversiones al mismo lote**: anulación de venta, devoluciones parciales sucesivas, recepción y cancelación de
+  transferencias, anulación de compra (rechazada si el lote ya no tiene lo comprado).
+- **Conteo por lote**, alta de lotes encontrados y baja de vencidos; lo que entra sin lote va a "S/L". Al activar el
+  control en un producto con stock, el saldo existente pasa a "S/L" de cada depósito.
+- **Vencimientos**: informe de lotes vencidos y por vencer con valor al costo, y alertas en el tablero.
 
 ## Estructura
 

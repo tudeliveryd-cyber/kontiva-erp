@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Minus, PackageX, Receipt, Undo2, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarClock, Minus, PackageX, Receipt, Undo2, Wallet } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -29,6 +29,7 @@ export interface DatosTablero {
   bancos?: { saldo: string };
   cajas?: { abiertas: number; efectivo: string; lista: { caja: string; sucursal: string; usuario: string; abiertaEn: string; efectivo: string }[] };
   stockBajo?: { cantidad: number; items: { varianteId: string; nombre: string; deposito: string; cantidad: string; minimo: string }[] };
+  vencimientos?: { vencidos: number; porVencer: number };
 }
 
 const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
@@ -154,6 +155,8 @@ function Tarjeta({ titulo, children, accion }: { titulo: string; children: React
 export function Alertas({ d }: { d: DatosTablero }) {
   const a: { icono: typeof AlertTriangle; texto: string; a?: string; tono: 'warn' | 'bad' | 'n' }[] = [];
   if (d.stockBajo?.cantidad) a.push({ icono: PackageX, texto: `${d.stockBajo.cantidad} producto${d.stockBajo.cantidad > 1 ? 's' : ''} bajo el stock mínimo`, a: '/informes?tab=stock', tono: 'warn' });
+  if (d.vencimientos?.vencidos) a.push({ icono: CalendarClock, texto: `${d.vencimientos.vencidos} ${d.vencimientos.vencidos > 1 ? 'lotes vencidos' : 'lote vencido'} con stock: retírelos`, a: '/stock?tab=vencimientos', tono: 'bad' });
+  if (d.vencimientos?.porVencer) a.push({ icono: CalendarClock, texto: `${d.vencimientos.porVencer} ${d.vencimientos.porVencer > 1 ? 'lotes vencen' : 'lote vence'} en los próximos 30 días`, a: '/stock?tab=vencimientos', tono: 'warn' });
   if (d.cobrar && Number(d.cobrar.vencido)) a.push({ icono: Receipt, texto: `${dinero(d.cobrar.vencido)} vencido por cobrar (${d.cobrar.clientesVencidos} cliente${d.cobrar.clientesVencidos > 1 ? 's' : ''})`, a: '/cuentas-cobrar', tono: 'bad' });
   if (d.pagar && Number(d.pagar.vencido)) a.push({ icono: Wallet, texto: `${dinero(d.pagar.vencido)} vencido por pagar`, a: '/cuentas-pagar', tono: 'bad' });
   if (d.pagar && Number(d.pagar.proximos7)) a.push({ icono: Wallet, texto: `${dinero(d.pagar.proximos7)} a pagar en los próximos 7 días`, a: '/cuentas-pagar', tono: 'warn' });

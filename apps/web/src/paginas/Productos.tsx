@@ -124,6 +124,7 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
     unidad: producto?.unidad ?? 'unidad',
     tasaIva: String(producto?.tasaIva ?? 10),
     controlaStock: producto?.controlaStock ?? true,
+    controlaLote: producto?.controlaLote ?? false,
   });
   const [variantes, setVariantes] = useState<VarianteForm[]>(
     producto?.variantes.filter((v) => v.activa).map((v) => ({ id: v.id, nombre: v.nombre ?? '', sku: v.sku ?? '', codigos: v.codigos.join(', '), precio: String(Number(v.precio)), costo: v.costo ? String(Number(v.costo)) : '', stockMinimo: v.stockMinimo && Number(v.stockMinimo) ? String(Number(v.stockMinimo)) : '', activa: true })) ?? [
@@ -149,6 +150,7 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
         unidad: d.unidad,
         tasaIva: Number(d.tasaIva),
         controlaStock: d.tipo === 'servicio' ? false : d.controlaStock,
+        controlaLote: d.tipo !== 'servicio' && d.controlaStock && d.controlaLote,
         variantes: variantes.map((v) => ({
           ...(v.id ? { id: v.id } : {}),
           nombre: v.nombre || null,
@@ -242,6 +244,12 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
         {d.tipo === 'producto' && (
           <label className="casilla">
             <input type="checkbox" disabled={!editable} checked={d.controlaStock} onChange={(e) => setD({ ...d, controlaStock: e.target.checked })} /> Controlar stock
+          </label>
+        )}
+        {d.tipo === 'producto' && d.controlaStock && (
+          <label className="casilla">
+            <input type="checkbox" disabled={!editable} checked={d.controlaLote} onChange={(e) => setD({ ...d, controlaLote: e.target.checked })} /> Controlar lotes y vencimientos
+            <span className="tenue peq">(la compra pide lote o vencimiento; se vende primero lo que vence antes y nunca lo vencido)</span>
           </label>
         )}
       </div>

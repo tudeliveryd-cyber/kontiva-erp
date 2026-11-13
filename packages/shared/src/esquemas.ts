@@ -127,6 +127,7 @@ export const productoEntrada = z.object({
   unidad: z.enum(UNIDADES).default('unidad'),
   tasaIva: z.coerce.number().refine((v) => v === 0 || v === 5 || v === 10, 'IVA 10, 5 o exento').default(10),
   controlaStock: z.boolean().default(true),
+  controlaLote: z.boolean().default(false),
   activo: z.boolean().default(true),
   variantes: z.array(varianteEntrada).min(1).max(200),
 });
@@ -139,7 +140,15 @@ export const ajusteStockEntrada = z.object({
   motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
   tipo: z.enum(['inicial', 'ajuste']).default('ajuste'),
   items: z
-    .array(z.object({ varianteId: uuid, cantidadNueva: z.coerce.number().min(-1e9).max(1e9) }))
+    .array(
+      z.object({
+        varianteId: uuid,
+        cantidadNueva: z.coerce.number().min(-1e9).max(1e9),
+        /** Productos con lote: el saldo contado es el de este lote (existente o nuevo). */
+        loteId: uuid.optional(),
+        lote: z.object({ codigo: z.string().trim().min(1).max(40), vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() }).optional(),
+      }),
+    )
     .min(1)
     .max(2000),
 });
@@ -408,7 +417,23 @@ export const compraEntrada = z
       .optional(),
     nota: textoOpcional(1000),
     items: z
-      .array(z.object({ varianteId: uuid, cantidad, costoUnitario: dinero, descuento: dinero.optional(), ordenLinea: z.number().int().positive().optional() }))
+      .array(
+        z.object({
+          varianteId: uuid,
+          cantidad,
+          costoUnitario: dinero,
+          descuento: dinero.optional(),
+          ordenLinea: z.number().int().positive().optional(),
+          /** Productos con control de lote: código del lote y/o vencimiento. */
+          lote: z
+            .object({
+              codigo: z.string().trim().max(40).nullable().optional().or(z.literal('').transform(() => null)),
+              vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
+            })
+            .nullable()
+            .optional(),
+        }),
+      )
       .min(1, 'Agregue al menos un producto')
       .max(1000),
   })

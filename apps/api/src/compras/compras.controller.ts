@@ -36,7 +36,7 @@ async function variantesCompra(tx: Tx, ids: string[]) {
   const vs = await tx
     .selectFrom('variante as v')
     .innerJoin('producto as p', 'p.id', 'v.producto_id')
-    .select(['v.id', 'v.nombre', 'v.costo', 'p.nombre as producto', 'p.tasa_iva', 'p.unidad', 'p.controla_stock', 'p.activo', 'v.activa'])
+    .select(['v.id', 'v.nombre', 'v.costo', 'p.nombre as producto', 'p.tasa_iva', 'p.unidad', 'p.controla_stock', 'p.controla_lote', 'p.activo', 'v.activa'])
     .where('v.id', 'in', ids)
     .execute();
   if (vs.length !== new Set(ids).size || vs.some((v) => !v.activo || !v.activa)) throw invalido('Algún producto no existe o está inactivo');
@@ -58,8 +58,8 @@ async function obtenerProveedor(tx: Tx, id: string) {
 /** Búsqueda de productos para comprar: el costo actual solo con costo_producto.ver. */
 async function buscarProductos(tx: Tx, ctx: Ctx, q: string) {
   const texto = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
-  const { rows } = await sql<{ id: string; producto: string; variante: string | null; sku: string | null; unidad: string; tasa_iva: string; costo: string }>`
-    SELECT v.id, p.nombre AS producto, v.nombre AS variante, v.sku, p.unidad, p.tasa_iva, v.costo
+  const { rows } = await sql<{ id: string; producto: string; variante: string | null; sku: string | null; unidad: string; tasa_iva: string; costo: string; controla_lote: boolean }>`
+    SELECT v.id, p.nombre AS producto, v.nombre AS variante, v.sku, p.unidad, p.tasa_iva, v.costo, p.controla_lote
     FROM variante v JOIN producto p ON p.id = v.producto_id
     WHERE p.activo AND v.activa AND p.tipo = 'producto' AND (
       EXISTS (SELECT 1 FROM codigo_barras cb WHERE cb.variante_id = v.id AND cb.codigo = ${q})
@@ -74,6 +74,7 @@ async function buscarProductos(tx: Tx, ctx: Ctx, q: string) {
     unidad: r.unidad,
     tasaIva: Number(r.tasa_iva) as 0 | 5 | 10,
     costo: verCosto ? r.costo : null,
+    controlaLote: r.controla_lote,
   }));
 }
 
@@ -186,7 +187,15 @@ async function leerOrden(tx: Tx, id: string) {
     .where('o.id', '=', id)
     .executeTakeFirst();
   if (!o) return null;
-  const items = await tx.selectFrom('orden_compra_item').selectAll().where('orden_id', '=', id).orderBy('linea').execute();
+  const items = await tx
+    .selectFrom('orden_compra_item as i')
+    .innerJoin('variante as v', 'v.id', 'i.variante_id')
+    .innerJoin('producto as p', 'p.id', 'v.producto_id')
+    .selectAll('i')
+    .select('p.controla_lote')
+    .where('i.orden_id', '=', id)
+    .orderBy('i.linea')
+    .execute();
   return {
     id: o.id,
     numero: Number(o.numero),
@@ -207,6 +216,7 @@ async function leerOrden(tx: Tx, id: string) {
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       cantidadRecibida: i.cantidad_recibida,
+      controlaLote: i.controla_lote,
       pendiente: Decimal.max(new Decimal(i.cantidad).minus(i.cantidad_recibida), 0).toFixed(4),
       costoUnitario: i.costo_unitario,
       tasaIva: i.tasa_iva,
@@ -394,7 +404,7 @@ async function leerCompra(tx: Tx, id: string, verCosto: boolean) {
     creadoPor: c.creado_por_nombre,
     creadoEn: c.creado_en,
     anulacion: c.anulada_en ? { por: c.anulada_por_nombre, en: c.anulada_en, motivo: c.motivo_anulacion } : null,
-    items: items.map((i) => ({ linea: i.linea, varianteId: i.variante_id, descripcion: i.descripcion, cantidad: i.cantidad, costoUnitario: ocultar(i.costo_unitario), descuento: ocultar(i.descuento), tasaIva: i.tasa_iva, total: ocultar(i.total) })),
+    items: items.map((i) => ({ linea: i.linea, varianteId: i.variante_id, descripcion: i.descripcion, cantidad: i.cantidad, costoUnitario: ocultar(i.costo_unitario), descuento: ocultar(i.descuento), tasaIva: i.tasa_iva, total: ocultar(i.total), lote: i.lote_codigo ? { codigo: i.lote_codigo, vencimiento: i.lote_vencimiento } : null })),
   };
 }
 
@@ -522,6 +532,16 @@ export class ComprasController {
       if (!prov.activo) throw invalido('El proveedor está inactivo');
       const dep = await obtenerDeposito(tx, ctx, d.depositoId);
       const vs = await variantesCompra(tx, d.items.map((i) => i.varianteId));
+      // Lote de cada línea: obligatorio (código o vencimiento) para los productos que controlan lote.
+      const lotes = d.items.map((i) => {
+        const v = vs.get(i.varianteId)!;
+        if (!v.controla_lote) return null;
+        const codigo = i.lote?.codigo?.trim().toUpperCase() || null;
+        const vencimiento = i.lote?.vencimiento ?? null;
+        if (!codigo && !vencimiento) throw invalido(`Indique el lote o el vencimiento de ${v.descripcion}`);
+        if (codigo === 'S/L') throw invalido('El código S/L está reservado');
+        return { codigo: codigo ?? `VTO-${vencimiento!.replace(/-/g, '')}`, vencimiento };
+      });
 
       // Orden de compra: mismo proveedor, enviada o parcial, sin recibir más de lo pedido.
       let orden: Awaited<ReturnType<typeof obtenerOrden>> | null = null;
@@ -594,6 +614,8 @@ export class ComprasController {
             tasa_iva: Number(vs.get(i.varianteId)!.tasa_iva),
             total: calc.lineas[n]!.total.toFixed(2),
             orden_linea: i.ordenLinea ?? null,
+            lote_codigo: lotes[n]?.codigo ?? null,
+            lote_vencimiento: lotes[n]?.vencimiento ?? null,
           })),
         )
         .execute();
@@ -625,7 +647,7 @@ export class ComprasController {
         d.items
           .map((i, n) => ({ i, n }))
           .filter(({ i }) => vs.get(i.varianteId)!.controla_stock)
-          .map(({ i, n }) => ({ varianteId: i.varianteId, cantidad: new Decimal(i.cantidad), tipo: 'compra' as const, origenId: compra.id, motivo: `Compra N.º ${numero}`, costo: calc.lineas[n]!.total.div(i.cantidad).toDecimalPlaces(2).toFixed(2) })),
+          .map(({ i, n }) => ({ varianteId: i.varianteId, cantidad: new Decimal(i.cantidad), tipo: 'compra' as const, origenId: compra.id, motivo: `Compra N.º ${numero}`, costo: calc.lineas[n]!.total.div(i.cantidad).toDecimalPlaces(2).toFixed(2), lote: lotes[n] ?? undefined })),
         false,
       );
 
@@ -691,7 +713,7 @@ export class ComprasController {
         tx,
         ctx,
         c.deposito_id,
-        items.filter((i) => i.controla_stock).map((i) => ({ varianteId: i.variante_id, cantidad: new Decimal(i.cantidad).neg(), tipo: 'anulacion_compra' as const, origenId: id, motivo: d.motivo, costo: i.costo_unitario })),
+        items.filter((i) => i.controla_stock).map((i) => ({ varianteId: i.variante_id, cantidad: new Decimal(i.cantidad).neg(), tipo: 'anulacion_compra' as const, origenId: id, motivo: d.motivo, costo: i.costo_unitario, deOrigen: { origenIds: [id], tipos: ['compra' as const] } })),
         true,
       );
       if (c.orden_id) {
