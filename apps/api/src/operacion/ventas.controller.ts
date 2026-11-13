@@ -4,7 +4,7 @@ import Decimal from 'decimal.js';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { AuthService } from '../auth/auth.service';
-import { enSucursal, exigirSucursal, preciosVigentes } from '../comun/alcance';
+import { enSucursal, exigirSucursal, listaDeCliente, preciosVigentes } from '../comun/alcance';
 import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, tiene, type Ctx, type Origen } from '../comun/contexto';
 import { Requiere } from '../comun/decoradores';
@@ -120,9 +120,10 @@ export class PdvController {
   @Requiere('venta', 'crear')
   @Get('buscar')
   buscar(@Contexto() ctx: Ctx, @Query() query: unknown) {
-    const f = validar(z.object({ cajaId: z.string().uuid(), q: z.string().trim().min(1).max(100) }), query);
+    const f = validar(z.object({ cajaId: z.string().uuid(), q: z.string().trim().min(1).max(100), clienteId: z.string().uuid().optional() }), query);
     return this.db.enEmpresa(ctx.empresaId, async (tx) => {
       const caja = await obtenerCaja(tx, ctx, f.cajaId);
+      const lista = await listaDeCliente(tx, f.clienteId);
       const base = () =>
         tx
           .selectFrom('variante as v')
@@ -145,7 +146,7 @@ export class PdvController {
           .limit(20)
           .execute();
       }
-      const precios = await preciosVigentes(tx, filas.map((r) => r.id), caja.sucursal_id);
+      const precios = await preciosVigentes(tx, filas.map((r) => r.id), caja.sucursal_id, lista);
       return {
         porCodigo,
         items: filas.map((r) => ({
@@ -159,6 +160,26 @@ export class PdvController {
           stock: r.controla_stock ? (r.cantidad ?? '0.0000') : null,
         })),
       };
+    });
+  }
+}
+
+@Controller('pdv')
+export class PdvPreciosController {
+  constructor(private readonly db: Db) {}
+
+  /** Precios de las líneas del carrito al elegir o quitar el cliente (su lista de precios). */
+  @Requiere('venta', 'crear')
+  @Post('precios')
+  @HttpCode(200)
+  precios(@Contexto() ctx: Ctx, @Body() body: unknown) {
+    const d = validar(z.object({ cajaId: z.string().uuid(), clienteId: z.string().uuid().nullable().optional(), varianteIds: z.array(z.string().uuid()).max(500) }), body);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const caja = await obtenerCaja(tx, ctx, d.cajaId);
+      const lista = await listaDeCliente(tx, d.clienteId);
+      const precios = await preciosVigentes(tx, [...new Set(d.varianteIds)], caja.sucursal_id, lista);
+      const nombre = lista ? (await tx.selectFrom('lista_precio').select('nombre').where('id', '=', lista).executeTakeFirstOrThrow()).nombre : null;
+      return { lista: lista ? { id: lista, nombre } : null, precios: Object.fromEntries(precios) };
     });
   }
 }
@@ -210,7 +231,8 @@ export class VentasController {
           .execute();
         const porId = new Map(variantes.map((v) => [v.id, v]));
         if (variantes.length !== ids.length || variantes.some((v) => !v.activo || !v.activa)) throw invalido('Algún producto no existe o está inactivo');
-        const precios = await preciosVigentes(tx, ids, caja.sucursal_id);
+        const lista = await listaDeCliente(tx, d.clienteId);
+        const precios = await preciosVigentes(tx, ids, caja.sucursal_id, lista);
 
         // Cambios de precio y descuentos: permiso propio o PIN de supervisor.
         const cambiaPrecio = d.items.some((i) => i.precioUnitario !== undefined && new Decimal(i.precioUnitario).toFixed(2) !== new Decimal(precios.get(i.varianteId) ?? 0).toFixed(2));
@@ -273,6 +295,7 @@ export class VentasController {
             numero,
             clave_idempotencia: d.claveIdempotencia,
             cliente_id: d.clienteId ?? null,
+            lista_precio_id: lista,
             subtotal: calc.subtotal.toFixed(2),
             descuento: calc.descuento.toFixed(2),
             total: calc.total.toFixed(2),

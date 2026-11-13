@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  Tags,
   Boxes,
   Package,
   Receipt,
@@ -26,6 +27,7 @@ export function Disposicion() {
     { a: '/cajas', icono: Store, texto: 'Cajas y PDV', visible: puede('caja.ver') },
     { a: '/ventas', icono: Receipt, texto: 'Ventas', visible: puede('venta.ver') },
     { a: '/productos', icono: Package, texto: 'Productos', visible: puede('producto.ver') },
+    { a: '/precios', icono: Tags, texto: 'Listas de precios', visible: puede('precio.ver') },
     { a: '/stock', icono: Boxes, texto: 'Stock', visible: puede('stock.ver') },
     { a: '/transferencias', icono: ArrowLeftRight, texto: 'Transferencias', visible: puede('transferencia.ver') },
     { a: '/clientes', icono: UsersRound, texto: 'Clientes', visible: puede('cliente.ver') },

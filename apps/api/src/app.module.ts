@@ -7,7 +7,8 @@ import { ClientesController } from './catalogo/clientes.controller';
 import { ImportacionController } from './catalogo/importacion.controller';
 import { StockController } from './catalogo/stock.controller';
 import { CajasController, CotizacionesController } from './operacion/cajas.controller';
-import { PdvController, VentasController } from './operacion/ventas.controller';
+import { PdvController, PdvPreciosController, VentasController } from './operacion/ventas.controller';
+import { ListasPrecioController } from './catalogo/listas.controller';
 import { DevolucionesController } from './operacion/devoluciones.controller';
 import { TransferenciasController } from './operacion/transferencias.controller';
 import { AuthController, CuentaController } from './auth/auth.controller';
@@ -52,6 +53,8 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     CajasController,
     CotizacionesController,
     PdvController,
+    PdvPreciosController,
+    ListasPrecioController,
     VentasController,
     TransferenciasController,
     DevolucionesController,

@@ -154,7 +154,27 @@ export const clienteEntrada = z.object({
   telefono: textoOpcional(40),
   email: email.nullable().optional().or(z.literal('').transform(() => null)),
   direccion: textoOpcional(300),
+  listaPrecioId: uuid.nullable().optional(),
   activo: z.boolean().optional(),
+});
+
+export const listaPrecioEntrada = z.object({
+  nombre: z.string().trim().min(2, 'Ingrese el nombre').max(80),
+  activa: z.boolean().optional(),
+});
+
+/** precio null = quitar el precio especial (rige el general). */
+export const preciosListaEntrada = z.object({
+  sucursalId: uuid.nullable().optional(),
+  items: z.array(z.object({ varianteId: uuid, precio: dinero.nullable() })).min(1).max(2000),
+});
+
+/** Genera precios de la lista a partir del precio normal: -10 = 10 % menos. */
+export const ajusteListaEntrada = z.object({
+  porcentaje: z.coerce.number().min(-90).max(500),
+  redondeo: z.coerce.number().refine((v) => [1, 50, 100, 500, 1000].includes(v), 'Redondeo inválido').default(1),
+  categoriaId: uuid.nullable().optional(),
+  soloSinPrecio: z.boolean().default(false),
 });
 
 export const cotizacionEntrada = z

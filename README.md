@@ -69,12 +69,14 @@ Producto comercial de **Araújo Tech Sistemas**.
 - **Devoluciones de ventas**: parciales o totales, también de ventas de cajas ya cerradas; reintegro
   proporcional al precio cobrado, en efectivo desde la caja abierta del cajero o por otro medio,
   con PIN de supervisor si el usuario no tiene el permiso; el stock vuelve al depósito de la caja.
-- **Pruebas**: 306 en total (288 de API, 18 compartidas); incluye 20 cajas vendiendo el mismo producto
+- **Listas de precios**: listas adicionales (mayorista, revendedor…) asignadas a clientes, precio por sucursal,
+  carga por porcentaje sobre el precio normal con redondeo; el PDV cobra la lista del cliente elegido
+  y el servidor recalcula siempre el precio (si un producto no está en la lista, rige el normal).
+- **Pruebas**: 332 en total (314 de API, 18 compartidas); incluye 20 cajas vendiendo el mismo producto
   a la vez con stock final exacto.
 
 ### Fase 1 · pendiente
 - Venta sin internet (cola local cifrada con numeración reservada) y agente local para impresora, gaveta y balanza.
-- Listas de precios adicionales y precio por sucursal (la base ya lo soporta; falta la pantalla).
 - Presupuestos y pedidos.
 - Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
 

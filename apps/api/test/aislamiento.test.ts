@@ -15,7 +15,8 @@ import { ClientesController } from '../src/catalogo/clientes.controller';
 import { ImportacionController } from '../src/catalogo/importacion.controller';
 import { StockController } from '../src/catalogo/stock.controller';
 import { CajasController, CotizacionesController } from '../src/operacion/cajas.controller';
-import { PdvController, VentasController } from '../src/operacion/ventas.controller';
+import { PdvController, PdvPreciosController, VentasController } from '../src/operacion/ventas.controller';
+import { ListasPrecioController } from '../src/catalogo/listas.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
 import { prepararVenta } from './ayudas';
@@ -43,6 +44,8 @@ const CONTROLADORES = [
   CajasController,
   CotizacionesController,
   PdvController,
+  PdvPreciosController,
+  ListasPrecioController,
   VentasController,
   TransferenciasController,
   DevolucionesController,
@@ -134,6 +137,8 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/transferencias'] = tr.body.id;
     const dv = await http(app).post('/api/devoluciones').set(hB).send({ ventaId: vb.ventaId, cajaId: vb.cajaId, motivo: 'Prueba B', items: [{ linea: 1, cantidad: 1 }] }).expect(201);
     idsDeB['/api/devoluciones'] = dv.body.id;
+    const lp = await http(app).post('/api/listas-precio').set(hB).send({ nombre: 'Mayorista B' }).expect(201);
+    idsDeB['/api/listas-precio'] = lp.body.id;
   });
   afterAll(() => app.close());
 
@@ -197,6 +202,9 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/cajas/:id/cerrar': { contado: [] },
           'POST /api/ventas/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/transferencias/:id/cancelar': { motivo: 'Intento ajeno' },
+          'PATCH /api/listas-precio/:id': { nombre: 'Intento ajeno' },
+          'PUT /api/listas-precio/:id/precios': { items: [{ varianteId: '00000000-0000-7000-8000-000000000000', precio: 1 }] },
+          'POST /api/listas-precio/:id/ajuste': { porcentaje: -10 },
         };
         const cuerpos: Record<string, object> = { patch: { nombre: 'Intento ajeno' }, put: { permisos: [] } };
         const cuerpo = porRuta[`${r.metodo.toUpperCase()} ${r.ruta}`] ?? cuerpos[r.metodo] ?? {};

@@ -393,6 +393,7 @@ export interface ClienteTabla {
   telefono: string | null;
   email: string | null;
   direccion: string | null;
+  lista_precio_id: string | null;
   activo: Generated<boolean>;
   creado_en: Creado;
   creado_por: string | null;
@@ -466,6 +467,7 @@ export interface VentaTabla {
   numero: ColumnType<string, number | string, never>;
   clave_idempotencia: string;
   cliente_id: string | null;
+  lista_precio_id: string | null;
   estado: Generated<'confirmada' | 'anulada'>;
   comprobante: Generated<'interno'>;
   subtotal: Num;

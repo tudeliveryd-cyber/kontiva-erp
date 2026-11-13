@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
 import { api } from '../lib/api';
 import type { Cliente } from '../lib/operacion';
+import type { ListaPrecio } from './Precios';
 import { useSesion } from '../lib/sesion';
 
 export function Clientes() {
@@ -72,8 +73,12 @@ function FichaCliente({ cliente, alCerrar }: { cliente: Cliente | null; alCerrar
   const qc = useQueryClient();
   const editable = cliente ? puede('cliente.editar') : puede('cliente.crear');
   const [d, setD] = useState({ nombre: cliente?.nombre ?? '', documento: cliente?.documento ?? '', telefono: cliente?.telefono ?? '', email: cliente?.email ?? '', direccion: cliente?.direccion ?? '' });
+  const [listaPrecioId, setListaPrecioId] = useState(cliente?.listaPrecioId ?? '');
+  const listas = useQuery({ queryKey: ['listas-precio'], queryFn: () => api<ListaPrecio[]>('/listas-precio'), enabled: puede('precio.ver') });
+  const adicionales = listas.data?.filter((l) => !l.predeterminada && (l.activa || l.id === listaPrecioId)) ?? [];
+  const cuerpo = { ...d, ...(puede('precio.ver') && { listaPrecioId: listaPrecioId || null }) };
   const guardar = useMutation({
-    mutationFn: () => (cliente ? api(`/clientes/${cliente.id}`, { metodo: 'PATCH', cuerpo: d }) : api('/clientes', { metodo: 'POST', cuerpo: d })),
+    mutationFn: () => (cliente ? api(`/clientes/${cliente.id}`, { metodo: 'PATCH', cuerpo }) : api('/clientes', { metodo: 'POST', cuerpo })),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['clientes'] });
       alCerrar();
@@ -99,6 +104,16 @@ function FichaCliente({ cliente, alCerrar }: { cliente: Cliente | null; alCerrar
         </div>
         {campo('email', 'Correo', { tipo: 'email' })}
         {campo('direccion', 'Dirección')}
+        {adicionales.length > 0 && (
+          <Campo etiqueta="Lista de precios" id="clp" ayuda="En la caja, al elegir este cliente se cobran los precios de su lista.">
+            <select id="clp" className="entrada" disabled={!editable} value={listaPrecioId} onChange={(e) => setListaPrecioId(e.target.value)}>
+              <option value="">Precio normal</option>
+              {adicionales.map((l) => (
+                <option key={l.id} value={l.id}>{l.nombre}{l.activa ? '' : ' (inactiva)'}</option>
+              ))}
+            </select>
+          </Campo>
+        )}
       </div>
     </Cajon>
   );

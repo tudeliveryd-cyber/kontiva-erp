@@ -104,7 +104,9 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const [lineas, setLineas] = useState<Linea[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [listaCliente, setListaCliente] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [nota, setNota] = useState<string | null>(null);
   const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | null>(null);
   const [autorizacion, setAutorizacion] = useState<{ token: string; nombre: string } | null>(null);
   const [vendida, setVendida] = useState<Venta | null>(null);
@@ -139,6 +141,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     });
     if (it.controlaStock && it.stock !== null && Number(it.stock) <= 0 && !c.permiteStockNegativo) setAviso(`Sin stock: ${it.descripcion}`);
     else setAviso(null);
+    setNota(null);
     setQ('');
     setResultados(null);
     enfocar();
@@ -148,7 +151,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     const texto = q.trim();
     if (!texto) return;
     try {
-      const r = await api<{ porCodigo: boolean; items: ItemBusqueda[] }>(`/pdv/buscar?cajaId=${c.caja.id}&q=${encodeURIComponent(texto)}`);
+      const r = await api<{ porCodigo: boolean; items: ItemBusqueda[] }>(`/pdv/buscar?cajaId=${c.caja.id}&q=${encodeURIComponent(texto)}${cliente ? `&clienteId=${cliente.id}` : ''}`);
       if (r.items.length === 0) {
         setAviso(`No se encontró "${texto}"`);
         setResultados(null);
@@ -163,6 +166,26 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     }
   };
 
+  /** Al elegir o quitar el cliente, el carrito pasa a los precios de su lista (el servidor cobra lo mismo). */
+  const aplicarPreciosCliente = async (cl: Cliente | null) => {
+    if (!cl?.listaPrecioId && !listaCliente) {
+      setListaCliente(null);
+      return;
+    }
+    try {
+      const r = await api<{ lista: { id: string; nombre: string } | null; precios: Record<string, string> }>('/pdv/precios', {
+        metodo: 'POST',
+        cuerpo: { cajaId: c.caja.id, clienteId: cl?.id ?? null, varianteIds: lineas.map((l) => l.varianteId) },
+      });
+      setListaCliente(r.lista?.nombre ?? null);
+      setLineas((ls) => ls.map((l) => ({ ...l, precio: r.precios[l.varianteId] ?? l.precio })));
+      setAviso(null);
+      setNota(lineas.length ? (r.lista ? `Precios de la lista "${r.lista.nombre}" aplicados` : 'Precios normales aplicados') : null);
+    } catch (e) {
+      setAviso(e instanceof FalloApi ? e.mensaje : 'No se pudieron actualizar los precios');
+    }
+  };
+
   const cambiarCantidad = (i: number, v: string) => setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, cantidad: v } : l)));
   const quitar = (i: number) => {
     setLineas((ls) => ls.filter((_, j) => j !== i));
@@ -172,6 +195,8 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const nuevaVenta = () => {
     setLineas([]);
     setCliente(null);
+    setListaCliente(null);
+    setNota(null);
     setAutorizacion(null);
     setVendida(null);
     setSel(null);
@@ -274,6 +299,11 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
               <Aviso tipo="error">{aviso}</Aviso>
             </div>
           )}
+          {!aviso && nota && (
+            <div style={{ padding: '10px 18px 0' }}>
+              <Aviso tipo="info">{nota}</Aviso>
+            </div>
+          )}
           <div className="pdv-items">
             {lineas.length === 0 ? (
               <Vacio titulo="Venta vacía">Escanee un producto o búsquelo por nombre.</Vacio>
@@ -351,7 +381,9 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           </button>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn" style={{ flex: 1 }} onClick={() => setDialogo('cliente')}>
-              <UserRound size={16} /> {cliente ? cliente.nombre : 'Cliente'} <span className="tecla">F4</span>
+              <UserRound size={16} /> {cliente ? cliente.nombre : 'Cliente'}
+              {listaCliente && <span className="insignia i-p" style={{ padding: '1px 7px' }}>{listaCliente}</span>}
+              <span className="tecla">F4</span>
             </button>
             <button className="btn" style={{ flex: 1 }} disabled={sel === null} onClick={() => setDialogo(c.puede.descuento || autorizacion ? 'descuento' : 'autorizar')}>
               <Percent size={16} /> Descuento <span className="tecla">F8</span>
@@ -397,6 +429,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           alElegir={(cl) => {
             setCliente(cl);
             setDialogo(null);
+            void aplicarPreciosCliente(cl);
             enfocar();
           }}
           alCerrar={() => {

@@ -49,6 +49,7 @@ export interface Cliente {
   telefono: string | null;
   email: string | null;
   direccion: string | null;
+  listaPrecioId: string | null;
   activo: boolean;
 }
 

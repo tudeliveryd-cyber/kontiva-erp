@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, type Ctx, type Origen } from '../comun/contexto';
 import { Requiere } from '../comun/decoradores';
-import { noEncontrado } from '../comun/errores';
+import { invalido, noEncontrado } from '../comun/errores';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 import type { ClienteTabla } from '../db/tipos';
@@ -17,8 +17,17 @@ const aDto = (c: Selectable<ClienteTabla>) => ({
   telefono: c.telefono,
   email: c.email,
   direccion: c.direccion,
+  listaPrecioId: c.lista_precio_id,
   activo: c.activo,
 });
+
+/** Lista especial del cliente: debe existir y estar activa; la predeterminada equivale a ninguna. */
+async function listaValida(tx: Tx, id: string | null | undefined): Promise<string | null> {
+  if (!id) return null;
+  const l = await tx.selectFrom('lista_precio').select(['id', 'predeterminada', 'activa']).where('id', '=', id).executeTakeFirst();
+  if (!l || !l.activa) throw invalido('La lista de precios no existe o está inactiva');
+  return l.predeterminada ? null : l.id;
+}
 
 async function obtener(tx: Tx, id: string) {
   const c = await tx.selectFrom('cliente').selectAll().where('id', '=', id).executeTakeFirst();
@@ -54,7 +63,7 @@ export class ClientesController {
     return this.db.enEmpresa(ctx.empresaId, async (tx) => {
       const c = await tx
         .insertInto('cliente')
-        .values({ empresa_id: ctx.empresaId, nombre: d.nombre, documento: d.documento, telefono: d.telefono ?? null, email: d.email ?? null, direccion: d.direccion ?? null, creado_por: ctx.usuarioId })
+        .values({ empresa_id: ctx.empresaId, nombre: d.nombre, documento: d.documento, telefono: d.telefono ?? null, email: d.email ?? null, direccion: d.direccion ?? null, lista_precio_id: await listaValida(tx, d.listaPrecioId), creado_por: ctx.usuarioId })
         .returningAll()
         .executeTakeFirstOrThrow();
       await auditar(tx, { ...ctx, ...o }, { accion: 'crear', entidad: 'cliente', entidadId: c.id, despues: aDto(c) });
@@ -68,9 +77,10 @@ export class ClientesController {
     const d = validar(clienteEntrada, body);
     return this.db.enEmpresa(ctx.empresaId, async (tx) => {
       const antes = await obtener(tx, id);
+      const lista = d.listaPrecioId === undefined ? antes.lista_precio_id : await listaValida(tx, d.listaPrecioId);
       const c = await tx
         .updateTable('cliente')
-        .set({ nombre: d.nombre, documento: d.documento, telefono: d.telefono ?? null, email: d.email ?? null, direccion: d.direccion ?? null, ...(d.activo !== undefined && { activo: d.activo }) })
+        .set({ nombre: d.nombre, documento: d.documento, telefono: d.telefono ?? null, email: d.email ?? null, direccion: d.direccion ?? null, lista_precio_id: lista, ...(d.activo !== undefined && { activo: d.activo }) })
         .where('id', '=', id)
         .returningAll()
         .executeTakeFirstOrThrow();
