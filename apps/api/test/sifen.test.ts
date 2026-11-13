@@ -65,6 +65,17 @@ class SifenSimulado {
           res.end(sobre(`<ns2:rResEnviConsLoteDe ${ns}><ns2:dFecProc>2026-11-12T10:00:05</ns2:dFecProc><ns2:dCodResLot>0362</ns2:dCodResLot><ns2:dMsgResLot>Procesamiento de lote concluido</ns2:dMsgResLot>${items}</ns2:rResEnviConsLoteDe>`));
           return;
         }
+        if (req.url!.endsWith('consulta-ruc.wsdl')) {
+          const ruc = valor(cuerpo, 'dRUCCons');
+          res.end(
+            sobre(
+              ruc === '80069563'
+                ? `<ns2:rResEnviConsRUC ${ns}><ns2:dCodRes>0502</ns2:dCodRes><ns2:dMsgRes>RUC encontrado</ns2:dMsgRes><ns2:xContRUC><ns2:dRUCCons>80069563</ns2:dRUCCons><ns2:dRazCons>EMPRESA DE PRUEBA S.A.</ns2:dRazCons><ns2:dCodEstCons>ACT</ns2:dCodEstCons><ns2:dDesEstCons>ACTIVO</ns2:dDesEstCons><ns2:dRUCFactElec>S</ns2:dRUCFactElec></ns2:xContRUC></ns2:rResEnviConsRUC>`
+                : `<ns2:rResEnviConsRUC ${ns}><ns2:dCodRes>0500</ns2:dCodRes><ns2:dMsgRes>RUC no existe</ns2:dMsgRes></ns2:rResEnviConsRUC>`,
+            ),
+          );
+          return;
+        }
         if (req.url!.endsWith('evento.wsdl')) {
           this.eventos.push(cuerpo);
           const cdc = valor(cuerpo, 'Id');
@@ -255,6 +266,16 @@ describe('Facturación electrónica (SIFEN)', () => {
       .set(h)
       .send({ ambiente: 'test', tipoContribuyente: 2, actividadCodigo: '47190', actividadDescripcion: 'Venta al por menor', timbradoNumero: conf.body.timbradoNumero, timbradoFecha: '2026-01-01', cscId: '1', envioCorreo: false })
       .expect(200);
+  });
+
+  it('consulta de RUC en la DNIT para cargar clientes', async () => {
+    const r = await http(app).get('/api/facturacion/ruc/80069563').set(h).expect(200);
+    expect(r.body).toEqual({ encontrado: true, ruc: '80069563-1', razonSocial: 'EMPRESA DE PRUEBA S.A.', estado: 'ACTIVO', facturadorElectronico: true });
+    const n = await http(app).get('/api/facturacion/ruc/1234567-0').set(h).expect(200);
+    expect(n.body).toMatchObject({ encontrado: false, mensaje: 'RUC no existe' });
+    await http(app).get('/api/facturacion/ruc/abc').set(h).expect(400);
+    const cajero = await crearUsuario(app, e, 'cajero');
+    await http(app).get('/api/facturacion/ruc/80069563').set(auth((await login(app, cajero.email)).token)).expect(200);
   });
 
   it('cliente contribuyente: B2B con RUC; rechazo de SIFEN y reenvío', async () => {

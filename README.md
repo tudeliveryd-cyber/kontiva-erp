@@ -146,8 +146,10 @@ Fase 2 completa.
 - **Envío por correo** del KuDE y el XML: manual desde el documento o la venta, y automático cuando SIFEN aprueba
   (opción de la configuración fiscal; hasta 3 intentos, con el error a la vista).
 
+- **Consulta de RUC en la DNIT** al cargar clientes (servicio de SIFEN con el certificado de la empresa):
+  completa la razón social y el dígito verificador, y muestra el estado y si es facturador electrónico.
+
 ### Fase 3 · pendiente
-- Consulta de RUC en la DNIT al cargar clientes.
 - Homologación con el ambiente de prueba real de la DNIT (requiere el certificado y el timbrado de la empresa).
 
 ### Fase 4 · hecho (RRHH y sueldos)

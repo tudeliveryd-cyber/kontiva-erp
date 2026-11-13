@@ -87,6 +87,13 @@ function FichaCliente({ cliente, alCerrar }: { cliente: Cliente | null; alCerrar
     ...(puede('precio.ver') && { listaPrecioId: listaPrecioId || null }),
     ...(puede('credito_cliente.editar') && { limiteCredito: Number(credito.limite) || 0, plazoCreditoDias: Number(credito.plazo) || 30 }),
   };
+  const consultaRuc = useMutation({
+    mutationFn: () => api<{ encontrado: boolean; ruc?: string; razonSocial?: string; estado?: string; facturadorElectronico?: boolean; mensaje?: string }>(`/facturacion/ruc/${encodeURIComponent(d.documento.trim())}`),
+    onSuccess: (r) => {
+      if (r.encontrado) setD((x) => ({ ...x, documento: r.ruc!, nombre: r.razonSocial! }));
+    },
+  });
+  const pareceRuc = /^[0-9]{3,8}(-[0-9])?$/.test(d.documento.trim());
   const guardar = useMutation({
     mutationFn: () => (cliente ? api(`/clientes/${cliente.id}`, { metodo: 'PATCH', cuerpo }) : api('/clientes', { metodo: 'POST', cuerpo })),
     onSuccess: () => {
@@ -112,6 +119,21 @@ function FichaCliente({ cliente, alCerrar }: { cliente: Cliente | null; alCerrar
           {campo('documento', 'RUC o cédula', { ayuda: 'RUC con dígito verificador: 80012345-6' })}
           {campo('telefono', 'Teléfono / WhatsApp')}
         </div>
+        {editable && pareceRuc && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: -6 }}>
+            <button type="button" className="btn" style={{ height: 30 }} disabled={consultaRuc.isPending} onClick={() => consultaRuc.mutate()}>
+              <Search size={14} /> {consultaRuc.isPending ? 'Consultando…' : 'Consultar RUC en la DNIT'}
+            </button>
+            {consultaRuc.data && (
+              <span className="peq" style={{ color: consultaRuc.data.encontrado ? (consultaRuc.data.estado === 'ACTIVO' ? 'var(--ok)' : 'var(--warn)') : 'var(--bad)' }}>
+                {consultaRuc.data.encontrado
+                  ? `${consultaRuc.data.razonSocial} · ${consultaRuc.data.estado?.toLowerCase()}${consultaRuc.data.facturadorElectronico ? ' · facturador electrónico' : ''}`
+                  : consultaRuc.data.mensaje}
+              </span>
+            )}
+          </div>
+        )}
+        <ErrorApi error={consultaRuc.error} />
         {campo('email', 'Correo', { tipo: 'email' })}
         {campo('direccion', 'Dirección')}
         {(puede('credito_cliente.editar') || puede('credito_cliente.ver')) && (

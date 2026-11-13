@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, StreamableFile } from '@nestjs/common';
-import { feCertificadoEntrada, feConfiguracionEntrada, feEstablecimientoEntrada, fePuntoEntrada, validarRuc } from '@kontiva/shared';
+import { calcularDvRuc, feCertificadoEntrada, feConfiguracionEntrada, feEstablecimientoEntrada, fePuntoEntrada, validarRuc } from '@kontiva/shared';
 import xmlgen from 'facturacionelectronicapy-xmlgen';
 import { z } from 'zod';
 import { cifrar } from '../auth/segundo-factor';
@@ -15,6 +15,7 @@ import Decimal from 'decimal.js';
 import { cargarFe, emitirFactura, emitirNotaCredito, numeroComprobante } from './emision';
 import { valor } from './firma';
 import { EmisorSifen, inutilizarEnSifen } from './emisor.service';
+import { consultarRuc } from './cliente';
 import { correoReceptor, enviarDocumentoPorCorreo } from './envio-correo';
 import { kudePdf } from './kude';
 import { Correo } from '../comun/correo';
@@ -292,6 +293,24 @@ export class FacturacionController {
         xml: d.xml_firmado,
       };
     });
+  }
+
+  /** Consulta un RUC en la DNIT (servicio de SIFEN, con el certificado de la empresa) para cargar clientes. */
+  @Requiere('cliente', 'crear')
+  @Get('ruc/:ruc')
+  async ruc(@Contexto() ctx: Ctx, @Param('ruc') valorRuc: string) {
+    const m = /^([0-9]{3,8})(?:-([0-9]))?$/.exec(valorRuc.trim());
+    if (!m) throw invalido('Ingrese el RUC: solo números, con o sin dígito verificador');
+    const base = m[1]!;
+    const fe = await this.db.enEmpresa(ctx.empresaId, (tx) => cargarFe(tx, true));
+    if (!fe) throw conflicto('FE_NO_CONFIGURADA', 'Para consultar en la DNIT, cargue el certificado digital y los datos fiscales en Facturación electrónica');
+    try {
+      const r = await consultarRuc(fe.ambiente, Date.now() % 1e12, base, fe.cert);
+      if (r.codigo !== '0502' || !r.razonSocial) return { encontrado: false, mensaje: r.mensaje || 'RUC no encontrado' };
+      return { encontrado: true, ruc: `${base}-${calcularDvRuc(base)}`, razonSocial: r.razonSocial, estado: r.estado, facturadorElectronico: r.facturadorElectronico };
+    } catch (e) {
+      throw conflicto('DNIT_NO_DISPONIBLE', `No se pudo consultar en la DNIT: ${(e as Error).message}`);
+    }
   }
 
   /** KuDE en hoja A4 (PDF), armado desde el XML firmado. */
