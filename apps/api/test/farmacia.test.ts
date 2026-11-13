@@ -11,7 +11,7 @@ describe('Farmacia', () => {
   let e: EmpresaPrueba;
   let h: { Authorization: string };
   let base: Awaited<ReturnType<typeof prepararVenta>>;
-  const v: Record<string, string> = {};
+  const v = { paracetamol: '', generico: '', otroGenerico: '', amoxi: '', clona: '' };
 
   const producto = async (nombre: string, extra: object, stock = 20) => {
     const p = await http(app).post('/api/productos').set(h).send({ nombre, tasaIva: 10, controlaLote: true, variantes: [{ precio: 10000, costo: 5000, codigos: [] }], ...extra }).expect(201);
