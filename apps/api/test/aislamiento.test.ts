@@ -22,6 +22,7 @@ import { FacturacionController } from '../src/sifen/facturacion.controller';
 import { CobrosController, CuentasCobrarController } from '../src/finanzas/cobrar.controller';
 import { CuentasBancariasController, MovimientosBancariosController } from '../src/finanzas/bancos.controller';
 import { FlujoCajaController } from '../src/finanzas/flujo.controller';
+import { ContabilidadController } from '../src/contabilidad/contabilidad.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
@@ -68,6 +69,7 @@ const CONTROLADORES = [
   CuentasBancariasController,
   MovimientosBancariosController,
   FlujoCajaController,
+  ContabilidadController,
 ];
 
 interface Ruta {
@@ -184,6 +186,17 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/cobros'] = kB.body.id;
     const cbB = await http(app).post('/api/cuentas-bancarias').set(hB).send({ banco: 'Banco de B', nombre: 'Cuenta corriente', saldoInicial: 0, fechaSaldoInicial: '2026-11-01' }).expect(201);
     idsDeB['/api/cuentas-bancarias'] = cbB.body.id;
+    await http(app).post('/api/contabilidad/cuentas/plan-sugerido').set(hB).expect(201);
+    const planB = await http(app).get('/api/contabilidad/cuentas').set(hB).expect(200);
+    const cajaB = planB.body.cuentas.find((c: { codigo: string }) => c.codigo === '1.1.01').id;
+    const capitalB = planB.body.cuentas.find((c: { codigo: string }) => c.codigo === '3.1.01').id;
+    idsDeB['/api/contabilidad/cuentas'] = cajaB;
+    const asB = await http(app)
+      .post('/api/contabilidad/asientos')
+      .set(hB)
+      .send({ fecha: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date()), descripcion: 'Aporte de capital', lineas: [{ cuentaId: cajaB, debe: 1000 }, { cuentaId: capitalB, haber: 1000 }] })
+      .expect(201);
+    idsDeB['/api/contabilidad/asientos'] = asB.body.id;
   });
   afterAll(() => app.close());
 
@@ -265,6 +278,8 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/compras/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/pagos-proveedor/:id/anular': { motivo: 'Intento ajeno' },
           'POST /api/cobros/:id/anular': { motivo: 'Intento ajeno' },
+          'PATCH /api/contabilidad/cuentas/:id': { codigo: '1.1.01', nombre: 'Intento ajeno', imputable: true },
+          'POST /api/contabilidad/asientos/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/cuentas-bancarias/:id': { banco: 'Banco ajeno', nombre: 'Intento ajeno', fechaSaldoInicial: '2026-11-01' },
           'POST /api/cuentas-bancarias/:id/movimientos': { tipo: 'deposito', fecha: '2026-11-12', monto: 1, descripcion: 'Intento ajeno' },
           'POST /api/cuentas-bancarias/:id/transferencia': { destinoId: '00000000-0000-7000-8000-000000000000', fecha: '2026-11-12', monto: 1 },

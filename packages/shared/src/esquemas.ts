@@ -485,3 +485,59 @@ export const depositoCajaEntrada = z.object({
   monto: z.coerce.number().positive().max(1e13),
   referencia: textoOpcional(80),
 });
+
+// ── Contabilidad ──────────────────────────────────────────────────────────────
+
+export const CONCEPTOS_CONTABLES = {
+  caja: 'Caja (efectivo)',
+  valores: 'Valores a depositar (tarjetas, cheques, otros medios)',
+  bancos: 'Bancos (si la cuenta bancaria no tiene una propia)',
+  transferencias: 'Transferencias entre cuentas en tránsito',
+  deudores: 'Deudores por ventas (cuentas a cobrar)',
+  iva_credito: 'IVA crédito fiscal (compras)',
+  mercaderias: 'Mercaderías (inventario)',
+  proveedores: 'Proveedores (cuentas a pagar)',
+  iva_debito: 'IVA débito fiscal (ventas)',
+  ventas: 'Ventas de mercaderías',
+  devoluciones_ventas: 'Devoluciones sobre ventas',
+  costo_ventas: 'Costo de mercaderías vendidas',
+  gastos_generales: 'Gastos (cuentas a pagar sin compra)',
+  gastos_bancarios: 'Gastos bancarios',
+  ingresos_financieros: 'Ingresos financieros (intereses)',
+  deposito_manual: 'Contrapartida de depósitos bancarios manuales',
+  extraccion_manual: 'Contrapartida de extracciones bancarias',
+} as const;
+export type ConceptoContable = keyof typeof CONCEPTOS_CONTABLES;
+
+export const cuentaContableEntrada = z.object({
+  codigo: z.string().trim().regex(/^[0-9]+(\.[0-9]+)*$/, 'Use números separados por punto, por ejemplo 1.1.08'),
+  nombre: z.string().trim().min(2, 'Ingrese el nombre de la cuenta').max(120),
+  imputable: z.boolean(),
+  activa: z.boolean().optional(),
+});
+
+export const conceptosContablesEntrada = z.object({
+  conceptos: z.partialRecord(z.enum(Object.keys(CONCEPTOS_CONTABLES) as [ConceptoContable, ...ConceptoContable[]]), z.string().uuid()).default({}),
+  bancos: z.record(z.string().uuid(), z.string().uuid().nullable()).default({}),
+});
+
+export const asientoManualEntrada = z
+  .object({
+    fecha: fechaDia,
+    descripcion: z.string().trim().min(3, 'Describa el asiento').max(300),
+    lineas: z
+      .array(
+        z.object({
+          cuentaId: z.string().uuid('Elija la cuenta'),
+          debe: z.coerce.number().min(0).max(1e13).default(0),
+          haber: z.coerce.number().min(0).max(1e13).default(0),
+          detalle: textoOpcional(200),
+        }),
+      )
+      .min(2, 'Un asiento necesita al menos dos líneas')
+      .max(200),
+  })
+  .refine((a) => a.lineas.every((l) => (l.debe > 0) !== (l.haber > 0)), { message: 'Cada línea va al debe o al haber, con un monto', path: ['lineas'] })
+  .refine((a) => Math.round(a.lineas.reduce((s, l) => s + l.debe - l.haber, 0) * 100) === 0, { message: 'El debe y el haber deben sumar lo mismo', path: ['lineas'] });
+
+export const cierreContableEntrada = z.object({ hasta: fechaDia, motivo: textoOpcional(300) });

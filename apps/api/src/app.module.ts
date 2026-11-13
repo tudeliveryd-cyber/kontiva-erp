@@ -14,6 +14,7 @@ import { FacturacionController } from './sifen/facturacion.controller';
 import { CobrosController, CuentasCobrarController } from './finanzas/cobrar.controller';
 import { CuentasBancariasController, MovimientosBancariosController } from './finanzas/bancos.controller';
 import { FlujoCajaController } from './finanzas/flujo.controller';
+import { ContabilidadController } from './contabilidad/contabilidad.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from './compras/compras.controller';
 import { EmisorSifen } from './sifen/emisor.service';
 import { DevolucionesController } from './operacion/devoluciones.controller';
@@ -75,6 +76,7 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     CuentasBancariasController,
     MovimientosBancariosController,
     FlujoCajaController,
+    ContabilidadController,
     VentasController,
     TransferenciasController,
     DevolucionesController,

@@ -254,6 +254,11 @@ export interface BaseDatos {
   cobro_aplicacion: CobroAplicacionTabla;
   cuenta_bancaria: CuentaBancariaTabla;
   movimiento_bancario: MovimientoBancarioTabla;
+  cuenta_contable: CuentaContableTabla;
+  cuenta_concepto: CuentaConceptoTabla;
+  asiento: AsientoTabla;
+  asiento_linea: AsientoLineaTabla;
+  cierre_contable: CierreContableTabla;
   'master.usuario': MasterUsuarioTabla;
   'master.sesion': MasterSesionTabla;
   'master.suscripcion': MasterSuscripcionTabla;
@@ -903,6 +908,7 @@ export interface CuentaBancariaTabla {
   saldo_inicial: NumGen;
   fecha_saldo_inicial: Fecha;
   activa: Generated<boolean>;
+  cuenta_contable_id: Generated<string | null>;
   creado_por: string | null;
   creado_en: Creado;
 }
@@ -924,5 +930,56 @@ export interface MovimientoBancarioTabla {
   conciliado_en: Date | null;
   conciliado_por: string | null;
   creado_por: string;
+  creado_en: Creado;
+}
+
+export type TipoCuentaContable = 'activo' | 'pasivo' | 'patrimonio' | 'ingreso' | 'gasto';
+export interface CuentaContableTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  codigo: string;
+  nombre: string;
+  tipo: TipoCuentaContable;
+  imputable: boolean;
+  padre_id: string | null;
+  activa: Generated<boolean>;
+  creado_en: Creado;
+}
+export interface CuentaConceptoTabla {
+  empresa_id: string;
+  concepto: string;
+  cuenta_id: string;
+}
+export interface AsientoTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: number;
+  fecha: Fecha;
+  descripcion: string;
+  origen_tipo: string;
+  origen_id: string | null;
+  estado: Generated<'confirmado' | 'anulado'>;
+  anulado_por: string | null;
+  anulado_en: Date | null;
+  motivo_anulacion: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+export interface AsientoLineaTabla {
+  empresa_id: string;
+  asiento_id: string;
+  linea: number;
+  cuenta_id: string;
+  debe: Num;
+  haber: Num;
+  detalle: string | null;
+}
+export interface CierreContableTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  accion: 'cierre' | 'reapertura';
+  hasta: string | null;
+  motivo: string | null;
+  usuario_id: string;
   creado_en: Creado;
 }

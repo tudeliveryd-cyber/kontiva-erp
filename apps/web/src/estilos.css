@@ -294,3 +294,11 @@ dl.datos dd { margin: 0; }
 .barra-flujo .ent { background: var(--ok); }
 .barra-flujo .sal { background: var(--bad); opacity: 0.75; }
 td.num { white-space: nowrap; }
+
+/* Contabilidad */
+.cifra small { display: block; margin-top: 4px; font-size: 12px; }
+table.diario tbody + tbody .cab-asiento td { border-top: 2px solid var(--linea); }
+.cab-asiento td { background: var(--fondo2, #f8fafc); font-size: 13.5px; }
+tbody.anulado td { color: var(--t3); }
+tbody.anulado .cab-asiento b { text-decoration: line-through; }
+tr.total-fila td { font-weight: 700; border-top: 2px solid var(--linea); background: var(--fondo2, #f8fafc); }

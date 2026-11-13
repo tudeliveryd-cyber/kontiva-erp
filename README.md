@@ -109,8 +109,18 @@ Producto comercial de **Araújo Tech Sistemas**.
 - **Flujo de caja** (flujo_caja.ver, confidencial): entradas y salidas reales del período por día y por
   concepto, exportación CSV, y proyección desde el saldo en bancos con lo que vence a cobrar y a pagar.
 
-### Fase 2 · pendiente
-- Plan de cuentas y asientos automáticos (contabilidad).
+- **Contabilidad**: plan de cuentas sugerido para un comercio en Paraguay (ampliable: grupos y cuentas
+  imputables), configuración de qué cuenta usa cada operación (también una cuenta propia por banco) y
+  contabilización automática e idempotente de ventas (con IVA y costo de lo vendido sin IVA), devoluciones,
+  compras, cuentas a pagar sin compra, pagos, cobros y movimientos bancarios; las anulaciones generan el
+  asiento inverso. Los asientos se numeran en orden de fecha y la base de datos exige debe = haber.
+  Asientos manuales (se anulan con el inverso), libro diario, libro mayor (también de un grupo), sumas y
+  saldos, balance general y estado de resultados, con exportación CSV. Cierre de períodos: contabiliza lo
+  pendiente y bloquea fechas cerradas; un documento atrasado pasa al primer día abierto. Reapertura con motivo.
+  No se contabilizan solos (van por asiento manual): el stock inicial, los ajustes de stock, los ingresos y
+  retiros manuales de caja y las diferencias de arqueo.
+
+### Fase 2 · completa
 
 ### Fase 3 · hecho (factura electrónica)
 - **Configuración fiscal**: ambiente (prueba / producción), timbrado, actividad económica, CSC y certificado
