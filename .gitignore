@@ -8,3 +8,4 @@ coverage/
 .DS_Store
 deploy/.env
 deploy/backups/
+.devcontainer/ACCESO.txt

@@ -16,5 +16,12 @@ export default defineConfig({
     port: 5173,
     // Mismo origen para la API: la cookie de renovación (Path=/api/auth, SameSite=Strict) funciona en desarrollo.
     proxy: { '/api/master': 'http://localhost:3001', '/api': 'http://localhost:3000' },
+    // Enlaces de prueba en GitHub Codespaces (https://<nombre>-5173.app.github.dev).
+    allowedHosts: ['.app.github.dev'],
+  },
+  preview: {
+    port: 5173,
+    proxy: { '/api/master': 'http://localhost:3001', '/api': 'http://localhost:3000' },
+    allowedHosts: ['.app.github.dev'],
   },
 });

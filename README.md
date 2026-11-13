@@ -94,6 +94,13 @@ packages/shared  Catálogo de permisos, perfiles de plantilla y esquemas Zod (AP
 scripts/         Roles de base de datos
 ```
 
+## Probar por enlace (GitHub Codespaces)
+
+Abra https://codespaces.new/tudeliveryd-cyber/kontiva-erp?ref=fase-1-operacion y elija **Create codespace**.
+En unos 5 minutos queda todo listo (PostgreSQL, migraciones, empresa de prueba y Panel Master) y se abre
+el ERP en un enlace `https://<nombre>-5173.app.github.dev`. Los datos de acceso quedan en
+`.devcontainer/ACCESO.txt`; las instrucciones, en `.devcontainer/PROBAR.md`.
+
 ## Desarrollo local
 
 Requisitos: Node 22, pnpm 10, Docker (o PostgreSQL 16 local).

@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { config } from './config';
 import { migrar, revertirUltima } from './db/migrador';
 import { ProvisionService } from './provision/provision.service';
+import { AuthService } from './auth/auth.service';
 import { randomBytes } from 'node:crypto';
 import { hashear } from './auth/cripto';
 import { crearKysely } from './db/database';
@@ -25,6 +26,7 @@ const AYUDA = `KONTIVA ERP · herramientas de línea de comandos
       --plan START|BUSINESS|ENTERPRISE   (obligatorio)
       --email propietario@correo      (obligatorio)
       --nombre "Nombre del propietario" (obligatorio)
+      --contrasena "..."            (solo pruebas: define la contraseña sin invitación)
   master:crear --email x --nombre "Nombre"   Crea un usuario del Panel Master (imprime una contraseña temporal)
   master:reiniciar-2fa --email x             Quita el segundo factor de un usuario master (lo vuelve a configurar al entrar)
   suscripciones:procesar                     Suspende / reactiva empresas según sus vencimientos
@@ -62,9 +64,12 @@ async function main() {
           plan: { type: 'string' },
           email: { type: 'string' },
           nombre: { type: 'string' },
+          // Solo fuera de producción (entornos de prueba): define la contraseña sin enlace de invitación.
+          contrasena: { type: 'string' },
         },
       });
       if (!v.razon || !v.plan || !v.email || !v.nombre) throw new Error('Faltan opciones obligatorias.\n\n' + AYUDA);
+      if (v.contrasena && config().NODE_ENV === 'production') throw new Error('--contrasena no está permitido en producción');
       const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
       try {
         const r = await app.get(ProvisionService).crearEmpresa({
@@ -76,7 +81,11 @@ async function main() {
           propietario: { email: v.email, nombre: v.nombre },
         });
         console.log(`Empresa creada: ${r.empresaId}`);
-        console.log(r.enlaceInvitacion ? `Enlace para crear la contraseña: ${r.enlaceInvitacion}` : 'La cuenta ya existía: ingresa con su contraseña actual.');
+        if (v.contrasena && r.enlaceInvitacion) {
+          const token = new URL(r.enlaceInvitacion).searchParams.get('token')!;
+          await app.get(AuthService).restablecer(token, v.contrasena, { ip: null, agente: 'cli' });
+          console.log(`Ingrese con ${v.email} y la contraseña indicada.`);
+        } else console.log(r.enlaceInvitacion ? `Enlace para crear la contraseña: ${r.enlaceInvitacion}` : 'La cuenta ya existía: ingresa con su contraseña actual.');
       } finally {
         await app.close();
       }
