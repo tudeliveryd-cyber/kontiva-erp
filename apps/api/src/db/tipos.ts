@@ -525,6 +525,7 @@ export interface VentaTabla {
   anulada_por: string | null;
   anulacion_autorizada_por: string | null;
   motivo_anulacion: string | null;
+  registrada_offline_en: Generated<Date | null>;
 }
 
 export interface VentaItemTabla {

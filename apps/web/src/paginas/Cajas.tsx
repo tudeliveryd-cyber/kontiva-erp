@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, ShoppingCart } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DialogoAutorizacion } from '../componentes/Autorizacion';
 import { Aviso, Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { fechaHora } from '../lib/formato';
 import { dinero, NOMBRE_MEDIO, type CajaFila, type Cotizacion, type Deposito, type Moneda, type SesionCaja } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { colaDeCaja } from '../lib/offline';
 
 export function Cajas() {
   const { puede, yo } = useSesion();
@@ -173,6 +174,11 @@ function FichaSesion({ caja, alCerrar }: { caja: CajaFila; alCerrar: () => void 
   const [mov, setMov] = useState({ tipo: 'retiro' as 'retiro' | 'ingreso', moneda: 'PYG' as Moneda, monto: '', motivo: '' });
   const [autorizacion, setAutorizacion] = useState<string | null>(null);
   const [contado, setContado] = useState<Record<string, string>>({});
+  // Ventas hechas sin conexión en este equipo que todavía no llegaron al servidor: el arqueo saldría mal.
+  const [sinSincronizar, setSinSincronizar] = useState(0);
+  useEffect(() => {
+    void colaDeCaja(caja.id).then((c) => setSinSincronizar(c.length));
+  }, [caja.id, modo]);
   const [cerrada, setCerrada] = useState<SesionCaja | null>(null);
   const s = sesion.data;
 
@@ -316,6 +322,11 @@ function FichaSesion({ caja, alCerrar }: { caja: CajaFila; alCerrar: () => void 
           {modo === 'cerrar' && (
             <form className="form" onSubmit={(e) => { e.preventDefault(); cerrar.mutate(); }}>
               <Aviso tipo="info">Cuente el dinero y escriba lo que hay. La diferencia con el sistema queda registrada.</Aviso>
+              {sinSincronizar > 0 && (
+                <Aviso tipo="error">
+                  Hay {sinSincronizar} venta{sinSincronizar > 1 ? 's' : ''} hecha{sinSincronizar > 1 ? 's' : ''} sin conexión en este equipo que todavía no se registraron. Vuelva al PDV con conexión para sincronizarlas antes de cerrar la caja.
+                </Aviso>
+              )}
               {s.esperado.map((e) => {
                 const k = `${e.moneda}|${e.medio}`;
                 return (
@@ -325,7 +336,7 @@ function FichaSesion({ caja, alCerrar }: { caja: CajaFila; alCerrar: () => void 
                 );
               })}
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn pri" disabled={cerrar.isPending || s.esperado.some((e) => (contado[`${e.moneda}|${e.medio}`] ?? '') === '')}>Cerrar caja</button>
+                <button className="btn pri" disabled={cerrar.isPending || sinSincronizar > 0 || s.esperado.some((e) => (contado[`${e.moneda}|${e.medio}`] ?? '') === '')}>Cerrar caja</button>
                 <button type="button" className="btn" onClick={() => setModo('ver')}>Volver</button>
               </div>
             </form>

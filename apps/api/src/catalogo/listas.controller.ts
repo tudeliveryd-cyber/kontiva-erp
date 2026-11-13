@@ -197,7 +197,7 @@ export class ListasPrecioController {
             INSERT INTO precio (empresa_id, lista_id, variante_id, sucursal_id, precio)
             VALUES (${ctx.empresaId}::uuid, ${id}::uuid, ${it.varianteId}::uuid, ${suc}::uuid, ${nuevo})
             ON CONFLICT (empresa_id, lista_id, variante_id, coalesce(sucursal_id, '00000000-0000-0000-0000-000000000000'))
-            DO UPDATE SET precio = EXCLUDED.precio, actualizado_en = now()`.execute(tx);
+            DO UPDATE SET precio = EXCLUDED.precio, actualizado_en = now() WHERE precio.precio IS DISTINCT FROM EXCLUDED.precio`.execute(tx);
         }
         cambios.push({ varianteId: it.varianteId, antes: viejo, despues: nuevo });
       }
@@ -233,7 +233,7 @@ export class ListasPrecioController {
           INSERT INTO precio (empresa_id, lista_id, variante_id, sucursal_id, precio)
           SELECT ${ctx.empresaId}::uuid, ${id}::uuid, variante_id, NULL, nuevo FROM base
           ON CONFLICT (empresa_id, lista_id, variante_id, coalesce(sucursal_id, '00000000-0000-0000-0000-000000000000'))
-          DO UPDATE SET precio = EXCLUDED.precio, actualizado_en = now()
+          DO UPDATE SET precio = EXCLUDED.precio, actualizado_en = now() WHERE precio.precio IS DISTINCT FROM EXCLUDED.precio
           RETURNING 1
         )
         SELECT count(*) AS n FROM ins`.execute(tx);

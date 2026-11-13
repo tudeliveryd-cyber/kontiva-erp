@@ -45,6 +45,8 @@ export interface OpcionesApi {
   reintento?: boolean;
   /** Encabezados extra, ej. X-Autorizacion con el token del PIN de un supervisor. */
   encabezados?: Record<string, string>;
+  /** Tiempo máximo de espera (ms). Vencido, se trata como falta de conexión (el PDV pasa a vender sin conexión). */
+  tiempo?: number;
 }
 
 export interface Cliente {
@@ -85,12 +87,20 @@ export function crearCliente(base: string): Cliente {
     const headers: Record<string, string> = { 'X-Kontiva': '1', ...opciones.encabezados };
     if (cuerpo !== undefined) headers['Content-Type'] = 'application/json';
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-    const r = await fetch(`${base}${ruta}`, {
-      method: metodo,
-      headers,
-      credentials: 'same-origin',
-      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
-    });
+    const corte = opciones.tiempo ? new AbortController() : null;
+    const reloj = corte ? setTimeout(() => corte.abort(), opciones.tiempo) : null;
+    let r: Response;
+    try {
+      r = await fetch(`${base}${ruta}`, {
+        method: metodo,
+        headers,
+        credentials: 'same-origin',
+        body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+        signal: corte?.signal,
+      });
+    } finally {
+      if (reloj) clearTimeout(reloj);
+    }
     if (r.status === 401 && reintento && !SIN_REINTENTO.some((p) => ruta.startsWith(p))) {
       if (await renovarSesion()) return api<T>(ruta, { ...opciones, reintento: false });
       alExpirar?.();

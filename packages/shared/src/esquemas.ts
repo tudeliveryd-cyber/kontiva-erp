@@ -251,6 +251,8 @@ export const ventaEntrada = z.object({
   vueltoMoneda: z.enum(['PYG', 'USD', 'BRL']).default('PYG'),
   /** Parte del total que queda en la cuenta corriente del cliente (venta a crédito). */
   credito: z.coerce.number().min(0).max(1e13).optional(),
+  /** Venta hecha en el PDV sin conexión: momento real; los precios de los ítems son los que tenía la caja. */
+  offline: z.object({ registradaEn: z.string().datetime({ offset: true }) }).optional(),
 }).refine((v) => v.pagos.length > 0 || (v.credito ?? 0) > 0, { message: 'Registre al menos un pago', path: ['pagos'] });
 export type VentaEntrada = z.infer<typeof ventaEntrada>;
 

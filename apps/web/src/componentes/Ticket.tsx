@@ -177,3 +177,46 @@ export function TicketNotaCredito({ dev, venta, empresa }: { dev: DevolucionNc; 
     </div>
   );
 }
+
+/** Comprobante provisional de una venta hecha sin conexión (se reemplaza por el definitivo al sincronizar). */
+export function TicketProvisorio({ p, empresa, caja, sucursal, cajero }: { p: { numero: number; creadaEn: string; lineas: { descripcion: string; cantidad: string; precio: string; total: number }[]; total: number; pagos: { medio: string; moneda: string; monto: number }[]; vuelto: { moneda: string; monto: number }[] }; empresa: { nombre: string; razonSocial: string; ruc: string | null }; caja: string; sucursal: string; cajero?: string }) {
+  return (
+    <div className="ticket">
+      <div className="t-centro">
+        <b style={{ fontSize: 14 }}>{empresa.nombre}</b>
+        <div>{empresa.razonSocial}</div>
+        {empresa.ruc && <div>RUC {empresa.ruc}</div>}
+        <div>{sucursal}</div>
+      </div>
+      <div className="t-linea" />
+      <div className="t-centro t-fuerte">COMPROBANTE PROVISORIO</div>
+      <div className="t-centro">VENTA REGISTRADA SIN CONEXIÓN</div>
+      <div className="t-centro">NO VÁLIDO COMO FACTURA</div>
+      <div className="t-linea" />
+      <div>N.º S/C-{p.numero} · {caja}</div>
+      <div>{fechaHora(p.creadaEn)}</div>
+      {cajero && <div>Atendió: {cajero}</div>}
+      <div className="t-linea" />
+      {p.lineas.map((l, i) => (
+        <div key={i} style={{ marginBottom: 3 }}>
+          <div>{l.descripcion}</div>
+          <div className="t-fila">
+            <span>{cantidad(l.cantidad)} x {numero(l.precio)}</span>
+            <span>{numero(l.total)}</span>
+          </div>
+        </div>
+      ))}
+      <div className="t-linea" />
+      <div className="t-fila t-fuerte"><span>TOTAL</span><span>{dinero(p.total)}</span></div>
+      {p.pagos.map((x, i) => (
+        <div key={i} className="t-fila"><span>{NOMBRE_MEDIO[x.medio as keyof typeof NOMBRE_MEDIO] ?? x.medio}</span><span>{dinero(x.monto, x.moneda as 'PYG')}</span></div>
+      ))}
+      {p.vuelto.map((x, i) => (
+        <div key={i} className="t-fila"><span>Vuelto</span><span>{dinero(x.monto, x.moneda as 'PYG')}</span></div>
+      ))}
+      <div className="t-linea" />
+      <div className="t-centro">Solicite su comprobante definitivo cuando vuelva la conexión.</div>
+      <div className="t-centro" style={{ marginTop: 6, fontSize: 10 }}>KONTIVA ERP · Desarrollado por Araújo Tech Sistemas</div>
+    </div>
+  );
+}

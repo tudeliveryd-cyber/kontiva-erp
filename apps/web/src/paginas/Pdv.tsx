@@ -1,14 +1,15 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardCheck, Minus, Percent, Plus, Printer, Search, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, CloudOff, Minus, Percent, Plus, Printer, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { calcularItems, calcularPagos, ErrorCalculo, type Cotizaciones } from '@kontiva/shared';
 import { DialogoAutorizacion } from '../componentes/Autorizacion';
-import { Ticket } from '../componentes/Ticket';
+import { Ticket, TicketProvisorio } from '../componentes/Ticket';
 import { Aviso, Cajon, Campo, Cargando, ErrorApi, Vacio } from '../componentes/ui';
 import { api, FalloApi } from '../lib/api';
 import { cantidad as fmtCant, dinero, NOMBRE_MEDIO, NOMBRE_MONEDA, nuevaClave, type Cliente, type Medio, type Moneda, type Venta } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { buscarEnCatalogo, encolar, esErrorDeRed, usePdvOffline } from '../lib/offline';
 import { fechaCorta, type DocComercial } from './Pedidos';
 
 interface ContextoPdv {
@@ -35,6 +36,16 @@ interface ItemBusqueda {
 interface Linea extends ItemBusqueda {
   cantidad: string;
   descuento: number;
+}
+
+/** Venta hecha sin conexión: comprobante provisional hasta que se sincroniza. */
+export interface VentaProvisoria {
+  numero: number;
+  creadaEn: string;
+  lineas: { descripcion: string; cantidad: string; precio: string; total: number }[];
+  total: number;
+  pagos: { medio: Medio; moneda: Moneda; monto: number }[];
+  vuelto: { moneda: Moneda; monto: number }[];
 }
 
 interface PagoUI {
@@ -112,6 +123,8 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const [pedido, setPedido] = useState<DocComercial | null>(null);
   const [autorizacion, setAutorizacion] = useState<{ token: string; nombre: string } | null>(null);
   const [vendida, setVendida] = useState<Venta | null>(null);
+  const [provisoria, setProvisoria] = useState<VentaProvisoria | null>(null);
+  const off = usePdvOffline(c.caja.id);
   const buscador = useRef<HTMLInputElement>(null);
   const cot: Cotizaciones = useMemo(() => Object.fromEntries(c.cotizaciones.map((x) => [x.moneda, { compra: x.compra, venta: x.venta }])), [c.cotizaciones]);
 
@@ -153,7 +166,16 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     const texto = q.trim();
     if (!texto) return;
     try {
-      const r = await api<{ porCodigo: boolean; items: ItemBusqueda[] }>(`/pdv/buscar?cajaId=${c.caja.id}&q=${encodeURIComponent(texto)}${cliente ? `&clienteId=${cliente.id}` : ''}`);
+      let r: { porCodigo: boolean; items: ItemBusqueda[] };
+      try {
+        if (!navigator.onLine) throw new TypeError('sin conexión');
+        r = await api<{ porCodigo: boolean; items: ItemBusqueda[] }>(`/pdv/buscar?cajaId=${c.caja.id}&q=${encodeURIComponent(texto)}${cliente ? `&clienteId=${cliente.id}` : ''}`, off.enLinea ? { tiempo: 5000 } : { tiempo: 1500 });
+      } catch (e) {
+        // Sin conexión: se busca en el catálogo guardado de la caja.
+        if (!esErrorDeRed(e) || !off.catalogo) throw e;
+        off.setEnLinea(false);
+        r = buscarEnCatalogo(off.catalogo, texto);
+      }
       if (r.items.length === 0) {
         setAviso(`No se encontró "${texto}"`);
         setResultados(null);
@@ -202,6 +224,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     setPedido(null);
     setAutorizacion(null);
     setVendida(null);
+    setProvisoria(null);
     setSel(null);
     setAviso(null);
     enfocar();
@@ -210,7 +233,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   // Atajos de teclado del PDV.
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
-      if (vendida) {
+      if (vendida || provisoria) {
         if (e.key === 'Enter' || e.key === 'Escape') {
           e.preventDefault();
           nuevaVenta();
@@ -244,6 +267,32 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   return (
     <div className="pdv">
       <CabeceraPdv c={c} />
+      {(!off.enLinea || off.cola.length > 0) && (
+        <div className={`pdv-conexion${off.enLinea ? '' : ' sin'}`}>
+          {!off.enLinea && (
+            <span>
+              <CloudOff size={16} /> Sin conexión: se vende con el catálogo guardado
+              {off.catalogo ? ` (actualizado a las ${new Date(off.catalogo.generado).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })})` : ' (no hay catálogo guardado)'}. Las ventas se registran al volver la conexión.
+            </span>
+          )}
+          {off.pendientes > 0 && (
+            <span>
+              {off.pendientes} venta{off.pendientes > 1 ? 's' : ''} por sincronizar
+              {off.enLinea && (
+                <button className="btn" style={{ height: 26, marginLeft: 8 }} disabled={off.sincronizando} onClick={() => void off.sincronizar()}>
+                  <RefreshCw size={13} /> Sincronizar
+                </button>
+              )}
+            </span>
+          )}
+          {off.errores.map((v) => (
+            <span key={v.clave} className="error">
+              Venta sin conexión S/C-{v.numero} ({dinero(v.total)}) rechazada: {v.error}
+              <button className="btn" style={{ height: 26, marginLeft: 8 }} onClick={() => void off.reintentar(v.clave)}>Reintentar</button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="pdv-cuerpo">
         <div className="pdv-izq">
           <div className="pdv-buscar">
@@ -433,6 +482,13 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
             setDialogo(null);
             setVendida(v);
           }}
+          catalogoGuardado={!!off.catalogo}
+          alVenderSinConexion={(p) => {
+            setDialogo(null);
+            setProvisoria(p);
+            off.setEnLinea(false);
+            void off.refrescarCola();
+          }}
         />
       )}
       {dialogo === 'pedidos' && (
@@ -507,6 +563,32 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           alCerrar={() => setDialogo(null)}
         />
       )}
+      {provisoria && (
+        <div className="fondo" style={{ justifyContent: 'center', alignItems: 'center' }}>
+          <div className="panel" style={{ padding: 20, display: 'flex', gap: 20, maxHeight: '92vh', overflow: 'auto' }}>
+            <TicketProvisorio p={provisoria} empresa={c.empresa} caja={c.caja.nombre} sucursal={c.sucursal.nombre} cajero={yo?.usuario.nombre} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 240 }}>
+              <Aviso tipo="info">Venta S/C-{provisoria.numero} guardada sin conexión. Se registrará sola al volver la conexión.</Aviso>
+              {provisoria.vuelto.length > 0 && (
+                <div className="pdv-total" style={{ padding: 14 }}>
+                  <div className="tenue">Vuelto</div>
+                  {provisoria.vuelto.map((v, i) => (
+                    <div key={i} className="num" style={{ fontSize: 26, fontWeight: 800 }}>
+                      {dinero(v.monto, v.moneda)}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button className="btn" onClick={() => window.print()}>
+                <Printer size={16} /> Imprimir comprobante
+              </button>
+              <button className="btn pri" autoFocus onClick={nuevaVenta}>
+                Nueva venta <span className="tecla">Enter</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {vendida && (
         <div className="fondo" style={{ justifyContent: 'center', alignItems: 'center' }}>
           <div className="panel" style={{ padding: 20, display: 'flex', gap: 20, maxHeight: '92vh', overflow: 'auto' }}>
@@ -537,7 +619,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   );
 }
 
-function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; alCerrar: () => void; alVender: (v: Venta) => void }) {
+function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; alCerrar: () => void; alVender: (v: Venta) => void; catalogoGuardado: boolean; alVenderSinConexion: (p: VentaProvisoria) => void }) {
   const [pagos, setPagos] = useState<PagoUI[]>([{ medio: 'efectivo', moneda: 'PYG', monto: String(props.total) }]);
   // Venta a crédito (cuenta corriente del cliente).
   const [credito, setCredito] = useState('');
@@ -561,23 +643,66 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
     }
   }, [pagos, vueltoMoneda, aCobrar, props.cot]);
 
+  const cuerpoVenta = () => ({
+    claveIdempotencia: clave,
+    ...(montoCredito > 0 && { credito: montoCredito }),
+    cajaId: props.c.caja.id,
+    clienteId: props.clienteId,
+    ...(props.pedidoId && { pedidoId: props.pedidoId }),
+    items: props.lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })),
+    pagos: pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio: p.medio, moneda: p.moneda, monto: Number(p.monto) })),
+    vueltoMoneda,
+  });
+  /**
+   * Sin conexión se puede vender al contado, sin pedido y sin descuentos que pidan PIN (el PIN lo valida el servidor).
+   * Los precios van en la venta: el servidor los respeta solo si cambiaron después.
+   */
+  const sinConexionPermitida = props.catalogoGuardado && montoCredito === 0 && !props.pedidoId && (props.c.puede.descuento || props.lineas.every((l) => l.descuento === 0));
+  const guardarSinConexion = async () => {
+    const creadaEn = new Date().toISOString();
+    const clave_ = `kontiva.sc.${props.c.caja.id}`;
+    let numero = 1;
+    try {
+      numero = Number(localStorage.getItem(clave_) ?? '0') + 1;
+      localStorage.setItem(clave_, String(numero));
+    } catch {
+      numero = Date.now() % 100000;
+    }
+    const base = cuerpoVenta();
+    const cuerpo = { ...base, items: props.lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), precioUnitario: Number(l.precio), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })), offline: { registradaEn: creadaEn } };
+    await encolar({ clave, cajaId: props.c.caja.id, cuerpo, numero, total: props.total, creadaEn, estado: 'pendiente' });
+    props.alVenderSinConexion({
+      numero,
+      creadaEn,
+      lineas: props.lineas.map((l) => ({ descripcion: l.descripcion, cantidad: l.cantidad, precio: l.precio, total: Number(l.cantidad) * Number(l.precio) - l.descuento })),
+      total: props.total,
+      pagos: base.pagos,
+      vuelto: resultado.r ? resultado.r.vuelto.map((v) => ({ moneda: v.moneda, monto: v.monto.toNumber() })) : [],
+    });
+  };
   const vender = useMutation({
-    mutationFn: () =>
-      api<Venta>('/ventas', {
-        metodo: 'POST',
-        encabezados: tokenCredito ? { 'X-Autorizacion': tokenCredito } : props.autorizacion ? { 'X-Autorizacion': props.autorizacion } : undefined,
-        cuerpo: {
-          claveIdempotencia: clave,
-          ...(montoCredito > 0 && { credito: montoCredito }),
-          cajaId: props.c.caja.id,
-          clienteId: props.clienteId,
-          ...(props.pedidoId && { pedidoId: props.pedidoId }),
-          items: props.lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })),
-          pagos: pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio: p.medio, moneda: p.moneda, monto: Number(p.monto) })),
-          vueltoMoneda,
-        },
-      }),
-    onSuccess: props.alVender,
+    // Por defecto TanStack Query pausa las mutaciones sin conexión: el PDV decide qué hacer.
+    networkMode: 'always',
+    mutationFn: async () => {
+      try {
+        if (!navigator.onLine) throw new TypeError('sin conexión');
+        return await api<Venta>('/ventas', {
+          metodo: 'POST',
+          encabezados: tokenCredito ? { 'X-Autorizacion': tokenCredito } : props.autorizacion ? { 'X-Autorizacion': props.autorizacion } : undefined,
+          cuerpo: cuerpoVenta(),
+          // Si no responde a tiempo se guarda sin conexión; la misma clave evita duplicados si llegó al servidor.
+          tiempo: sinConexionPermitida ? 8000 : undefined,
+        });
+      } catch (e) {
+        if (esErrorDeRed(e) && sinConexionPermitida) {
+          await guardarSinConexion();
+          return null;
+        }
+        if (esErrorDeRed(e)) throw new FalloApi(0, 'SIN_CONEXION', 'Sin conexión: sin conexión solo se vende al contado, sin pedido y sin descuentos que requieran PIN');
+        throw e;
+      }
+    },
+    onSuccess: (v) => v && props.alVender(v),
     onError: (e) => {
       if (e instanceof FalloApi && e.codigo === 'CREDITO_EXCEDIDO') setPidePinCredito(true);
     },

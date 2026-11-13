@@ -250,7 +250,7 @@ export class ImportacionController {
           INSERT INTO precio (empresa_id, lista_id, variante_id, sucursal_id, precio)
           VALUES (${ctx.empresaId}::uuid, ${lista}::uuid, ${varianteId}::uuid, NULL, ${p.datos.precio})
           ON CONFLICT (empresa_id, lista_id, variante_id, coalesce(sucursal_id, '00000000-0000-0000-0000-000000000000'))
-          DO UPDATE SET precio = EXCLUDED.precio, actualizado_en = now()`.execute(tx);
+          DO UPDATE SET precio = EXCLUDED.precio, actualizado_en = now() WHERE precio.precio IS DISTINCT FROM EXCLUDED.precio`.execute(tx);
         p.varianteId = varianteId;
       }
 

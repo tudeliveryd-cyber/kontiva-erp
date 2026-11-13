@@ -70,6 +70,7 @@ export async function leerVenta(tx: Tx, id: string) {
     cliente: v.cliente_id ? { id: v.cliente_id, nombre: v.cliente_nombre, documento: v.cliente_documento } : null,
     pedidoId: v.pedido_id,
     credito: v.credito,
+    registradaOfflineEn: v.registrada_offline_en,
     cuentaCobrar: Number(v.credito) > 0 ? ((await tx.selectFrom('cuenta_cobrar').select(['id', 'saldo', 'vencimiento', 'estado']).where('venta_id', '=', v.id).executeTakeFirst()) ?? null) : null,
     documentoElectronico: de
       ? { id: de.id, cdc: de.cdc, numero: numeroComprobante(de), timbrado: de.timbrado, timbradoInicio: feConf?.timbrado_fecha ?? null, estado: de.estado, qr: de.qr_url, qrImagen, ambiente: de.ambiente, totalIva: de.total_iva, mensaje: de.respuesta_mensaje }
@@ -128,6 +129,45 @@ export class PdvController {
           cambiarPrecio: tiene(ctx, 'precio.editar'),
           anular: tiene(ctx, 'venta.cancelar'),
         },
+      };
+    });
+  }
+
+  /**
+   * Catálogo completo de la caja para vender sin conexión: productos activos con sus códigos de barras,
+   * el precio de la sucursal (lista general) y el stock del depósito. La caja lo guarda y lo renueva.
+   */
+  @Requiere('venta', 'crear')
+  @Get('catalogo')
+  catalogo(@Contexto() ctx: Ctx, @Query() query: unknown) {
+    const { cajaId } = validar(z.object({ cajaId: z.string().uuid() }), query);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const caja = await obtenerCaja(tx, ctx, cajaId);
+      const filas = await tx
+        .selectFrom('variante as v')
+        .innerJoin('producto as p', 'p.id', 'v.producto_id')
+        .leftJoin('stock as s', (j) => j.onRef('s.variante_id', '=', 'v.id').on('s.deposito_id', '=', caja.deposito_id))
+        .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad'])
+        .select((eb) => eb.selectFrom('codigo_barras as cb').whereRef('cb.variante_id', '=', 'v.id').select(sql<string[]>`coalesce(array_agg(cb.codigo), '{}')`.as('c')).as('codigos'))
+        .where('p.activo', '=', true)
+        .where('v.activa', '=', true)
+        .orderBy('p.nombre')
+        .limit(50000)
+        .execute();
+      const precios = await preciosVigentes(tx, filas.map((r) => r.id), caja.sucursal_id, null);
+      return {
+        generado: new Date().toISOString(),
+        items: filas.map((r) => ({
+          varianteId: r.id,
+          descripcion: r.variante ? `${r.producto} · ${r.variante}` : r.producto,
+          sku: r.sku,
+          codigos: r.codigos ?? [],
+          unidad: r.unidad,
+          tasaIva: Number(r.tasa_iva) as 0 | 5 | 10,
+          precio: precios.get(r.id) ?? '0.00',
+          controlaStock: r.controla_stock,
+          stock: r.controla_stock ? (r.cantidad ?? '0.0000') : null,
+        })),
       };
     });
   }
@@ -258,6 +298,14 @@ export class VentasController {
         const sesion = await sesionAbierta(tx, caja.id);
         if (!sesion) throw conflicto('CAJA_CERRADA', 'La caja no está abierta');
         if (sesion.usuario_id !== ctx.usuarioId) throw prohibido('La caja está abierta por otro usuario');
+        // Venta sin conexión: debe ser de esta sesión de caja y de las últimas 72 horas.
+        const registradaOffline = d.offline ? new Date(d.offline.registradaEn) : null;
+        if (registradaOffline) {
+          const t = registradaOffline.getTime();
+          if (t < new Date(sesion.abierta_en).getTime() - 5 * 60_000 || t > Date.now() + 5 * 60_000 || t < Date.now() - 72 * 3600_000) {
+            throw invalido('La venta sin conexión no corresponde a la sesión de caja abierta');
+          }
+        }
 
         if (d.clienteId) {
           const cl = await tx.selectFrom('cliente').select('id').where('id', '=', d.clienteId).where('activo', '=', true).executeTakeFirst();
@@ -291,6 +339,20 @@ export class VentasController {
             if (Number(it.descuento) > 0) descuentoPedido.set(it.variante_id, new Decimal(it.descuento).div(it.cantidad));
           }
           pedido = p;
+        }
+
+        // Sin conexión, la caja cobró con los precios que tenía: se respetan solo si el precio cambió
+        // después de la venta (así no sirve para bajar precios a voluntad).
+        const preciosOffline = new Map<string, string>();
+        if (registradaOffline) {
+          const distintos = d.items.filter((i) => i.precioUnitario !== undefined && new Decimal(i.precioUnitario).toFixed(2) !== new Decimal(precios.get(i.varianteId) ?? 0).toFixed(2));
+          if (distintos.length) {
+            const cambiados = new Set(
+              (await tx.selectFrom('precio').select('variante_id').where('variante_id', 'in', distintos.map((i) => i.varianteId)).where('actualizado_en', '>', registradaOffline).execute()).map((x) => x.variante_id),
+            );
+            for (const i of distintos) if (cambiados.has(i.varianteId)) preciosOffline.set(i.varianteId, new Decimal(i.precioUnitario!).toFixed(2));
+          }
+          for (const [id, pr] of preciosOffline) precios.set(id, pr);
         }
 
         // Cambios de precio y descuentos: permiso propio o PIN de supervisor.
@@ -357,7 +419,8 @@ export class VentasController {
           for (const f of filas) saldo.set(f.variante_id, new Decimal(f.cantidad));
           const empresa = await tx.selectFrom('empresa').select('configuracion').executeTakeFirstOrThrow();
           const permiteNegativo = (empresa.configuracion as { permiteStockNegativo?: boolean }).permiteStockNegativo === true;
-          if (!permiteNegativo) {
+          // Lo vendido sin conexión ya salió del local: se registra aunque el stock quede negativo.
+          if (!permiteNegativo && !registradaOffline) {
             const pedido = new Map<string, Decimal>();
             for (const l of lineas.filter((x) => x.v.controla_stock)) pedido.set(l.varianteId, (pedido.get(l.varianteId) ?? new Decimal(0)).plus(l.cantidad));
             const faltantes = [...pedido].filter(([id, cant]) => saldo.get(id)!.lt(cant)).map(([id, cant]) => ({ varianteId: id, descripcion: porId.get(id)!.producto, disponible: saldo.get(id)!.toFixed(4), pedido: cant.toFixed(4) }));
@@ -392,6 +455,7 @@ export class VentasController {
             vuelto_moneda: d.vueltoMoneda,
             credito: credito.toFixed(2),
             autorizado_por: autorizadoPor,
+            registrada_offline_en: registradaOffline,
             creado_por: ctx.usuarioId,
             anulada_en: null,
             anulada_por: null,
@@ -474,7 +538,15 @@ export class VentasController {
           entidad: 'venta',
           entidadId: venta.id,
           autorizadoPor,
-          despues: { numero, caja: caja.nombre, total: calc.total.toFixed(0), items: lineas.length, descuento: calc.descuento.toFixed(0), ...(pedido && { pedido: Number(pedido.numero) }) },
+          despues: {
+            numero,
+            caja: caja.nombre,
+            total: calc.total.toFixed(0),
+            items: lineas.length,
+            descuento: calc.descuento.toFixed(0),
+            ...(pedido && { pedido: Number(pedido.numero) }),
+            ...(registradaOffline && { sinConexion: registradaOffline.toISOString(), ...(preciosOffline.size && { preciosAnteriores: Object.fromEntries(preciosOffline) }) }),
+          },
         });
         if (pedido) {
           await tx.updateTable('pedido').set({ estado: 'entregado', venta_id: venta.id, cerrado_por: ctx.usuarioId, cerrado_en: new Date() }).where('id', '=', pedido.id).execute();
@@ -516,7 +588,7 @@ export class VentasController {
         .innerJoin('caja as c', 'c.id', 'v.caja_id')
         .innerJoin('usuario as u', 'u.id', 'v.creado_por')
         .leftJoin('cliente as cl', 'cl.id', 'v.cliente_id')
-        .select(['v.id', 'v.numero', 'v.creado_en', 'v.total', 'v.estado', 'v.sucursal_id', 'v.creado_por', 'c.nombre as caja', 'u.nombre as vendedor', 'cl.nombre as cliente'])
+        .select(['v.id', 'v.numero', 'v.creado_en', 'v.total', 'v.estado', 'v.sucursal_id', 'v.creado_por', 'v.registrada_offline_en', 'c.nombre as caja', 'u.nombre as vendedor', 'cl.nombre as cliente'])
         .orderBy('v.id', 'desc')
         .limit(f.limite + 1);
       if (ctx.alcance === 'propia') q = q.where('v.creado_por', '=', ctx.usuarioId);
@@ -530,7 +602,7 @@ export class VentasController {
       const filas = await q.execute();
       const pagina = filas.slice(0, f.limite);
       return {
-        items: pagina.map((v) => ({ id: v.id, numero: Number(v.numero), fecha: v.creado_en, total: v.total, estado: v.estado, caja: v.caja, vendedor: v.vendedor, cliente: v.cliente })),
+        items: pagina.map((v) => ({ id: v.id, numero: Number(v.numero), fecha: v.creado_en, total: v.total, estado: v.estado, caja: v.caja, vendedor: v.vendedor, cliente: v.cliente, sinConexion: v.registrada_offline_en })),
         siguiente: filas.length > f.limite ? pagina[pagina.length - 1]!.id : null,
       };
     });

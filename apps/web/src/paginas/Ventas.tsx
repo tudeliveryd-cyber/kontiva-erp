@@ -19,6 +19,7 @@ interface FilaVenta {
   caja: string;
   vendedor: string;
   cliente: string | null;
+  sinConexion: string | null;
 }
 
 const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
@@ -75,7 +76,10 @@ export function Ventas() {
                 {items.map((v) => (
                   <tr key={v.id} className="clic" onClick={() => setAbierta(v.id)} style={v.estado === 'anulada' ? { opacity: 0.55 } : undefined}>
                     <td className="num">{v.numero}</td>
-                    <td className="num peq">{fechaHora(v.fecha)}</td>
+                    <td className="num peq">
+                      {fechaHora(v.sinConexion ?? v.fecha)}
+                      {v.sinConexion && <span className="insignia i-warn" style={{ marginLeft: 6 }} title={`Registrada al volver la conexión: ${fechaHora(v.fecha)}`}>Sin conexión</span>}
+                    </td>
                     <td>{v.caja}</td>
                     <td className="tenue">{v.vendedor}</td>
                     <td className="tenue">{v.cliente ?? 'Consumidor final'}</td>

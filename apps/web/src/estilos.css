@@ -370,3 +370,9 @@ table.planilla th { white-space: nowrap; }
 .movil-pie small { width: 100%; text-align: center; color: var(--t3); font-size: 11px; }
 .girando { animation: girar 1s linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
+
+/* PDV sin conexión */
+.pdv-conexion { display: flex; flex-direction: column; gap: 4px; padding: 8px 18px; font-size: 13.5px; background: var(--p1); color: var(--p9); border-bottom: 1px solid var(--linea); }
+.pdv-conexion.sin { background: var(--warnb); color: var(--warn); }
+.pdv-conexion span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pdv-conexion .error { color: var(--bad); }

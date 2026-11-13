@@ -79,8 +79,18 @@ Producto comercial de **Araújo Tech Sistemas**.
 - **Pruebas**: 382 en total (364 de API, 18 compartidas); incluye 20 cajas vendiendo el mismo producto
   a la vez con stock final exacto.
 
+- **PDV sin conexión**: la caja guarda su catálogo (códigos de barras, precios de la sucursal, stock) y lo
+  renueva cada 10 minutos. Si se corta internet (o el servidor no responde en 8 segundos) la venta al contado
+  se guarda en el equipo con un comprobante provisorio (S/C-n) y se envía sola al volver la conexión, con la
+  misma clave de idempotencia (sin duplicados). El servidor la registra con su momento real, la valida contra la
+  sesión de caja (últimas 72 horas), respeta el precio cobrado solo si el precio cambió después de la venta y
+  no la rechaza por stock (la mercadería ya salió). La caja no se cierra con ventas sin sincronizar; las
+  rechazadas quedan a la vista para reintentar. Sin conexión no hay crédito, pedidos ni descuentos con PIN.
+  Decisión: la numeración definitiva la asigna el servidor al sincronizar (no se reservan números en el
+  equipo), y la cola no se cifra: no guarda credenciales y una clave en el mismo equipo no protegería.
+
 ### Fase 1 · pendiente
-- Venta sin internet (cola local cifrada con numeración reservada) y agente local para impresora, gaveta y balanza.
+- Agente local para impresora, gaveta y balanza.
 - Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
 
 ### Fase 2 · hecho (compras y cuentas a pagar)
