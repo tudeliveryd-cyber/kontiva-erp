@@ -15,7 +15,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 1 | Operación central: productos, inventario, PDV, caja | Circuito central listo · ver pendientes abajo |
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
-| 4 | RRHH, informes, dashboard, app del dueño | RRHH y sueldos listos · en curso |
+| 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
 | 5 | Verticales por rubro e integraciones | Pendiente |
 
 ### Fase 0 · hecho
@@ -162,8 +162,20 @@ Fase 2 completa.
   anticipos y sueldos a pagar) y asiento del pago; los sueldos pagados entran al flujo de caja. Las
   empresas con el plan creado antes de RRHH agregan las cuentas que faltan con un botón.
 
+### Fase 4 · hecho (tablero, informes y app del dueño)
+- **Tablero** en la pantalla de inicio: ventas, tickets y ticket promedio con la variación contra el período
+  anterior, margen bruto, efectivo en cajas abiertas, saldo en bancos, ventas por día u hora, productos más
+  vendidos, medios de pago, sucursales, vendedores, cuentas a cobrar y a pagar, y alertas (stock bajo el
+  mínimo, vencidos, anulaciones, devoluciones). Cada bloque depende de los permisos; con alcance de sucursal,
+  solo sus sucursales. Se actualiza cada minuto.
+- **Informes**: ventas agrupadas por día, mes, producto, categoría, marca, cliente, vendedor, sucursal o caja,
+  con costo y margen para quien ve ganancias (permiso nuevo `informe_ventas`); stock por depósito con valor al
+  costo y lo que está bajo el mínimo; compras por proveedor, producto o mes. Exportación CSV e impresión.
+- **Stock mínimo** por variante en la ficha del producto.
+- **App del dueño** (`/movil`): versión para el celular con lo esencial del negocio, instalable en la pantalla
+  de inicio (manifiesto, íconos y service worker que nunca guarda datos de la API).
+
 ### Fase 4 · pendiente
-- Informes de gestión, dashboard y app del dueño.
 - RRHH: control de asistencia, registro de vacaciones tomadas y liquidación final por egreso
   (preaviso e indemnización).
 

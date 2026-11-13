@@ -1,0 +1,15 @@
+{
+  "name": "KONTIVA · App del dueño",
+  "short_name": "KONTIVA",
+  "description": "Ventas, cajas, alertas y cuentas de su negocio en el celular.",
+  "lang": "es",
+  "start_url": "/movil",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f7f8",
+  "theme_color": "#2A004E",
+  "icons": [
+    { "src": "/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

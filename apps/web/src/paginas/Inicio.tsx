@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronRight, Circle } from 'lucide-react';
+import { useState } from 'react';
+import { PERIODOS, Tablero, useTablero, type Periodo } from '../componentes/Tablero';
 import { Link } from 'react-router-dom';
 import { Encabezado } from '../componentes/ui';
-import { api, type EmpresaDatos, type UsuarioFila } from '../lib/api';
+import { api, type EmpresaDatos, type SucursalFila, type UsuarioFila } from '../lib/api';
 import { dinero } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 
@@ -35,9 +37,14 @@ export function Inicio() {
       const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
       return api<{ items: { total: string; estado: string }[] }>(`/ventas?limite=200&estado=confirmada&desde=${new Date(`${hoy}T00:00:00-03:00`).toISOString()}`);
     },
-    enabled: puede('venta.ver'),
+    enabled: puede('venta.ver') && !puede('informe_ventas.ver'),
     refetchInterval: 60_000,
   });
+  const [periodo, setPeriodo] = useState<Periodo>('hoy');
+  const [sucursalId, setSucursalId] = useState('');
+  const sucursales = useQuery({ queryKey: ['sucursales'], queryFn: () => api<SucursalFila[]>('/sucursales'), enabled: puede('sucursal.ver') });
+  const tablero = useTablero(periodo, sucursalId || undefined, 60_000);
+  const conTablero = !!tablero.data && Object.keys(tablero.data).length > 2;
   if (!yo) return null;
 
   // Asistente de configuración inicial: se basa solo en datos reales de la empresa.
@@ -87,7 +94,27 @@ export function Inicio() {
         <span className="insignia i-p">Plan {yo.empresa.plan}</span>
       </Encabezado>
       <div className="contenido">
-        {pasos.length > 0 && (
+        {conTablero && (
+          <>
+            <div className="filtros" style={{ padding: '0 0 14px', gap: 10 }}>
+              <div className="segmentado" role="group" aria-label="Período">
+                {PERIODOS.map(([k, t]) => (
+                  <button key={k} className={periodo === k ? 'activo' : ''} onClick={() => setPeriodo(k)}>{t}</button>
+                ))}
+              </div>
+              {(sucursales.data?.length ?? 0) > 1 && (
+                <select aria-label="Sucursal" className="entrada" style={{ width: 'auto' }} value={sucursalId} onChange={(e) => setSucursalId(e.target.value)}>
+                  <option value="">Todas las sucursales</option>
+                  {sucursales.data!.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                </select>
+              )}
+              {tablero.isFetching && <span className="tenue peq">Actualizando…</span>}
+            </div>
+            <Tablero d={tablero.data!} />
+          </>
+        )}
+
+        {pasos.length > 0 && pendientes > 0 && (
           <section className="panel">
             <div className="panel-cab">
               <h2>Configuración inicial</h2>

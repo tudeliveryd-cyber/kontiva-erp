@@ -112,6 +112,7 @@ export const varianteEntrada = z.object({
   codigos: z.array(codigoBarras).max(20).default([]),
   precio: dinero,
   costo: dinero.optional(),
+  stockMinimo: z.coerce.number().min(0).max(1e9).optional(),
   activa: z.boolean().default(true),
 });
 

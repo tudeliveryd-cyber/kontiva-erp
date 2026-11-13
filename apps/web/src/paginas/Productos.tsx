@@ -105,6 +105,7 @@ interface VarianteForm {
   codigos: string;
   precio: string;
   costo: string;
+  stockMinimo: string;
   activa: boolean;
 }
 
@@ -125,8 +126,8 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
     controlaStock: producto?.controlaStock ?? true,
   });
   const [variantes, setVariantes] = useState<VarianteForm[]>(
-    producto?.variantes.filter((v) => v.activa).map((v) => ({ id: v.id, nombre: v.nombre ?? '', sku: v.sku ?? '', codigos: v.codigos.join(', '), precio: String(Number(v.precio)), costo: v.costo ? String(Number(v.costo)) : '', activa: true })) ?? [
-      { nombre: '', sku: '', codigos: '', precio: '', costo: '', activa: true },
+    producto?.variantes.filter((v) => v.activa).map((v) => ({ id: v.id, nombre: v.nombre ?? '', sku: v.sku ?? '', codigos: v.codigos.join(', '), precio: String(Number(v.precio)), costo: v.costo ? String(Number(v.costo)) : '', stockMinimo: v.stockMinimo && Number(v.stockMinimo) ? String(Number(v.stockMinimo)) : '', activa: true })) ?? [
+      { nombre: '', sku: '', codigos: '', precio: '', costo: '', stockMinimo: '', activa: true },
     ],
   );
   const [nuevaCategoria, setNuevaCategoria] = useState('');
@@ -155,6 +156,7 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
           codigos: v.codigos.split(/[,\s]+/).map((c) => c.trim()).filter(Boolean),
           precio: Number(v.precio || 0),
           ...(editarCosto && v.costo !== '' ? { costo: Number(v.costo) } : {}),
+          stockMinimo: Number(v.stockMinimo || 0),
         })),
       };
       return producto ? api(`/productos/${producto.id}`, { metodo: 'PATCH', cuerpo }) : api('/productos', { metodo: 'POST', cuerpo });
@@ -281,12 +283,17 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
                   <Campo etiqueta="SKU / código interno" id={`vs${i}`}>
                     <input id={`vs${i}`} className="entrada mono" disabled={!editable} value={v.sku} onChange={(e) => setV(i, { sku: e.target.value })} />
                   </Campo>
+                  {d.tipo !== 'servicio' && (
+                    <Campo etiqueta="Stock mínimo" id={`vm${i}`} ayuda="Aviso de reposición por depósito.">
+                      <input id={`vm${i}`} className="entrada num" inputMode="decimal" disabled={!editable} value={v.stockMinimo} onChange={(e) => setV(i, { stockMinimo: e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.') })} />
+                    </Campo>
+                  )}
                 </div>
               </div>
             </div>
           ))}
           {editable && (
-            <button type="button" className="btn chico" style={{ alignSelf: 'flex-start' }} onClick={() => setVariantes((vs) => [...vs, { nombre: '', sku: '', codigos: '', precio: vs[0]?.precio ?? '', costo: vs[0]?.costo ?? '', activa: true }])}>
+            <button type="button" className="btn chico" style={{ alignSelf: 'flex-start' }} onClick={() => setVariantes((vs) => [...vs, { nombre: '', sku: '', codigos: '', precio: vs[0]?.precio ?? '', costo: vs[0]?.costo ?? '', stockMinimo: vs[0]?.stockMinimo ?? '', activa: true }])}>
               <Plus size={14} /> Agregar variante (talle, color, presentación)
             </button>
           )}

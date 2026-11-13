@@ -391,6 +391,7 @@ export interface VarianteTabla {
   nombre: string | null;
   sku: string | null;
   costo: NumGen;
+  stock_minimo: NumGen;
   activa: Generated<boolean>;
   creado_en: Creado;
   actualizado_en: Actualizado;

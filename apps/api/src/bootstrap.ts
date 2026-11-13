@@ -43,7 +43,17 @@ export async function crearApp(op: Opciones = { modulo: AppModule, prefijo: 'api
   // Producción: la misma aplicación sirve la web compilada (un solo contenedor por servicio).
   if (c.WEB_DIST && existsSync(path.join(c.WEB_DIST, op.pagina))) {
     const dist = path.resolve(c.WEB_DIST);
-    app.use(express.static(dist, { index: false, maxAge: '1h', setHeaders: (res, f) => f.includes('/assets/') && res.setHeader('Cache-Control', 'public, max-age=31536000, immutable') }));
+    app.use(
+      express.static(dist, {
+        index: false,
+        maxAge: '1h',
+        setHeaders: (res, f) => {
+          if (f.includes('/assets/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          // El service worker y el manifiesto de la app instalable se revisan siempre.
+          else if (f.endsWith('sw.js') || f.endsWith('.webmanifest')) res.setHeader('Cache-Control', 'no-cache');
+        },
+      }),
+    );
     app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
       if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
       res.sendFile(path.join(dist, op.pagina));

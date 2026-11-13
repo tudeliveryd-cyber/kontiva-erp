@@ -22,6 +22,8 @@ import { Usuarios } from './paginas/Usuarios';
 import { Cajas } from './paginas/Cajas';
 import { Clientes } from './paginas/Clientes';
 import { Pdv } from './paginas/Pdv';
+import { Movil } from './paginas/Movil';
+import { Informes } from './paginas/Informes';
 import { Productos } from './paginas/Productos';
 import { Stock } from './paginas/Stock';
 import { Ventas } from './paginas/Ventas';
@@ -56,6 +58,7 @@ function Rutas() {
   return (
     <Routes>
       {puede('venta.crear') && <Route path="pdv/:cajaId" element={<Pdv />} />}
+      <Route path="movil" element={<Movil />} />
       <Route element={<Disposicion />}>
         <Route index element={<Inicio />} />
         {puede('caja.ver') && <Route path="cajas" element={<Cajas />} />}
@@ -76,6 +79,7 @@ function Rutas() {
         {puede('flujo_caja.ver') && <Route path="flujo-caja" element={<Flujo />} />}
         {puede('contabilidad.ver') && <Route path="contabilidad" element={<Contabilidad />} />}
         {puede('funcionario.ver') && <Route path="funcionarios" element={<Funcionarios />} />}
+        {(puede('informe_ventas.ver') || puede('stock.ver') || puede('recepcion.ver')) && <Route path="informes" element={<Informes />} />}
         {puede('salario.ver') && <Route path="sueldos" element={<Sueldos />} />}
         {puede('cliente.ver') && <Route path="clientes" element={<Clientes />} />}
         {(puede('producto.crear') || puede('cliente.crear')) && <Route path="importar/:tipo" element={<Importar />} />}
@@ -102,3 +106,8 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// App instalable (app del dueño). En desarrollo no se registra para no interferir con Vite.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => undefined));
+}

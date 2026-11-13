@@ -28,7 +28,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
   const variantes = await tx
     .selectFrom('variante as v')
     .leftJoin('precio as pr', (j) => j.onRef('pr.variante_id', '=', 'v.id').on('pr.lista_id', '=', lista).on('pr.sucursal_id', 'is', null))
-    .select(['v.id', 'v.nombre', 'v.sku', 'v.costo', 'v.activa', 'pr.precio'])
+    .select(['v.id', 'v.nombre', 'v.sku', 'v.costo', 'v.stock_minimo', 'v.activa', 'pr.precio'])
     .where('v.producto_id', '=', id)
     .orderBy('v.creado_en')
     .orderBy('v.id')
@@ -55,6 +55,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
       sku: v.sku,
       activa: v.activa,
       precio: v.precio ?? '0.00',
+      stockMinimo: v.stock_minimo,
       ...(verCosto ? { costo: v.costo } : {}),
       codigos: codigos.filter((c) => c.variante_id === v.id).map((c) => c.codigo),
     })),
@@ -189,14 +190,14 @@ export class ProductosController {
       if (varianteId) {
         await tx
           .updateTable('variante')
-          .set({ nombre: v.nombre ?? null, sku: v.sku ?? null, activa: v.activa, ...(puedeCosto && v.costo !== undefined ? { costo: v.costo } : {}) })
+          .set({ nombre: v.nombre ?? null, sku: v.sku ?? null, activa: v.activa, ...(v.stockMinimo !== undefined ? { stock_minimo: v.stockMinimo } : {}), ...(puedeCosto && v.costo !== undefined ? { costo: v.costo } : {}) })
           .where('id', '=', varianteId)
           .execute();
       } else {
         varianteId = (
           await tx
             .insertInto('variante')
-            .values({ empresa_id: ctx.empresaId, producto_id: productoId, nombre: v.nombre ?? null, sku: v.sku ?? null, activa: v.activa, costo: puedeCosto ? (v.costo ?? 0) : 0 })
+            .values({ empresa_id: ctx.empresaId, producto_id: productoId, nombre: v.nombre ?? null, sku: v.sku ?? null, activa: v.activa, stock_minimo: v.stockMinimo ?? 0, costo: puedeCosto ? (v.costo ?? 0) : 0 })
             .returning('id')
             .executeTakeFirstOrThrow()
         ).id;

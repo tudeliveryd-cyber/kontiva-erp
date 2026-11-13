@@ -24,6 +24,7 @@ import { CuentasBancariasController, MovimientosBancariosController } from '../s
 import { FlujoCajaController } from '../src/finanzas/flujo.controller';
 import { ContabilidadController } from '../src/contabilidad/contabilidad.controller';
 import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from '../src/rrhh/rrhh.controller';
+import { InformesController } from '../src/informes/informes.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
@@ -74,6 +75,7 @@ const CONTROLADORES = [
   FuncionariosController,
   RrhhConfiguracionController,
   LiquidacionesController,
+  InformesController,
 ];
 
 interface Ruta {

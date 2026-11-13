@@ -10,6 +10,7 @@ export interface Variante {
   activa: boolean;
   precio: string;
   costo?: string;
+  stockMinimo?: string;
   codigos: string[];
 }
 

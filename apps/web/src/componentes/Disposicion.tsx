@@ -24,6 +24,8 @@ import {
   Users,
   Banknote,
   BookOpenCheck,
+  ChartColumn,
+  Smartphone,
   IdCard,
   ChartNoAxesCombined,
   Landmark,
@@ -55,6 +57,8 @@ export function Disposicion() {
     { a: '/cuentas-pagar', icono: Wallet, texto: 'Cuentas a pagar', visible: puede('cuenta_pagar.ver') },
     { a: '/bancos', icono: Landmark, texto: 'Bancos', visible: puede('banco.ver') },
     { a: '/flujo-caja', icono: ChartNoAxesCombined, texto: 'Flujo de caja', visible: puede('flujo_caja.ver') },
+    { a: '/informes', icono: ChartColumn, texto: 'Informes', visible: puede('informe_ventas.ver') || puede('stock.ver') || puede('recepcion.ver') },
+    { a: '/movil', icono: Smartphone, texto: 'App del dueño', visible: puede('informe_ventas.ver') },
     { a: '/contabilidad', icono: BookOpenCheck, texto: 'Contabilidad', visible: puede('contabilidad.ver') },
   ];
   const personal = [
