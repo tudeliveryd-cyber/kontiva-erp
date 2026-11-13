@@ -23,7 +23,7 @@ import { CobrosController, CuentasCobrarController } from '../src/finanzas/cobra
 import { CuentasBancariasController, MovimientosBancariosController } from '../src/finanzas/bancos.controller';
 import { FlujoCajaController } from '../src/finanzas/flujo.controller';
 import { ContabilidadController } from '../src/contabilidad/contabilidad.controller';
-import { NovedadesController, VacacionesController } from '../src/rrhh/asistencia.controller';
+import { MarcacionesController, NovedadesController, VacacionesController } from '../src/rrhh/asistencia.controller';
 import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from '../src/rrhh/rrhh.controller';
 import { InformesController } from '../src/informes/informes.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
@@ -77,6 +77,7 @@ const CONTROLADORES = [
   RrhhConfiguracionController,
   LiquidacionesController,
   NovedadesController,
+  MarcacionesController,
   VacacionesController,
   InformesController,
 ];
@@ -218,6 +219,8 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/rrhh/novedades'] = nB.body.ids[0];
     const vB = await http(app).post('/api/rrhh/vacaciones/ajuste').set(hB).send({ funcionarioId: fB.body.id, dias: 5, observacion: 'Saldo inicial de B' }).expect(201);
     idsDeB['/api/rrhh/vacaciones'] = vB.body.id;
+    const mB = await http(app).post('/api/rrhh/marcaciones').set(hB).send({ funcionarioId: fB.body.id, fecha: '2026-10-06', hora: '08:00' }).expect(201);
+    idsDeB['/api/rrhh/marcaciones'] = mB.body.id;
   });
   afterAll(() => app.close());
 

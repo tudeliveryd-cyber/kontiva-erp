@@ -108,6 +108,11 @@ function formatoFuncionario(f: Record<string, unknown> & { salario: string; fech
     banco: f.banco,
     cuentaBancaria: f.cuenta_bancaria,
     nota: f.nota,
+    codigoReloj: f.codigo_reloj ?? null,
+    horarioEntrada: typeof f.horario_entrada === 'string' ? f.horario_entrada.slice(0, 5) : null,
+    horarioSalida: typeof f.horario_salida === 'string' ? f.horario_salida.slice(0, 5) : null,
+    trabajaSabado: f.trabaja_sabado ?? true,
+    sabadoSalida: typeof f.sabado_salida === 'string' ? f.sabado_salida.slice(0, 5) : null,
     diasVacaciones: diasVacaciones(f.fecha_ingreso, hoy()),
   };
 }
@@ -166,6 +171,7 @@ export class FuncionariosController {
     return this.db.enEmpresa(ctx.empresaId, async (tx) => {
       const dup = await tx.selectFrom('funcionario').select('id').where('documento', '=', d.documento).executeTakeFirst();
       if (dup) throw conflicto('DOCUMENTO_DUPLICADO', 'Ya hay un funcionario con esa cédula');
+      await exigirCodigoLibre(tx, d.codigoReloj ?? null, null);
       const suc = await tx.selectFrom('sucursal').select('id').where('id', '=', d.sucursalId).executeTakeFirst();
       if (!suc) throw noEncontrado('Sucursal');
       const r = await tx
@@ -189,6 +195,11 @@ export class FuncionariosController {
           banco: d.banco ?? null,
           cuenta_bancaria: d.cuentaBancaria ?? null,
           nota: d.nota ?? null,
+          codigo_reloj: d.codigoReloj ?? null,
+          horario_entrada: d.horarioEntrada ?? null,
+          horario_salida: d.horarioSalida ?? null,
+          trabaja_sabado: d.trabajaSabado,
+          sabado_salida: d.sabadoSalida ?? null,
           creado_por: ctx.usuarioId,
         })
         .returning('id')
@@ -214,6 +225,7 @@ export class FuncionariosController {
         const dup = await tx.selectFrom('funcionario').select('id').where('documento', '=', d.documento).where('id', '<>', id).executeTakeFirst();
         if (dup) throw conflicto('DOCUMENTO_DUPLICADO', 'Ya hay un funcionario con esa cédula');
       }
+      await exigirCodigoLibre(tx, d.codigoReloj ?? null, id);
       await tx
         .updateTable('funcionario')
         .set({
@@ -234,6 +246,11 @@ export class FuncionariosController {
           banco: d.banco ?? null,
           cuenta_bancaria: d.cuentaBancaria ?? null,
           nota: d.nota ?? null,
+          codigo_reloj: d.codigoReloj ?? null,
+          horario_entrada: d.horarioEntrada ?? null,
+          horario_salida: d.horarioSalida ?? null,
+          trabaja_sabado: d.trabajaSabado,
+          sabado_salida: d.sabadoSalida ?? null,
         })
         .where('id', '=', id)
         .execute();
@@ -906,4 +923,12 @@ async function aplicarFiniquito(tx: Tx, ctx: Ctx, id: string, opciones: Opciones
   };
   await tx.updateTable('liquidacion_final').set({ opciones: JSON.stringify({ ...opciones, calculo }) }).where('liquidacion_id', '=', id).execute();
   await recalcularTotales(tx, id);
+}
+
+async function exigirCodigoLibre(tx: Tx, codigo: string | null, id: string | null) {
+  if (!codigo) return;
+  let q = tx.selectFrom('funcionario').select('nombre').where('codigo_reloj', '=', codigo);
+  if (id) q = q.where('id', '<>', id);
+  const otro = await q.executeTakeFirst();
+  if (otro) throw conflicto('CODIGO_RELOJ_DUPLICADO', `El código ${codigo} del reloj ya es de ${otro.nombre}`);
 }

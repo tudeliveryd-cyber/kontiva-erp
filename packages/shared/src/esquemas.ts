@@ -574,7 +574,14 @@ export const funcionarioEntrada = z.object({
   banco: textoOpcional(80),
   cuentaBancaria: textoOpcional(40),
   nota: textoOpcional(500),
-});
+  codigoReloj: z.string().trim().regex(/^[0-9A-Za-z]{1,20}$/, 'Código del reloj: solo letras y números').nullable().optional().or(z.literal('').transform(() => null)),
+  horarioEntrada: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida').nullable().optional().or(z.literal('').transform(() => null)),
+  horarioSalida: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida').nullable().optional().or(z.literal('').transform(() => null)),
+  trabajaSabado: z.boolean().default(true),
+  sabadoSalida: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida').nullable().optional().or(z.literal('').transform(() => null)),
+}).refine((f) => !f.horarioEntrada === !f.horarioSalida && (!f.horarioEntrada || f.horarioSalida! > f.horarioEntrada), { message: 'Indique la entrada y una salida posterior', path: ['horarioSalida'] });
+
+export const marcacionManualEntrada = z.object({ funcionarioId: z.string().uuid(), fecha: fechaDia, hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida') });
 
 export const bajaFuncionarioEntrada = z.object({ fechaEgreso: fechaDia, motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
 

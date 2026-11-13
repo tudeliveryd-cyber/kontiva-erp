@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Plus, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Plus, Trash2, Upload, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Aviso, Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
 import { api } from '../lib/api';
@@ -7,7 +7,9 @@ import { useSesion } from '../lib/sesion';
 
 type TipoNovedad = 'ausencia' | 'ausencia_justificada' | 'reposo' | 'permiso' | 'llegada_tardia' | 'horas_extra';
 interface Novedad { id: string; funcionarioId: string; fecha: string; tipo: TipoNovedad; horas: string; recargo: 50 | 100 | null; observacion: string | null }
+interface Marcacion { id: string; funcionarioId: string; fecha: string; hora: string; origen: 'reloj' | 'manual' }
 interface Planilla {
+  marcaciones: Marcacion[];
   funcionarios: { id: string; nombre: string; cargo: string; sucursal: string; fechaIngreso: string; fechaEgreso: string | null; remuneracion: 'mensual' | 'jornal' }[];
   novedades: Novedad[];
   vacaciones: { id: string; funcionarioId: string; desde: string; hasta: string; dias: string }[];
@@ -44,6 +46,8 @@ const nombreMes = (mes: string) => new Intl.DateTimeFormat('es-PY', { month: 'lo
 const LETRA_DIA = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
 const dias = (n: number) => `${n.toLocaleString('es-PY')} ${n === 1 ? 'día' : 'días'}`;
 const horas = (h: string | number) => `${Number(h).toLocaleString('es-PY')} h`;
+/** Duración legible: los retrasos y permisos cortos se leen mejor en minutos. */
+const duracion = (h: string | number) => (Number(h) < 1 ? `${Math.round(Number(h) * 60)} min` : horas(h));
 
 /** Días hábiles (lunes a sábado) entre dos fechas: valor sugerido para el goce de vacaciones. */
 const habiles = (desde: string, hasta: string) => {
@@ -53,7 +57,8 @@ const habiles = (desde: string, hasta: string) => {
 };
 
 export function Asistencia() {
-  const [pestana, setPestana] = useState<'planilla' | 'vacaciones'>('planilla');
+  const { puede } = useSesion();
+  const [pestana, setPestana] = useState<'planilla' | 'vacaciones' | 'reloj'>('planilla');
   return (
     <>
       <Encabezado titulo="Asistencia y vacaciones" />
@@ -61,8 +66,9 @@ export function Asistencia() {
         <div className="pestanas">
           <button className={pestana === 'planilla' ? 'activa' : ''} onClick={() => setPestana('planilla')}>Planilla del mes</button>
           <button className={pestana === 'vacaciones' ? 'activa' : ''} onClick={() => setPestana('vacaciones')}>Vacaciones</button>
+          {puede('asistencia.editar') && <button className={pestana === 'reloj' ? 'activa' : ''} onClick={() => setPestana('reloj')}>Reloj de asistencia</button>}
         </div>
-        {pestana === 'planilla' ? <PlanillaAsistencia /> : <Vacaciones />}
+        {pestana === 'planilla' ? <PlanillaAsistencia /> : pestana === 'vacaciones' ? <Vacaciones /> : <Reloj />}
       </div>
     </>
   );
@@ -81,6 +87,7 @@ function PlanillaAsistencia() {
     for (const x of q.data?.novedades ?? []) m.set(`${x.funcionarioId}|${x.fecha}`, [...(m.get(`${x.funcionarioId}|${x.fecha}`) ?? []), x]);
     return m;
   }, [q.data]);
+  const marcasDe = (fid: string, fecha: string) => q.data?.marcaciones.filter((m) => m.funcionarioId === fid && m.fecha === fecha) ?? [];
   const enVacaciones = (fid: string, fecha: string) => q.data?.vacaciones.some((v) => v.funcionarioId === fid && v.desde <= fecha && v.hasta >= fecha);
   const totales = (fid: string) => {
     const ns = q.data?.novedades.filter((x) => x.funcionarioId === fid) ?? [];
@@ -132,19 +139,21 @@ function PlanillaAsistencia() {
                         const fuera = f < fu.fechaIngreso || (!!fu.fechaEgreso && f > fu.fechaEgreso);
                         const ns = porCelda.get(`${fu.id}|${f}`) ?? [];
                         const vac = enVacaciones(fu.id, f);
+                        const marcas = marcasDe(fu.id, f);
                         const domingo = new Date(`${f}T12:00:00Z`).getUTCDay() === 0;
                         const edita = editar && !fuera;
                         return (
                           <td
                             key={f}
                             className={`celda${fuera ? ' fuera' : domingo ? ' domingo' : ''}${edita ? ' edita' : ''}`}
-                            title={[vac ? 'Vacaciones' : '', ...ns.map((x) => TIPOS_NOVEDAD[x.tipo].nombre + (x.tipo === 'horas_extra' ? ` ${horas(x.horas)} al ${x.recargo} %` : ''))].filter(Boolean).join(' · ')}
+                            title={[vac ? 'Vacaciones' : '', marcas.length ? `Marcaciones: ${marcas.map((m) => m.hora).join(' · ')}` : '', ...ns.map((x) => TIPOS_NOVEDAD[x.tipo].nombre + (x.tipo === 'horas_extra' ? ` ${horas(x.horas)} al ${x.recargo} %` : ''))].filter(Boolean).join(' · ')}
                             onClick={edita ? () => setCelda({ funcionarioId: fu.id, fecha: f }) : undefined}
                           >
                             {vac && <span className="cod cod-V">V</span>}
                             {ns.map((x) => (
                               <span key={x.id} className={`cod cod-${TIPOS_NOVEDAD[x.tipo].cod}`}>{x.tipo === 'horas_extra' ? Number(x.horas) : TIPOS_NOVEDAD[x.tipo].cod}</span>
                             ))}
+                            {!vac && !ns.length && marcas.length > 0 && <span className="marcado" aria-label="Con marcaciones" />}
                           </td>
                         );
                       })}
@@ -162,6 +171,7 @@ function PlanillaAsistencia() {
               <span key={k}><span className={`cod cod-${v.cod}`}>{k === 'horas_extra' ? '2' : v.cod}</span>{k === 'horas_extra' ? 'Horas extra (cantidad)' : v.nombre}</span>
             ))}
             <span><span className="cod cod-V">V</span>Vacaciones</span>
+            <span><span className="marcado" />Marcó en el reloj</span>
           </div>
         </>
       )}
@@ -170,6 +180,7 @@ function PlanillaAsistencia() {
           funcionario={funcionario}
           fecha={celda.fecha}
           novedades={porCelda.get(`${celda.funcionarioId}|${celda.fecha}`) ?? []}
+          marcaciones={marcasDe(celda.funcionarioId, celda.fecha)}
           alCerrar={() => setCelda(null)}
         />
       )}
@@ -177,7 +188,16 @@ function PlanillaAsistencia() {
   );
 }
 
-function NovedadesDelDia({ funcionario, fecha, novedades, alCerrar }: { funcionario: Planilla['funcionarios'][number]; fecha: string; novedades: Novedad[]; alCerrar: () => void }) {
+function NovedadesDelDia({ funcionario, fecha, novedades, marcaciones, alCerrar }: { funcionario: Planilla['funcionarios'][number]; fecha: string; novedades: Novedad[]; marcaciones: Marcacion[]; alCerrar: () => void }) {
+  const [horaManual, setHoraManual] = useState('');
+  const marcar = useMutation({
+    mutationFn: () => api('/rrhh/marcaciones', { metodo: 'POST', cuerpo: { funcionarioId: funcionario.id, fecha, hora: horaManual } }),
+    onSuccess: () => {
+      setHoraManual('');
+      void qcMarcas.invalidateQueries({ queryKey: ['asistencia'] });
+    },
+  });
+  const quitarMarca = useMutation({ mutationFn: (id: string) => api(`/rrhh/marcaciones/${id}`, { metodo: 'DELETE' }), onSuccess: () => void qcMarcas.invalidateQueries({ queryKey: ['asistencia'] }) });
   const qc = useQueryClient();
   const [tipo, setTipo] = useState<TipoNovedad>('ausencia');
   const [hasta, setHasta] = useState(fecha);
@@ -207,6 +227,7 @@ function NovedadesDelDia({ funcionario, fecha, novedades, alCerrar }: { funciona
     },
   });
   const quitar = useMutation({ mutationFn: (id: string) => api(`/rrhh/novedades/${id}`, { metodo: 'DELETE' }), onSuccess: refrescar });
+  const qcMarcas = qc;
   const domingo = new Date(`${fecha}T12:00:00Z`).getUTCDay() === 0;
   return (
     <Cajon
@@ -215,7 +236,19 @@ function NovedadesDelDia({ funcionario, fecha, novedades, alCerrar }: { funciona
       pie={<><button className="btn" onClick={alCerrar}>Cerrar</button><button className="btn pri" disabled={crear.isPending || (conHoras && !Number(cantHoras.replace(',', '.')))} onClick={() => crear.mutate()}><Plus size={16} /> Registrar</button></>}
     >
       <div className="form">
-        <ErrorApi error={crear.error ?? quitar.error} />
+        <ErrorApi error={crear.error ?? quitar.error ?? marcar.error ?? quitarMarca.error} />
+        <h3 className="subtitulo" style={{ margin: 0 }}>Marcaciones</h3>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {!marcaciones.length && <span className="tenue peq">Sin marcaciones.</span>}
+          {marcaciones.map((m) => (
+            <span key={m.id} className="insignia i-n" title={m.origen === 'manual' ? 'Cargada a mano' : 'Del reloj'}>
+              <Clock size={12} /> {m.hora}{m.origen === 'manual' && ' (manual)'}
+              <button aria-label={`Quitar ${m.hora}`} style={{ border: 0, background: 'none', padding: 0, display: 'flex', color: 'var(--t3)', cursor: 'pointer' }} onClick={() => quitarMarca.mutate(m.id)}><XCircle size={13} /></button>
+            </span>
+          ))}
+          <input type="time" aria-label="Hora de la marcación" className="entrada" style={{ height: 30, width: 110 }} value={horaManual} onChange={(e) => setHoraManual(e.target.value)} />
+          <button className="btn" style={{ height: 30 }} disabled={!horaManual || marcar.isPending} onClick={() => marcar.mutate()}><Plus size={14} /> Marcar</button>
+        </div>
         {novedades.length > 0 && (
           <>
             <h3 className="subtitulo" style={{ margin: 0 }}>Registrado este día</h3>
@@ -223,7 +256,7 @@ function NovedadesDelDia({ funcionario, fecha, novedades, alCerrar }: { funciona
               <tbody>
                 {novedades.map((x) => (
                   <tr key={x.id}>
-                    <td><span className={`cod cod-${TIPOS_NOVEDAD[x.tipo].cod}`}>{TIPOS_NOVEDAD[x.tipo].cod}</span> {TIPOS_NOVEDAD[x.tipo].nombre}{Number(x.horas) ? ` · ${horas(x.horas)}` : ''}{x.recargo ? ` al ${x.recargo} %` : ''}{x.observacion && <div className="tenue peq">{x.observacion}</div>}</td>
+                    <td><span className={`cod cod-${TIPOS_NOVEDAD[x.tipo].cod}`}>{TIPOS_NOVEDAD[x.tipo].cod}</span> {TIPOS_NOVEDAD[x.tipo].nombre}{Number(x.horas) ? ` · ${duracion(x.horas)}` : ''}{x.recargo ? ` al ${x.recargo} %` : ''}{x.observacion && <div className="tenue peq">{x.observacion}</div>}</td>
                     <td className="der"><button className="btn" aria-label="Quitar" style={{ height: 30, padding: '0 8px' }} disabled={quitar.isPending} onClick={() => quitar.mutate(x.id)}><Trash2 size={14} /></button></td>
                   </tr>
                 ))}
@@ -436,5 +469,142 @@ export function VacacionesFuncionario({ fila, alCerrar }: { fila: { funcionarioI
         </>
       )}
     </Cajon>
+  );
+}
+
+interface ResultadoImportacion { lineas: number; importadas: number; repetidas: number; ignoradas: number; fueraDePeriodo: number; sinFuncionario: string[]; desde: string | null; hasta: string | null }
+interface Propuesta { funcionarioId: string; nombre: string; fecha: string; tipo: 'ausencia' | 'llegada_tardia' | 'horas_extra'; horas?: number; recargo?: 50 | 100; detalle: string }
+interface Propuestas { desde: string; hasta: string; propuestas: Propuesta[]; incompletas: { funcionarioId: string; nombre: string; fecha: string; hora: string }[]; sinHorario: string[] }
+
+/** Importación del archivo del reloj y revisión de las novedades que surgen de comparar con el horario. */
+function Reloj() {
+  const qc = useQueryClient();
+  const [resultado, setResultado] = useState<ResultadoImportacion | null>(null);
+  const [desde, setDesde] = useState(`${hoy().slice(0, 7)}-01`);
+  const [hasta, setHasta] = useState(hoy());
+  const [propuestas, setPropuestas] = useState<Propuestas | null>(null);
+  const [elegidas, setElegidas] = useState<Set<number>>(new Set());
+  const [registro, setRegistro] = useState<{ registradas: number; rechazadas: { indice: number; motivo: string }[] } | null>(null);
+  const importar = useMutation({
+    mutationFn: async (archivo: File) => api<ResultadoImportacion>('/rrhh/marcaciones/importar', { metodo: 'POST', cuerpo: { contenido: await archivo.text(), nombreArchivo: archivo.name } }),
+    onSuccess: (r) => {
+      setResultado(r);
+      if (r.desde && r.hasta) {
+        setDesde(r.desde);
+        setHasta(r.hasta);
+      }
+      setPropuestas(null);
+      void qc.invalidateQueries({ queryKey: ['asistencia'] });
+    },
+  });
+  const analizar = useMutation({
+    mutationFn: () => api<Propuestas>(`/rrhh/marcaciones/propuestas?desde=${desde}&hasta=${hasta}`),
+    onSuccess: (p) => {
+      setPropuestas(p);
+      setElegidas(new Set(p.propuestas.map((_, i) => i)));
+      setRegistro(null);
+    },
+  });
+  const registrar = useMutation({
+    mutationFn: () =>
+      api<{ registradas: number; rechazadas: { indice: number; motivo: string }[] }>('/rrhh/novedades/lote', {
+        metodo: 'POST',
+        cuerpo: {
+          novedades: propuestas!.propuestas
+            .filter((_, i) => elegidas.has(i))
+            .map((p) => ({ funcionarioId: p.funcionarioId, fecha: p.fecha, tipo: p.tipo, horas: p.horas, recargo: p.recargo, observacion: `Reloj: ${p.detalle}` })),
+        },
+      }),
+    onSuccess: (r) => {
+      setRegistro(r);
+      void qc.invalidateQueries({ queryKey: ['asistencia'] });
+      analizar.mutate();
+    },
+  });
+  const describir = (p: Propuesta) => (p.tipo === 'ausencia' ? 'Ausencia' : p.tipo === 'llegada_tardia' ? `Llegada tardía (${duracion(p.horas!)})` : `Horas extra ${horas(p.horas!)} al ${p.recargo} %`);
+  return (
+    <>
+      <section className="panel" style={{ marginBottom: 16 }}>
+        <div className="form" style={{ padding: 20 }}>
+          <ErrorApi error={importar.error} />
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="btn pri" style={{ cursor: 'pointer' }}>
+              <Upload size={16} /> Importar archivo del reloj
+              <input type="file" accept=".dat,.txt,.csv" hidden disabled={importar.isPending} onChange={(e) => { const a = e.target.files?.[0]; if (a) importar.mutate(a); e.target.value = ''; }} />
+            </label>
+            <span className="tenue peq" style={{ flex: 1, minWidth: 260 }}>
+              Archivo attlog.dat de los relojes ZKTeco o la exportación en CSV o texto del programa del reloj. Cada marcación se asigna por el código del funcionario en el reloj o por su cédula. Se puede importar el mismo archivo de nuevo: lo repetido se ignora.
+            </span>
+          </div>
+          {importar.isPending && <Cargando />}
+          {resultado && (
+            <Aviso tipo={resultado.importadas ? 'ok' : 'info'}>
+              {resultado.importadas.toLocaleString('es-PY')} marcaciones nuevas de {resultado.lineas.toLocaleString('es-PY')} leídas
+              {resultado.desde && ` (del ${fechaCorta(resultado.desde)} al ${fechaCorta(resultado.hasta)})`}
+              {resultado.repetidas > 0 && ` · ${resultado.repetidas} ya estaban`}
+              {resultado.fueraDePeriodo > 0 && ` · ${resultado.fueraDePeriodo} fuera del período de trabajo`}
+              {resultado.ignoradas > 0 && ` · ${resultado.ignoradas} líneas sin datos`}
+              {resultado.sinFuncionario.length > 0 && `. Códigos sin funcionario: ${resultado.sinFuncionario.join(', ')} (cárguelos en el legajo, campo "Código en el reloj")`}
+            </Aviso>
+          )}
+        </div>
+      </section>
+      <section className="panel">
+        <div className="filtros" style={{ paddingTop: 16, alignItems: 'flex-end' }}>
+          <Campo etiqueta="Desde" id="rl-d"><input id="rl-d" type="date" className="entrada" value={desde} onChange={(e) => setDesde(e.target.value)} /></Campo>
+          <Campo etiqueta="Hasta" id="rl-h"><input id="rl-h" type="date" className="entrada" max={hoy()} value={hasta} onChange={(e) => setHasta(e.target.value)} /></Campo>
+          <button className="btn" style={{ marginBottom: 2 }} disabled={analizar.isPending} onClick={() => analizar.mutate()}><Clock size={16} /> Comparar con el horario</button>
+          <span className="tenue peq" style={{ alignSelf: 'center', flex: 1, minWidth: 240 }}>
+            Propone ausencias, llegadas tardías (más de 10 minutos) y horas extra (por media hora cumplida). Revise feriados y permisos antes de registrar.
+          </span>
+        </div>
+        <ErrorApi error={analizar.error ?? registrar.error} />
+        {registro && (
+          <Aviso tipo={registro.rechazadas.length ? 'info' : 'ok'}>
+            {registro.registradas} novedades registradas{registro.rechazadas.length > 0 && ` · ${registro.rechazadas.length} no se registraron: ${registro.rechazadas.slice(0, 3).map((r) => r.motivo).join('; ')}`}
+          </Aviso>
+        )}
+        {propuestas && (
+          <>
+            {propuestas.sinHorario.length > 0 && <Aviso tipo="info">Sin horario cargado (no se comparan): {propuestas.sinHorario.join(', ')}.</Aviso>}
+            {!propuestas.propuestas.length ? (
+              <Vacio titulo="Nada para proponer">Las marcaciones del período coinciden con los horarios.</Vacio>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 36 }}>
+                      <input type="checkbox" aria-label="Todas" checked={elegidas.size === propuestas.propuestas.length} onChange={(e) => setElegidas(e.target.checked ? new Set(propuestas.propuestas.map((_, i) => i)) : new Set())} />
+                    </th>
+                    <th>Funcionario</th><th>Fecha</th><th>Novedad</th><th>Detalle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {propuestas.propuestas.map((p, i) => (
+                    <tr key={i}>
+                      <td><input type="checkbox" aria-label="Registrar" checked={elegidas.has(i)} onChange={(e) => { const n = new Set(elegidas); if (e.target.checked) n.add(i); else n.delete(i); setElegidas(n); }} /></td>
+                      <td>{p.nombre}</td>
+                      <td className="tenue">{LETRA_DIA[new Date(`${p.fecha}T12:00:00Z`).getUTCDay()]} {fechaCorta(p.fecha)}</td>
+                      <td><span className={`cod cod-${p.tipo === 'ausencia' ? 'A' : p.tipo === 'llegada_tardia' ? 'T' : 'H'}`}>{p.tipo === 'ausencia' ? 'A' : p.tipo === 'llegada_tardia' ? 'T' : p.horas}</span> {describir(p)}</td>
+                      <td className="tenue peq">{p.detalle}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {propuestas.incompletas.length > 0 && (
+              <p className="tenue peq" style={{ margin: 0, padding: '10px 16px' }}>
+                Días con una sola marcación (complételos en la planilla del mes): {propuestas.incompletas.map((x) => `${x.nombre} ${fechaCorta(x.fecha)} ${x.hora}`).join(' · ')}.
+              </p>
+            )}
+            {propuestas.propuestas.length > 0 && (
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--linea2)', display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn pri" disabled={!elegidas.size || registrar.isPending} onClick={() => registrar.mutate()}><CheckCircle2 size={16} /> Registrar {elegidas.size} {elegidas.size === 1 ? 'novedad' : 'novedades'}</button>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    </>
   );
 }

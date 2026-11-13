@@ -218,8 +218,11 @@ Fase 2 completa.
   el legajo queda con la fecha y el motivo de egreso; se paga, contabiliza y anula como las demás planillas, y
   el funcionario ya no entra en las planillas mensuales ni en el aguinaldo siguientes. Recibo para firmar.
 
-### Fase 4 · pendiente
-- Marcaciones de reloj biométrico (importación de entradas y salidas).
+- **Reloj de asistencia**: cada legajo tiene su horario (con salida distinta los sábados) y su código en el
+  reloj. Se importa el `attlog.dat` de los relojes ZKTeco o la exportación CSV/TXT del programa del reloj
+  (asignación por código o cédula; reimportar no duplica), y se pueden cargar o quitar marcaciones a mano.
+  Al comparar con el horario se proponen ausencias, llegadas tardías (más de 10 minutos) y horas extra (por
+  media hora, al 100 % en domingos); la empresa revisa y registra las que correspondan.
 
 ## Estructura
 

@@ -264,6 +264,7 @@ export interface BaseDatos {
   liquidacion: LiquidacionTabla;
   liquidacion_item: LiquidacionItemTabla;
   novedad: NovedadTabla;
+  marcacion: MarcacionTabla;
   vacacion: VacacionTabla;
   liquidacion_final: LiquidacionFinalTabla;
   liquidacion_concepto: LiquidacionConceptoTabla;
@@ -1032,6 +1033,11 @@ export interface FuncionarioTabla {
   cuenta_bancaria: string | null;
   usuario_id: string | null;
   nota: string | null;
+  codigo_reloj: string | null;
+  horario_entrada: string | null;
+  horario_salida: string | null;
+  trabaja_sabado: Generated<boolean>;
+  sabado_salida: string | null;
   creado_por: string;
   creado_en: Creado;
 }
@@ -1134,4 +1140,14 @@ export interface LiquidacionConceptoTabla {
   base: NumGen;
   monto: Num;
   imponible: boolean;
+}
+export interface MarcacionTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  funcionario_id: string;
+  fecha: Fecha;
+  hora: string;
+  origen: 'reloj' | 'manual';
+  creado_por: string;
+  creado_en: Creado;
 }

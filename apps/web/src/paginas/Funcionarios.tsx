@@ -30,6 +30,11 @@ export interface Funcionario {
   banco: string | null;
   cuentaBancaria: string | null;
   nota: string | null;
+  codigoReloj: string | null;
+  horarioEntrada: string | null;
+  horarioSalida: string | null;
+  trabajaSabado: boolean;
+  sabadoSalida: string | null;
   diasVacaciones: number;
 }
 interface Legajo extends Funcionario {
@@ -140,6 +145,11 @@ function FormFuncionario({ funcionario, alCerrar }: { funcionario: Funcionario |
     banco: funcionario?.banco ?? '',
     cuentaBancaria: funcionario?.cuentaBancaria ?? '',
     nota: funcionario?.nota ?? '',
+    codigoReloj: funcionario?.codigoReloj ?? '',
+    horarioEntrada: funcionario?.horarioEntrada ?? '',
+    horarioSalida: funcionario?.horarioSalida ?? '',
+    trabajaSabado: funcionario?.trabajaSabado ?? true,
+    sabadoSalida: funcionario?.sabadoSalida ?? '',
   });
   const sucursalId = f.sucursalId || sucursales.data?.[0]?.id || '';
   const guardar = useMutation({
@@ -216,6 +226,20 @@ function FormFuncionario({ funcionario, alCerrar }: { funcionario: Funcionario |
         <div className="fila-campos">
           <Campo etiqueta="Banco para el sueldo (opcional)" id="ff-b"><input id="ff-b" className="entrada" {...t('banco')} /></Campo>
           <Campo etiqueta="N.º de cuenta" id="ff-cb"><input id="ff-cb" className="entrada" {...t('cuentaBancaria')} /></Campo>
+        </div>
+        <h3 className="subtitulo" style={{ margin: '6px 0 0' }}>Horario y reloj de asistencia</h3>
+        <div className="fila-campos">
+          <Campo etiqueta="Entrada" id="ff-he"><input id="ff-he" type="time" className="entrada" {...t('horarioEntrada')} /></Campo>
+          <Campo etiqueta="Salida" id="ff-hs"><input id="ff-hs" type="time" className="entrada" {...t('horarioSalida')} /></Campo>
+          <Campo etiqueta="Código en el reloj" id="ff-cr" ayuda="El número con que marca; si no tiene, se usa la cédula.">
+            <input id="ff-cr" className="entrada num" {...t('codigoReloj')} />
+          </Campo>
+        </div>
+        <div className="fila-campos" style={{ alignItems: 'flex-end' }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', paddingBottom: 10 }}>
+            <input type="checkbox" checked={f.trabajaSabado} onChange={(e) => setF({ ...f, trabajaSabado: e.target.checked })} /> Trabaja los sábados
+          </label>
+          {f.trabajaSabado && <Campo etiqueta="Salida del sábado (si es distinta)" id="ff-ss"><input id="ff-ss" type="time" className="entrada" {...t('sabadoSalida')} /></Campo>}
         </div>
         <Campo etiqueta="Nota" id="ff-no"><textarea id="ff-no" className="entrada" rows={2} {...t('nota')} /></Campo>
       </div>
@@ -316,6 +340,7 @@ function LegajoFuncionario({ id, alCerrar, alEditar }: { id: string; alCerrar: (
             <dt>Dirección</dt><dd>{f.direccion || '—'}</dd>
             <dt>IPS</dt><dd>{f.aseguradoIps ? `Asegurado${f.numeroIps ? ` N.º ${f.numeroIps}` : ''}` : 'No asegurado'}</dd>
             <dt>Hijos menores</dt><dd>{f.hijos}</dd>
+            <dt>Horario</dt><dd>{f.horarioEntrada ? `${f.horarioEntrada} a ${f.horarioSalida}${f.trabajaSabado ? (f.sabadoSalida ? ` · sábados hasta ${f.sabadoSalida}` : ' · también sábados') : ' · sin sábados'}` : '—'}{f.codigoReloj && ` · reloj N.º ${f.codigoReloj}`}</dd>
             <dt>Cuenta para el sueldo</dt><dd>{f.banco ? `${f.banco} · ${f.cuentaBancaria ?? ''}` : '—'}</dd>
             {f.nota && <><dt>Nota</dt><dd>{f.nota}</dd></>}
           </dl>
