@@ -35,7 +35,10 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
     .orderBy('v.id')
     .execute();
   const codigos = variantes.length
-    ? await tx.selectFrom('codigo_barras').select(['codigo', 'variante_id']).where('variante_id', 'in', variantes.map((v) => v.id)).execute()
+    ? await tx.selectFrom('codigo_barras').select(['codigo', 'variante_id', 'presentacion_id']).where('variante_id', 'in', variantes.map((v) => v.id)).execute()
+    : [];
+  const presentaciones = variantes.length
+    ? await tx.selectFrom('presentacion').select(['id', 'variante_id', 'nombre', 'factor', 'precio']).where('variante_id', 'in', variantes.map((v) => v.id)).where('activa', '=', true).orderBy('factor').execute()
     : [];
   const verCosto = tiene(ctx, 'costo_producto.ver');
   return {
@@ -67,7 +70,10 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
       precio: v.precio ?? '0.00',
       stockMinimo: v.stock_minimo,
       ...(verCosto ? { costo: v.costo } : {}),
-      codigos: codigos.filter((c) => c.variante_id === v.id).map((c) => c.codigo),
+      codigos: codigos.filter((c) => c.variante_id === v.id && !c.presentacion_id).map((c) => c.codigo),
+      presentaciones: presentaciones
+        .filter((x) => x.variante_id === v.id)
+        .map((x) => ({ id: x.id, nombre: x.nombre, factor: x.factor, precio: x.precio, codigos: codigos.filter((c) => c.presentacion_id === x.id).map((c) => c.codigo) })),
     })),
   };
 }
@@ -238,6 +244,31 @@ export class ProductosController {
         const usados = await tx.selectFrom('codigo_barras').select('codigo').where('codigo', 'in', v.codigos).execute();
         if (usados.length) throw conflicto('CODIGO_EN_USO', `El código ${usados[0]!.codigo} ya está asignado a otro producto`);
         await tx.insertInto('codigo_barras').values(v.codigos.map((codigo) => ({ empresa_id: ctx.empresaId, codigo, variante_id: varianteId! }))).execute();
+      }
+
+      // Presentaciones (caja, rollo): las que no vienen se desactivan; sus códigos se cargan de nuevo.
+      const previas = await tx.selectFrom('presentacion').select(['id', 'precio']).where('variante_id', '=', varianteId!).where('activa', '=', true).execute();
+      const siguen = new Set(v.presentaciones.map((x) => x.id).filter(Boolean));
+      for (const pr of previas) if (!siguen.has(pr.id)) await tx.updateTable('presentacion').set({ activa: false }).where('id', '=', pr.id).execute();
+      const nombres = v.presentaciones.map((x) => x.nombre.toLowerCase());
+      if (new Set(nombres).size !== nombres.length) throw invalido('Hay presentaciones con el mismo nombre');
+      for (const pr of v.presentaciones) {
+        const precio = pr.precio === null || pr.precio === undefined ? null : pr.precio.toFixed(2);
+        let presentacionId = pr.id;
+        if (presentacionId) {
+          const previa = previas.find((x) => x.id === presentacionId);
+          if (!previa) throw noEncontrado('Presentación');
+          await tx.updateTable('presentacion').set({ nombre: pr.nombre, factor: String(pr.factor), ...(puedePrecio && { precio }) }).where('id', '=', presentacionId).execute();
+        } else {
+          presentacionId = (
+            await tx.insertInto('presentacion').values({ empresa_id: ctx.empresaId, variante_id: varianteId!, nombre: pr.nombre, factor: String(pr.factor), precio: puedePrecio ? precio : null }).returning('id').executeTakeFirstOrThrow()
+          ).id;
+        }
+        if (pr.codigos.length) {
+          const usados = await tx.selectFrom('codigo_barras').select('codigo').where('codigo', 'in', pr.codigos).execute();
+          if (usados.length) throw conflicto('CODIGO_EN_USO', `El código ${usados[0]!.codigo} ya está asignado a otro producto`);
+          await tx.insertInto('codigo_barras').values(pr.codigos.map((codigo) => ({ empresa_id: ctx.empresaId, codigo, variante_id: varianteId!, presentacion_id: presentacionId! }))).execute();
+        }
       }
 
       if (puedePrecio) {

@@ -92,7 +92,7 @@ export const RECURSOS = {
   asistencia: { nombre: 'Asistencia y vacaciones', modulo: 'rrhh', acciones: ['ver', 'editar'] },
 
   // Logística (verticales)
-  entrega: { nombre: 'Entregas y rutas', modulo: 'logistica', acciones: ['ver', 'crear', 'editar'] },
+  entrega: { nombre: 'Rutas, repartos y rendición', modulo: 'logistica', acciones: ['ver', 'crear', 'editar', 'cancelar'] },
 } as const satisfies Record<string, DefRecurso>;
 
 export type Recurso = keyof typeof RECURSOS;

@@ -25,6 +25,7 @@ import { ComprasController, CuentasPagarController, OrdenesCompraController, Pag
 import { EmisorSifen } from './sifen/emisor.service';
 import { DevolucionesController } from './operacion/devoluciones.controller';
 import { ValesController } from './operacion/vales.controller';
+import { RepartosController, RutasController } from './distribucion/distribucion.controller';
 import { TransferenciasController } from './operacion/transferencias.controller';
 import { AuthController, CuentaController } from './auth/auth.controller';
 import { AuthGuard } from './auth/auth.guard';
@@ -101,8 +102,14 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     VentasController,
     TransferenciasController,
     DevolucionesController,
+    RutasController,
+    RepartosController,
   ],
   providers: [
+    // El despacho y la rendición de los repartos reutilizan la venta, el cobro y la devolución.
+    VentasController,
+    CobrosController,
+    DevolucionesController,
     { provide: Tokens, useFactory: Tokens.empresas },
     Correo,
     AuthService,

@@ -226,6 +226,10 @@ export interface BaseDatos {
   stock: StockTabla;
   movimiento_stock: MovimientoStockTabla;
   cliente: ClienteTabla;
+  ruta: RutaTabla;
+  reparto: RepartoTabla;
+  reparto_pedido: RepartoPedidoTabla;
+  presentacion: PresentacionTabla;
   cotizacion: CotizacionTabla;
   caja: CajaTabla;
   sesion_caja: SesionCajaTabla;
@@ -426,7 +430,7 @@ export interface VarianteTabla {
   actualizado_en: Actualizado;
 }
 
-export interface CodigoBarrasTabla { empresa_id: string; codigo: string; variante_id: string }
+export interface CodigoBarrasTabla { empresa_id: string; codigo: string; variante_id: string; presentacion_id: string | null }
 export interface ListaPrecioTabla { empresa_id: string; id: Generated<string>; nombre: string; predeterminada: Generated<boolean>; activa: Generated<boolean>; creado_en: Creado }
 export interface PrecioTabla { empresa_id: string; lista_id: string; variante_id: string; sucursal_id: string | null; precio: Num; actualizado_en: Generated<Date> }
 export interface DepositoTabla { empresa_id: string; id: Generated<string>; sucursal_id: string; nombre: string; activo: Generated<boolean>; creado_en: Creado }
@@ -456,6 +460,8 @@ export interface ClienteTabla {
   email: string | null;
   direccion: string | null;
   lista_precio_id: string | null;
+  ruta_id: string | null;
+  orden_ruta: number | null;
   limite_credito: NumGen;
   plazo_credito_dias: Generated<number>;
   activo: Generated<boolean>;
@@ -570,6 +576,7 @@ export interface VentaItemTabla {
   total: Num;
   tasa_iva: Num;
   costo_unitario: NumGen;
+  presentacion: string | null;
   condicion_venta: Generated<'receta' | 'receta_archivada' | null>;
 }
 
@@ -852,6 +859,7 @@ export interface CompraItemTabla {
   tasa_iva: number;
   total: Num;
   orden_linea: number | null;
+  presentacion: string | null;
   lote_codigo: string | null;
   lote_vencimiento: FechaNula;
 }
@@ -1362,4 +1370,62 @@ export interface ValeMovimientoTabla {
   venta_id: string | null;
   creado_por: string;
   creado_en: Creado;
+}
+
+export interface RutaTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  sucursal_id: string;
+  nombre: string;
+  dias: number[];
+  nota: string | null;
+  activa: Generated<boolean>;
+  creado_en: Creado;
+}
+
+export interface RepartoTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: number | string;
+  sucursal_id: string;
+  caja_id: string;
+  ruta_id: string | null;
+  fecha: string;
+  repartidor: string;
+  funcionario_id: string | null;
+  vehiculo: string | null;
+  nota: string | null;
+  estado: Generated<'preparacion' | 'en_ruta' | 'rendido' | 'anulado'>;
+  despachado_en: Date | null;
+  despachado_por: string | null;
+  rendido_en: Date | null;
+  rendido_por: string | null;
+  efectivo_esperado: Num | null;
+  efectivo_entregado: Num | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+
+export interface RepartoPedidoTabla {
+  empresa_id: string;
+  reparto_id: string;
+  pedido_id: string;
+  orden: number;
+  estado: Generated<'pendiente' | 'entregado' | 'parcial' | 'rechazado'>;
+  venta_id: string | null;
+  devolucion_id: string | null;
+  cobro_id: string | null;
+  cobrado: NumGen;
+  medio: 'efectivo' | 'transferencia' | 'cheque' | 'otro' | null;
+  motivo: string | null;
+}
+
+export interface PresentacionTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  variante_id: string;
+  nombre: string;
+  factor: Num;
+  precio: Num | null;
+  activa: Generated<boolean>;
 }

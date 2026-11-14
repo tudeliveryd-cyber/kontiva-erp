@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ClipboardCheck, CloudOff, FileText, Grid3x3, Minus, Percent, Pill, Plus, Printer, RefreshCw, Repeat, Scissors, Search, Ticket as IconoVale, Trash2, UserRound, UtensilsCrossed, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { calcularItems, calcularPagos, ErrorCalculo, type ConfigBalanza, type Cotizaciones } from '@kontiva/shared';
+import { calcularItems, lineaPresentacion, calcularPagos, ErrorCalculo, type ConfigBalanza, type Cotizaciones } from '@kontiva/shared';
 import { DialogoAutorizacion } from '../componentes/Autorizacion';
 import { AplicarVale, DialogoCambio, ElegirGrade, type ValeConsulta } from '../componentes/Ropa';
 import { Ticket, TicketProvisorio } from '../componentes/Ticket';
@@ -36,6 +36,9 @@ interface ItemBusqueda {
   talle?: string | null;
   color?: string | null;
   grade?: number;
+  /** Presentaciones (caja, rollo, pack); `presentacionId` es la elegida (o la del código leído). */
+  presentaciones?: { id: string; nombre: string; factor: string; precio: string }[];
+  presentacionId?: string | null;
   descripcion: string;
   sku: string | null;
   unidad: string;
@@ -85,6 +88,13 @@ interface Linea extends ItemBusqueda {
   cantidad: string;
   descuento: number;
 }
+
+const presentacionDe = (l: Linea) => (l.presentacionId ? (l.presentaciones?.find((p) => p.id === l.presentacionId) ?? null) : null);
+/** La línea en la unidad base del stock, como la guarda el servidor. */
+const baseDe = (l: Linea) => {
+  const p = presentacionDe(l);
+  return p ? lineaPresentacion(l.cantidad || '0.0001', p.factor, p.precio) : { cantidad: l.cantidad || '0.0001', precioUnitario: l.precio };
+};
 
 /** Venta hecha sin conexión: comprobante provisional hasta que se sincroniza. */
 export interface VentaProvisoria {
@@ -200,7 +210,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
 
   const calc = useMemo(() => {
     try {
-      return calcularItems(lineas.map((l) => ({ cantidad: l.cantidad || '0.0001', precioUnitario: l.precio, descuento: l.descuento, tasaIva: l.tasaIva })));
+      return calcularItems(lineas.map((l) => ({ ...baseDe(l), descuento: l.descuento, tasaIva: l.tasaIva })));
     } catch {
       return null;
     }
@@ -214,8 +224,8 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
 
   const agregar = useCallback((it: ItemBusqueda) => {
     setLineas((ls) => {
-      const i = ls.findIndex((l) => l.varianteId === it.varianteId && l.descuento === 0);
-      if (i >= 0 && it.unidad === 'unidad' && !it.cantidad) {
+      const i = ls.findIndex((l) => l.varianteId === it.varianteId && (l.presentacionId ?? null) === (it.presentacionId ?? null) && l.descuento === 0);
+      if (i >= 0 && (it.unidad === 'unidad' || it.presentacionId) && !it.cantidad) {
         const n = [...ls];
         n[i] = { ...n[i]!, cantidad: String(Number(n[i]!.cantidad) + 1) };
         setSel(i);
@@ -505,30 +515,45 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                             {l.tasaIva === 0 ? 'Exento' : `IVA ${l.tasaIva} %`}
                             {l.descuento > 0 && <span className="insignia i-warn" style={{ marginLeft: 6 }}>Descuento {dinero(l.descuento)}</span>}
                           </div>
+                          {!!l.presentaciones?.length && !cuentaCobro && (
+                            <select
+                              className="entrada chica"
+                              style={{ marginTop: 4, width: 'auto' }}
+                              aria-label={`Presentación de ${l.descripcion}`}
+                              value={l.presentacionId ?? ''}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => setLineas((ls) => ls.map((x, j) => (j === i ? { ...x, presentacionId: e.target.value || null, cantidad: e.target.value || x.unidad === 'unidad' ? String(Math.max(Math.round(Number(x.cantidad)), 1)) : x.cantidad } : x)))}
+                            >
+                              <option value="">Por {l.unidad === 'unidad' ? 'unidad' : l.unidad} · {dinero(l.precio)}</option>
+                              {l.presentaciones.map((p) => (
+                                <option key={p.id} value={p.id}>{p.nombre} · {dinero(p.precio)}</option>
+                              ))}
+                            </select>
+                          )}
                         </td>
                         <td>
                           {cuentaCobro ? (
                             <span className="num" style={{ fontWeight: 600 }}>{fmtCant(l.cantidad)}</span>
                           ) : (
                           <div className="cant" onClick={(e) => e.stopPropagation()}>
-                            <button aria-label="Menos" onClick={() => cambiarCantidad(i, String(Math.max(Number(l.cantidad) - 1, l.unidad === 'unidad' ? 1 : 0.001)))}>
+                            <button aria-label="Menos" onClick={() => cambiarCantidad(i, String(Math.max(Number(l.cantidad) - 1, l.unidad === 'unidad' || l.presentacionId ? 1 : 0.001)))}>
                               <Minus size={14} />
                             </button>
                             <input
                               className="num"
                               inputMode="decimal"
                               value={l.cantidad}
-                              onChange={(e) => cambiarCantidad(i, l.unidad === 'unidad' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))}
+                              onChange={(e) => cambiarCantidad(i, l.unidad === 'unidad' || l.presentacionId ? e.target.value.replace(/[^0-9]/g, '') : e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))}
                               onBlur={enfocar}
                             />
                             <button aria-label="Más" onClick={() => cambiarCantidad(i, String(Number(l.cantidad) + 1))}>
                               <Plus size={14} />
                             </button>
-                            {l.unidad !== 'unidad' && <span className="tenue peq">{l.unidad}</span>}
+                            {presentacionDe(l) ? <span className="tenue peq">{presentacionDe(l)!.nombre.split(' ')[0]!.toLowerCase()}</span> : l.unidad !== 'unidad' && <span className="tenue peq">{l.unidad}</span>}
                           </div>
                           )}
                         </td>
-                        <td className="der num">{dinero(l.precio)}</td>
+                        <td className="der num">{dinero(presentacionDe(l)?.precio ?? l.precio)}</td>
                         <td className="der num" style={{ fontWeight: 600 }}>{total !== undefined ? dinero(total) : '—'}</td>
                         <td className="der" style={{ whiteSpace: 'nowrap' }}>
                           {l.principioActivo && (
@@ -914,7 +939,7 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
     cajaId: props.c.caja.id,
     clienteId: props.clienteId,
     ...(props.pedidoId && { pedidoId: props.pedidoId }),
-    items: props.lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })),
+    items: props.lineas.map((l) => ({ varianteId: l.varianteId, ...(presentacionDe(l) ? { presentacionId: l.presentacionId } : {}), cantidad: Number(l.cantidad), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })),
     pagos: [
       ...pagosVale.map((x) => ({ medio: 'vale' as const, moneda: 'PYG' as const, monto: x.monto, referencia: x.vale.codigo })),
       ...pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio: p.medio, moneda: p.moneda, monto: Number(p.monto) })),
@@ -939,7 +964,7 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
       numero = Date.now() % 100000;
     }
     const base = cuerpoVenta();
-    const cuerpo = { ...base, items: props.lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), precioUnitario: Number(l.precio), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })), offline: { registradaEn: creadaEn } };
+    const cuerpo = { ...base, items: props.lineas.map((l) => ({ varianteId: l.varianteId, ...(presentacionDe(l) ? { presentacionId: l.presentacionId } : {}), cantidad: Number(l.cantidad), precioUnitario: Number(presentacionDe(l)?.precio ?? l.precio), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })), offline: { registradaEn: creadaEn } };
     await encolar({ clave, cajaId: props.c.caja.id, cuerpo, numero, total: props.total, creadaEn, estado: 'pendiente' });
     props.alVenderSinConexion({
       numero,

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { anularVentaEntrada, BALANZA_PREDETERMINADA, compararTalles, calcularItems, leerEtiquetaBalanza, type ConfigBalanza, calcularPagos, ErrorCalculo, ventaEntrada, type Cotizaciones } from '@kontiva/shared';
+import { anularVentaEntrada, BALANZA_PREDETERMINADA, compararTalles, lineaPresentacion, precioPresentacion, calcularItems, leerEtiquetaBalanza, type ConfigBalanza, calcularPagos, ErrorCalculo, ventaEntrada, type Cotizaciones } from '@kontiva/shared';
 import Decimal from 'decimal.js';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -102,12 +102,13 @@ export async function leerVenta(tx: Tx, id: string) {
       varianteId: i.variante_id,
       descripcion: i.descripcion,
       cantidad: i.cantidad,
-      precioUnitario: i.precio_unitario,
+      precioUnitario: precio4(i.precio_unitario),
       descuento: i.descuento,
       total: i.total,
       tasaIva: Number(i.tasa_iva),
       cantidadDevuelta: (devuelto.get(i.linea)?.cantidad ?? new Decimal(0)).toFixed(4),
       condicionVenta: i.condicion_venta,
+      presentacion: i.presentacion,
       lotes: lotes.filter((l) => l.variante_id === i.variante_id).map((l) => ({ codigo: l.codigo, vencimiento: l.vencimiento, cantidad: new Decimal(l.cantidad).neg().toFixed(4) })),
     })),
     receta: receta
@@ -120,6 +121,25 @@ export async function leerVenta(tx: Tx, id: string) {
   };
 }
 export type VentaDto = NonNullable<Awaited<ReturnType<typeof leerVenta>>>;
+
+/** Precio con dos decimales, o cuatro si una presentación los necesita (caja de 12 a 10.000 = 833,3333). */
+export const precio4 = (v: string) => {
+  const d = new Decimal(v);
+  return d.decimalPlaces() <= 2 ? d.toFixed(2) : d.toFixed(4);
+};
+
+/** Presentaciones activas de las variantes con su precio efectivo (el propio o factor × precio de la unidad). */
+export async function presentacionesDe(tx: Tx, varianteIds: string[], precios: Map<string, string>) {
+  const r = new Map<string, { id: string; nombre: string; factor: string; precio: string }[]>();
+  if (!varianteIds.length) return r;
+  const filas = await tx.selectFrom('presentacion').select(['id', 'variante_id', 'nombre', 'factor', 'precio']).where('variante_id', 'in', varianteIds).where('activa', '=', true).orderBy('factor').execute();
+  for (const p of filas) {
+    const lista = r.get(p.variante_id) ?? [];
+    lista.push({ id: p.id, nombre: p.nombre, factor: p.factor, precio: precioPresentacion(precios.get(p.variante_id) ?? 0, p.factor, p.precio).toFixed(2) });
+    r.set(p.variante_id, lista);
+  }
+  return r;
+}
 
 @Controller('pdv')
 export class PdvController {
@@ -167,7 +187,7 @@ export class PdvController {
         .innerJoin('producto as p', 'p.id', 'v.producto_id')
         .leftJoin('stock as s', (j) => j.onRef('s.variante_id', '=', 'v.id').on('s.deposito_id', '=', caja.deposito_id))
         .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad', 'p.principio_activo', 'p.concentracion', 'p.condicion_venta'])
-        .select((eb) => eb.selectFrom('codigo_barras as cb').whereRef('cb.variante_id', '=', 'v.id').select(sql<string[]>`coalesce(array_agg(cb.codigo), '{}')`.as('c')).as('codigos'))
+        .select((eb) => eb.selectFrom('codigo_barras as cb').whereRef('cb.variante_id', '=', 'v.id').where('cb.presentacion_id', 'is', null).select(sql<string[]>`coalesce(array_agg(cb.codigo), '{}')`.as('c')).as('codigos'))
         .where('p.activo', '=', true)
         .where('v.activa', '=', true)
         .orderBy('p.nombre')
@@ -217,10 +237,14 @@ export class PdvController {
       // Etiqueta de balanza: el código trae el PLU y el peso (o el importe).
       const empresa = await tx.selectFrom('empresa').select('configuracion').executeTakeFirstOrThrow();
       const etiqueta = leerEtiquetaBalanza(f.q, (empresa.configuracion as { balanza?: ConfigBalanza }).balanza);
-      let filas = await base()
+      const porCodigoFilas = await base()
         .innerJoin('codigo_barras as cb', 'cb.variante_id', 'v.id')
+        .select('cb.presentacion_id')
         .where('cb.codigo', 'in', etiqueta ? etiqueta.candidatos : [f.q])
         .execute();
+      // Código de una presentación (la caja, el rollo): se agrega esa presentación.
+      const presentacionLeida = new Map(porCodigoFilas.filter((r) => r.presentacion_id).map((r) => [r.id, r.presentacion_id!]));
+      let filas: Omit<(typeof porCodigoFilas)[number], 'presentacion_id'>[] = porCodigoFilas;
       if (etiqueta && filas.length > 1) filas = filas.slice(0, 1);
       const porCodigo = filas.length > 0;
       if (!porCodigo) {
@@ -232,6 +256,7 @@ export class PdvController {
           .execute();
       }
       const precios = await preciosVigentes(tx, filas.map((r) => r.id), caja.sucursal_id, lista);
+      const presentaciones = await presentacionesDe(tx, filas.map((r) => r.id), precios);
       const cantidadEtiqueta = (id: string) => {
         if (!etiqueta) return undefined;
         if (etiqueta.cantidad !== null) return etiqueta.cantidad.toFixed(3);
@@ -256,6 +281,8 @@ export class PdvController {
           principioActivo: r.principio_activo,
           concentracion: r.concentracion,
           condicionVenta: r.condicion_venta,
+          presentaciones: presentaciones.get(r.id) ?? [],
+          presentacionId: presentacionLeida.get(r.id) ?? null,
         })),
       };
     });
@@ -431,8 +458,15 @@ export class VentasController {
    */
   @Requiere('venta', 'crear')
   @Post()
-  async crear(@Contexto() ctx: Ctx, @Body() body: unknown, @Headers('x-autorizacion') autorizacion: string | undefined, @OrigenPeticion() o: Origen) {
-    const d = validar(ventaEntrada, body);
+  async crear(
+    @Contexto() ctx: Ctx,
+    @Body() body: unknown,
+    @Headers('x-autorizacion') autorizacion: string | undefined,
+    @OrigenPeticion() o: Origen,
+    /** Uso interno (despacho de un reparto): todo a la cuenta del cliente, sin tope de crédito; contra entrega si no tiene crédito. */
+    interno?: { reparto: number },
+  ) {
+    const d = validar(ventaEntrada, interno ? { ...(body as object), pagos: [], credito: 1 } : body);
     try {
       return await this.db.enEmpresa(ctx.empresaId, async (tx) => {
         const previa = await tx.selectFrom('venta').select('id').where('clave_idempotencia', '=', d.claveIdempotencia).executeTakeFirst();
@@ -544,10 +578,27 @@ export class VentasController {
           for (const [id, pr] of preciosOffline) precios.set(id, pr);
         }
 
+        // Presentaciones (caja, rollo): la línea pasa a la unidad base; el precio es el de la presentación.
+        const presIds = [...new Set(d.items.map((i) => i.presentacionId).filter((x): x is string => !!x))];
+        const presentaciones = presIds.length ? await tx.selectFrom('presentacion').select(['id', 'variante_id', 'nombre', 'factor', 'precio']).where('id', 'in', presIds).where('activa', '=', true).execute() : [];
+        const items = d.items.map((i) => {
+          if (!i.presentacionId) return { ...i, presentacion: null as null | { nombre: string; cantidad: Decimal; precio: Decimal; listaPrecio: Decimal; factor: string } };
+          const pr = presentaciones.find((x) => x.id === i.presentacionId && x.variante_id === i.varianteId);
+          if (!pr) throw invalido('La presentación no existe o no es de ese producto');
+          const listaPrecio = precioPresentacion(precios.get(i.varianteId) ?? 0, pr.factor, pr.precio);
+          const precio = i.precioUnitario !== undefined ? new Decimal(i.precioUnitario) : listaPrecio;
+          const base = lineaPresentacion(i.cantidad, pr.factor, precio);
+          return { ...i, cantidad: base.cantidad.toNumber(), precioUnitario: undefined, presentacion: { nombre: pr.nombre, cantidad: new Decimal(i.cantidad), precio, listaPrecio, factor: pr.factor } };
+        });
+
         // Cambios de precio y descuentos: permiso propio o PIN de supervisor.
-        const cambiaPrecio = d.items.some((i) => i.precioUnitario !== undefined && new Decimal(i.precioUnitario).toFixed(2) !== new Decimal(precios.get(i.varianteId) ?? 0).toFixed(2));
+        const cambiaPrecio = items.some((i) =>
+          i.presentacion
+            ? i.presentacion.precio.toFixed(2) !== i.presentacion.listaPrecio.toFixed(2)
+            : i.precioUnitario !== undefined && new Decimal(i.precioUnitario).toFixed(2) !== new Decimal(precios.get(i.varianteId) ?? 0).toFixed(2),
+        );
         // El descuento del pedido (proporcional a la cantidad) no vuelve a pedir autorización.
-        const hayDescuento = d.items.some((i) => {
+        const hayDescuento = items.some((i) => {
           const desc = new Decimal(i.descuento ?? 0);
           if (desc.lte(0)) return false;
           const permitido = (descuentoPedido.get(i.varianteId) ?? new Decimal(0)).mul(i.cantidad).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
@@ -560,20 +611,26 @@ export class VentasController {
           if (!autorizadoPor) throw prohibido('El descuento requiere autorización de un supervisor');
         }
 
-        const lineas = d.items.map((i) => {
+        const lineas = items.map((i) => {
           const v = porId.get(i.varianteId)!;
-          const precio = i.precioUnitario !== undefined && cambiaPrecio ? new Decimal(i.precioUnitario) : new Decimal(precios.get(i.varianteId) ?? 0);
+          const precio = i.presentacion
+            ? lineaPresentacion(1, i.presentacion.factor, i.presentacion.precio).precioUnitario
+            : i.precioUnitario !== undefined && cambiaPrecio ? new Decimal(i.precioUnitario) : new Decimal(precios.get(i.varianteId) ?? 0);
           if (v.unidad === 'unidad' && !new Decimal(i.cantidad).isInteger()) throw invalido(`${v.producto} se vende por unidad entera`);
           return { ...i, v, precio, cantidad: new Decimal(i.cantidad).toDecimalPlaces(4) };
         });
         const calc = calcularItems(lineas.map((l) => ({ cantidad: l.cantidad, precioUnitario: l.precio, descuento: l.descuento ?? 0, tasaIva: Number(l.v.tasa_iva) as 0 | 5 | 10 })));
         const cot = aCotizaciones(await cotizacionesVigentes(tx, caja.sucursal_id));
         // Venta a crédito: la parte a crédito va a la cuenta del cliente; el resto se cobra en caja.
-        const credito = new Decimal(d.credito ?? 0).toDecimalPlaces(0);
+        const credito = interno ? calc.total : new Decimal(d.credito ?? 0).toDecimalPlaces(0);
         let creditoAutorizadoPor: string | null = null;
         let plazoCredito = 30;
         if (credito.gt(calc.total)) throw invalido('El crédito no puede superar el total de la venta');
-        if (credito.gt(0)) {
+        if (credito.gt(0) && interno) {
+          if (!d.clienteId) throw invalido('El pedido no tiene un cliente registrado');
+          const cl = await tx.selectFrom('cliente').select(['limite_credito', 'plazo_credito_dias']).where('id', '=', d.clienteId).executeTakeFirstOrThrow();
+          plazoCredito = new Decimal(cl.limite_credito).gt(0) ? cl.plazo_credito_dias : 0;
+        } else if (credito.gt(0)) {
           if (!d.clienteId) throw invalido('La venta a crédito necesita un cliente');
           const cl = await tx.selectFrom('cliente').select(['limite_credito', 'plazo_credito_dias']).where('id', '=', d.clienteId).forUpdate().executeTakeFirstOrThrow();
           plazoCredito = cl.plazo_credito_dias;
@@ -664,9 +721,10 @@ export class VentasController {
               venta_id: venta.id,
               linea: i + 1,
               variante_id: l.varianteId,
-              descripcion: l.v.nombre ? `${l.v.producto} · ${l.v.nombre}` : l.v.producto,
+              descripcion: (l.v.nombre ? `${l.v.producto} · ${l.v.nombre}` : l.v.producto) + (l.presentacion ? ` · ${l.presentacion.nombre}` : ''),
               cantidad: l.cantidad.toFixed(4),
-              precio_unitario: l.precio.toFixed(2),
+              precio_unitario: l.precio.toFixed(4),
+              presentacion: l.presentacion ? `${l.presentacion.cantidad.toString()} × ${l.presentacion.nombre}` : null,
               descuento: calc.lineas[i]!.descuento.toFixed(2),
               total: calc.lineas[i]!.total.toFixed(2),
               tasa_iva: l.v.tasa_iva,
@@ -738,7 +796,7 @@ export class VentasController {
           vence.setUTCDate(vence.getUTCDate() + plazoCredito);
           await tx
             .insertInto('cuenta_cobrar')
-            .values({ empresa_id: ctx.empresaId, cliente_id: d.clienteId!, venta_id: venta.id, sucursal_id: caja.sucursal_id, descripcion: `Venta N.º ${numero} (${caja.nombre})`, fecha, vencimiento: vence.toISOString().slice(0, 10), monto: credito.toFixed(2), saldo: credito.toFixed(2), autorizado_por: creditoAutorizadoPor, creado_por: ctx.usuarioId })
+            .values({ empresa_id: ctx.empresaId, cliente_id: d.clienteId!, venta_id: venta.id, sucursal_id: caja.sucursal_id, descripcion: `Venta N.º ${numero} (${caja.nombre})${interno ? ` · reparto N.º ${interno.reparto}` : ''}`, fecha, vencimiento: vence.toISOString().slice(0, 10), monto: credito.toFixed(2), saldo: credito.toFixed(2), autorizado_por: creditoAutorizadoPor, creado_por: ctx.usuarioId })
             .execute();
         }
         if (fe) await emitirFactura(tx, ctx, fe, venta.id);

@@ -9,6 +9,7 @@ export interface Variante {
   sku: string | null;
   talle?: string | null;
   color?: string | null;
+  presentaciones?: { id: string; nombre: string; factor: string; precio: string | null; codigos: string[] }[];
   activa: boolean;
   precio: string;
   costo?: string;

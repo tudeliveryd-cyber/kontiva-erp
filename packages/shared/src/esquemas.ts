@@ -117,6 +117,19 @@ export const varianteEntrada = z.object({
   talle: textoOpcional(20),
   color: textoOpcional(40),
   codigos: z.array(codigoBarras).max(20).default([]),
+  /** Ferretería y mayorista: se vende o compra por caja, rollo o paquete; el stock sigue en la unidad. */
+  presentaciones: z
+    .array(
+      z.object({
+        id: uuid.optional(),
+        nombre: z.string().trim().min(1, 'Nombre de la presentación').max(40),
+        factor: z.coerce.number().positive().max(1e6).refine((n) => n !== 1, 'La presentación contiene más (o menos) de una unidad'),
+        precio: z.coerce.number().min(0).max(1e13).nullable().optional(),
+        codigos: z.array(codigoBarras).max(10).default([]),
+      }),
+    )
+    .max(10)
+    .default([]),
   precio: dinero,
   costo: dinero.optional(),
   stockMinimo: z.coerce.number().min(0).max(1e9).optional(),
@@ -254,6 +267,8 @@ export const ventaEntrada = z.object({
     .array(
       z.object({
         varianteId: uuid,
+        /** Vendido en una presentación (caja, rollo): la cantidad es de presentaciones. */
+        presentacionId: uuid.nullable().optional(),
         cantidad,
         /** Solo con permiso precio.editar; si no, se usa el precio de lista. */
         precioUnitario: dinero.optional(),
@@ -452,6 +467,8 @@ export const compraEntrada = z
       .array(
         z.object({
           varianteId: uuid,
+          /** Comprado en una presentación (caja, rollo): cantidad y costo son por presentación. */
+          presentacionId: uuid.nullable().optional(),
           cantidad,
           costoUnitario: dinero,
           descuento: dinero.optional(),
@@ -797,4 +814,53 @@ export const mermaEntrada = z.object({
   depositoId: z.string().uuid('Elija el depósito'),
   motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
   items: z.array(z.object({ varianteId: z.string().uuid(), cantidad: cantidadPositiva, loteId: z.string().uuid().optional() })).min(1).max(500),
+});
+
+// ---------------------------------------------------------------------------
+// Fase 5 · distribuidora: rutas, repartos y rendición
+// ---------------------------------------------------------------------------
+
+export const rutaEntrada = z.object({
+  sucursalId: uuid,
+  nombre: z.string().trim().min(2, 'Nombre de la ruta').max(80),
+  /** Días de visita: 0 domingo … 6 sábado. */
+  dias: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+  nota: textoOpcional(500),
+  activa: z.boolean().default(true),
+});
+
+/** Clientes de la ruta en el orden de visita (reemplaza la lista). */
+export const rutaClientesEntrada = z.object({ clienteIds: z.array(uuid).max(2000) });
+
+export const repartoEntrada = z.object({
+  cajaId: uuid,
+  rutaId: uuid.nullable().optional(),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+  repartidor: z.string().trim().min(2, 'Nombre del repartidor').max(120),
+  funcionarioId: uuid.nullable().optional(),
+  vehiculo: textoOpcional(60),
+  nota: textoOpcional(500),
+  /** En el orden de entrega. */
+  pedidoIds: z.array(uuid).min(1, 'Elija los pedidos').max(300),
+});
+
+export const rendicionEntrada = z.object({
+  entregas: z
+    .array(
+      z.object({
+        pedidoId: uuid,
+        estado: z.enum(['entregado', 'parcial', 'rechazado']),
+        /** Lo que el cliente pagó al repartidor (el resto queda en su cuenta corriente). */
+        cobrado: z.coerce.number().min(0).max(1e13).default(0),
+        medio: z.enum(['efectivo', 'transferencia', 'cheque', 'otro']).default('efectivo'),
+        /** Entrega parcial: lo que volvió (líneas de la venta). */
+        devuelto: z.array(z.object({ linea: z.number().int().positive(), cantidad })).max(500).default([]),
+        motivo: textoOpcional(300),
+      }),
+    )
+    .min(1)
+    .max(300),
+  /** Efectivo que entregó el repartidor al rendir. */
+  efectivoEntregado: z.coerce.number().min(0).max(1e13),
+  nota: textoOpcional(500),
 });

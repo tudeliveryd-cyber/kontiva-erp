@@ -16,7 +16,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
-| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia, restaurante, panadería y producción, tienda de ropa |
+| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia, restaurante, panadería y producción, tienda de ropa, distribuidora y ferretería |
 
 ### Fase 0 · hecho
 - **Autenticación**: Argon2id, bloqueo progresivo tras 5 intentos, token de acceso de 15 min + renovación rotativa
@@ -285,6 +285,23 @@ Fase 2 completa.
 - **Vales**: se pagan en el cobro con el código (sin vuelto; lo que sobra queda en el vale), anular la venta
   repone el saldo, vencen a los días que defina la empresa. Listado con saldo vigente y el historial de cada uno.
   En la factura electrónica el pago figura como vale; en contabilidad es un pasivo ("Vales de cambio a canjear").
+
+### Fase 5 · hecho (distribuidora y ferretería)
+- **Rutas**: zonas de reparto con días de visita y sus clientes en el orden de visita (un cliente, una ruta).
+- **Repartos**: se arman con los pedidos pendientes de clientes registrados (por fecha de entrega y ruta, en el
+  orden de visita), con repartidor, vehículo y la caja que factura. Hoja de ruta y hoja de carga (productos
+  sumados) para imprimir. Un pedido no puede estar en dos repartos abiertos.
+- **Despacho**: cada pedido se factura a la cuenta del cliente (la factura viaja con la mercadería; contra
+  entrega si el cliente no tiene crédito, a su plazo si lo tiene) y la mercadería sale del depósito de la caja.
+  Si un pedido falla, los demás quedan facturados y se reintenta.
+- **Rendición**: por pedido, entregado, parcial (lo que volvió entra al stock con nota de crédito) o no
+  entregado (vuelve todo; el pedido se reprograma o se cancela). Lo cobrado (efectivo, transferencia, cheque)
+  entra a la caja como cobro de la cuenta; lo no cobrado queda en la cuenta corriente. Se registra el efectivo
+  que entrega el repartidor y la diferencia. Cada pedido se registra una sola vez: un error se corrige y se reenvía.
+- **Presentaciones** (ferretería, mayorista): caja x 100, rollo de 50 m, pack x 6, con precio y código de barras
+  propios. Se venden en la caja (el código de la caja agrega la presentación; se cambia en la línea) y se
+  compran por presentación; el stock y el costo siguen en la unidad. Sin precio propio: factor × precio unitario.
+- Permiso `entrega` (rutas, repartos y rendición). Menú Repartos en los rubros distribuidora y general.
 
 ## Estructura
 

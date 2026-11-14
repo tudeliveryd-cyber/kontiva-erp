@@ -1,0 +1,10 @@
+ALTER TABLE compra_item DROP COLUMN presentacion;
+ALTER TABLE venta_item DROP COLUMN presentacion;
+ALTER TABLE compra_item ALTER COLUMN costo_unitario TYPE numeric(18,2);
+ALTER TABLE venta_item ALTER COLUMN precio_unitario TYPE numeric(18,2);
+ALTER TABLE codigo_barras DROP COLUMN presentacion_id;
+DROP TABLE presentacion;
+DROP TABLE reparto_pedido;
+DROP TABLE reparto;
+ALTER TABLE cliente DROP COLUMN orden_ruta, DROP COLUMN ruta_id;
+DROP TABLE ruta;

@@ -460,3 +460,7 @@ table.asistencia td.tot { padding: 0 10px; font-variant-numeric: tabular-nums; f
 .vales-cobro { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--linea); border-radius: var(--radio); }
 .fila-vale { display: flex; align-items: center; gap: 8px; color: var(--t); }
 .fila-vale svg { color: var(--p5); }
+.presentaciones { display: flex; flex-direction: column; gap: 8px; }
+.presentaciones table td { padding: 4px 6px; vertical-align: top; }
+.texto-error { color: var(--bad); }
+tr.sub-fila td { background: #fafafb; padding-top: 6px; padding-bottom: 10px; }

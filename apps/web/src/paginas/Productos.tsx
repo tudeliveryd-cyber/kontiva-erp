@@ -8,6 +8,7 @@ import { dinero, UNIDADES, type Producto } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 import { ArmarGrade, TablaGrade, type FilaGrade } from '../componentes/Ropa';
 import { compararTalles } from '@kontiva/shared';
+import { EditorPresentaciones, presentacionesAEnvio, type PresentacionForm } from '../componentes/Presentaciones';
 
 export function Productos() {
   const { puede } = useSesion();
@@ -109,6 +110,7 @@ interface VarianteForm {
   costo: string;
   stockMinimo: string;
   activa: boolean;
+  presentaciones: PresentacionForm[];
 }
 
 function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCerrar: () => void }) {
@@ -136,8 +138,8 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
   });
   const [medicamento, setMedicamento] = useState(!!(producto?.principioActivo || (producto?.condicionVenta && producto.condicionVenta !== 'libre')));
   const [variantes, setVariantes] = useState<VarianteForm[]>(
-    producto?.variantes.filter((v) => v.activa).map((v) => ({ id: v.id, nombre: v.nombre ?? '', sku: v.sku ?? '', codigos: v.codigos.join(', '), precio: String(Number(v.precio)), costo: v.costo ? String(Number(v.costo)) : '', stockMinimo: v.stockMinimo && Number(v.stockMinimo) ? String(Number(v.stockMinimo)) : '', activa: true })) ?? [
-      { nombre: '', sku: '', codigos: '', precio: '', costo: '', stockMinimo: '', activa: true },
+    producto?.variantes.filter((v) => v.activa).map((v) => ({ id: v.id, nombre: v.nombre ?? '', sku: v.sku ?? '', codigos: v.codigos.join(', '), precio: String(Number(v.precio)), costo: v.costo ? String(Number(v.costo)) : '', stockMinimo: v.stockMinimo && Number(v.stockMinimo) ? String(Number(v.stockMinimo)) : '', activa: true, presentaciones: (v.presentaciones ?? []).map((p) => ({ id: p.id, nombre: p.nombre, factor: String(Number(p.factor)), precio: p.precio === null ? '' : String(Number(p.precio)), codigos: p.codigos.join(', ') })) })) ?? [
+      { nombre: '', sku: '', codigos: '', precio: '', costo: '', stockMinimo: '', activa: true, presentaciones: [] },
     ],
   );
   const [nuevaCategoria, setNuevaCategoria] = useState('');
@@ -192,6 +194,7 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
           precio: Number(v.precio || 0),
           ...(editarCosto && v.costo !== '' ? { costo: Number(v.costo) } : {}),
           stockMinimo: Number(v.stockMinimo || 0),
+          presentaciones: presentacionesAEnvio(v.presentaciones),
         })),
       };
       return producto ? api(`/productos/${producto.id}`, { metodo: 'PATCH', cuerpo }) : api('/productos', { metodo: 'POST', cuerpo });
@@ -405,12 +408,15 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
                     </Campo>
                   )}
                 </div>
+                {d.tipo !== 'servicio' && (
+                  <EditorPresentaciones filas={v.presentaciones} unidad={d.unidad} precioUnidad={v.precio} editable={editable} editarPrecio={editarPrecio} alCambiar={(f) => setV(i, { presentaciones: f })} />
+                )}
               </div>
             </div>
           ))}
           {editable && (
-            <button type="button" className="btn chico" style={{ alignSelf: 'flex-start' }} onClick={() => setVariantes((vs) => [...vs, { nombre: '', sku: '', codigos: '', precio: vs[0]?.precio ?? '', costo: vs[0]?.costo ?? '', stockMinimo: vs[0]?.stockMinimo ?? '', activa: true }])}>
-              <Plus size={14} /> Agregar variante (presentación, sabor)
+            <button type="button" className="btn chico" style={{ alignSelf: 'flex-start' }} onClick={() => setVariantes((vs) => [...vs, { nombre: '', sku: '', codigos: '', precio: vs[0]?.precio ?? '', costo: vs[0]?.costo ?? '', stockMinimo: vs[0]?.stockMinimo ?? '', activa: true, presentaciones: [] }])}>
+              <Plus size={14} /> Agregar variante (sabor, modelo, medida)
             </button>
           )}
           {editable && d.tipo === 'producto' && (

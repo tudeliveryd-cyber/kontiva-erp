@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { calcularItems, compraEntrada, cuentaPagarEntrada, ErrorCalculo, ordenCompraEntrada, pagoProveedorEntrada, proveedorEntrada } from '@kontiva/shared';
+import { calcularItems, compraEntrada, cuentaPagarEntrada, ErrorCalculo, lineaPresentacion, ordenCompraEntrada, pagoProveedorEntrada, proveedorEntrada } from '@kontiva/shared';
 import Decimal from 'decimal.js';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -11,6 +11,7 @@ import { conflicto, ErrorNegocio, invalido, noEncontrado, prohibido } from '../c
 import { moverStock, siguienteNumero } from '../comun/stock';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
+import { precio4 } from '../operacion/ventas.controller';
 import { movimientoBancario, obtenerCuentaBancaria, revertirMovimientos } from '../finanzas/bancos.controller';
 import { esperado, obtenerCaja, sesionAbierta } from '../operacion/cajas.controller';
 
@@ -67,6 +68,7 @@ async function buscarProductos(tx: Tx, ctx: Ctx, q: string) {
     ORDER BY similarity(p.nombre, ${q}) DESC, p.nombre
     LIMIT 20`.execute(tx);
   const verCosto = tiene(ctx, 'costo_producto.ver');
+  const pres = rows.length ? await tx.selectFrom('presentacion').select(['id', 'variante_id', 'nombre', 'factor']).where('variante_id', 'in', rows.map((r) => r.id)).where('activa', '=', true).orderBy('factor').execute() : [];
   return rows.map((r) => ({
     varianteId: r.id,
     descripcion: r.variante ? `${r.producto} · ${r.variante}` : r.producto,
@@ -75,6 +77,7 @@ async function buscarProductos(tx: Tx, ctx: Ctx, q: string) {
     tasaIva: Number(r.tasa_iva) as 0 | 5 | 10,
     costo: verCosto ? r.costo : null,
     controlaLote: r.controla_lote,
+    presentaciones: pres.filter((x) => x.variante_id === r.id).map((x) => ({ id: x.id, nombre: x.nombre, factor: x.factor })),
   }));
 }
 
@@ -404,7 +407,7 @@ async function leerCompra(tx: Tx, id: string, verCosto: boolean) {
     creadoPor: c.creado_por_nombre,
     creadoEn: c.creado_en,
     anulacion: c.anulada_en ? { por: c.anulada_por_nombre, en: c.anulada_en, motivo: c.motivo_anulacion } : null,
-    items: items.map((i) => ({ linea: i.linea, varianteId: i.variante_id, descripcion: i.descripcion, cantidad: i.cantidad, costoUnitario: ocultar(i.costo_unitario), descuento: ocultar(i.descuento), tasaIva: i.tasa_iva, total: ocultar(i.total), lote: i.lote_codigo ? { codigo: i.lote_codigo, vencimiento: i.lote_vencimiento } : null })),
+    items: items.map((i) => ({ linea: i.linea, varianteId: i.variante_id, descripcion: i.descripcion, cantidad: i.cantidad, costoUnitario: ocultar(precio4(i.costo_unitario)), descuento: ocultar(i.descuento), tasaIva: i.tasa_iva, total: ocultar(i.total), presentacion: i.presentacion, lote: i.lote_codigo ? { codigo: i.lote_codigo, vencimiento: i.lote_vencimiento } : null })),
   };
 }
 
@@ -532,8 +535,18 @@ export class ComprasController {
       if (!prov.activo) throw invalido('El proveedor está inactivo');
       const dep = await obtenerDeposito(tx, ctx, d.depositoId);
       const vs = await variantesCompra(tx, d.items.map((i) => i.varianteId));
+      // Comprado por caja o rollo: la línea pasa a la unidad base (cantidad × factor, costo / factor).
+      const presIds = [...new Set(d.items.map((i) => i.presentacionId).filter((x): x is string => !!x))];
+      const pres = presIds.length ? await tx.selectFrom('presentacion').select(['id', 'variante_id', 'nombre', 'factor']).where('id', 'in', presIds).where('activa', '=', true).execute() : [];
+      const items = d.items.map((i) => {
+        if (!i.presentacionId) return { ...i, presentacion: null as string | null };
+        const pr = pres.find((x) => x.id === i.presentacionId && x.variante_id === i.varianteId);
+        if (!pr) throw invalido('La presentación no existe o no es de ese producto');
+        const base = lineaPresentacion(i.cantidad, pr.factor, i.costoUnitario);
+        return { ...i, cantidad: base.cantidad.toNumber(), costoUnitario: base.precioUnitario.toNumber(), presentacion: `${i.cantidad} × ${pr.nombre}` };
+      });
       // Lote de cada línea: obligatorio (código o vencimiento) para los productos que controlan lote.
-      const lotes = d.items.map((i) => {
+      const lotes = items.map((i) => {
         const v = vs.get(i.varianteId)!;
         if (!v.controla_lote) return null;
         const codigo = i.lote?.codigo?.trim().toUpperCase() || null;
@@ -552,7 +565,7 @@ export class ComprasController {
         if (orden.estado !== 'enviada' && orden.estado !== 'parcial') throw conflicto('ORDEN_NO_RECIBIBLE', 'La orden debe estar enviada para recibirla');
         const its = await tx.selectFrom('orden_compra_item').selectAll().where('orden_id', '=', orden.id).execute();
         for (const i of its) lineasOrden.set(i.linea, { varianteId: i.variante_id, pendiente: new Decimal(i.cantidad).minus(i.cantidad_recibida) });
-        for (const i of d.items) {
+        for (const i of items) {
           if (!i.ordenLinea) continue;
           const l = lineasOrden.get(i.ordenLinea);
           if (!l || l.varianteId !== i.varianteId) throw invalido(`La línea ${i.ordenLinea} no corresponde a la orden`);
@@ -560,7 +573,7 @@ export class ComprasController {
         }
       }
 
-      const calc = calcular(d.items.map((i) => ({ ...i, tasaIva: Number(vs.get(i.varianteId)!.tasa_iva) })));
+      const calc = calcular(items.map((i) => ({ ...i, tasaIva: Number(vs.get(i.varianteId)!.tasa_iva) })));
       const vencimiento = d.condicion === 'credito' ? (d.vencimiento ?? sumarDias(d.fechaDocumento, prov.plazo_pago_dias || 30)) : null;
       if (vencimiento && vencimiento < d.fechaDocumento) throw invalido('El vencimiento no puede ser anterior a la fecha de la factura');
       const numero = await siguienteNumero(tx, 'compra');
@@ -602,14 +615,15 @@ export class ComprasController {
       await tx
         .insertInto('compra_item')
         .values(
-          d.items.map((i, n) => ({
+          items.map((i, n) => ({
             empresa_id: ctx.empresaId,
             compra_id: compra.id,
             linea: n + 1,
             variante_id: i.varianteId,
             descripcion: vs.get(i.varianteId)!.descripcion,
             cantidad: new Decimal(i.cantidad).toFixed(4),
-            costo_unitario: new Decimal(i.costoUnitario).toFixed(2),
+            costo_unitario: new Decimal(i.costoUnitario).toFixed(4),
+            presentacion: i.presentacion,
             descuento: calc.lineas[n]!.descuento.toFixed(2),
             tasa_iva: Number(vs.get(i.varianteId)!.tasa_iva),
             total: calc.lineas[n]!.total.toFixed(2),
@@ -622,7 +636,7 @@ export class ComprasController {
 
       // Costo promedio ponderado (IVA incluido, como los precios de venta) con el stock de toda la empresa.
       const porVariante = new Map<string, { cantidad: Decimal; total: Decimal }>();
-      d.items.forEach((i, n) => {
+      items.forEach((i, n) => {
         const a = porVariante.get(i.varianteId) ?? { cantidad: new Decimal(0), total: new Decimal(0) };
         porVariante.set(i.varianteId, { cantidad: a.cantidad.plus(i.cantidad), total: a.total.plus(calc.lineas[n]!.total) });
       });
@@ -644,7 +658,7 @@ export class ComprasController {
         tx,
         ctx,
         dep.id,
-        d.items
+        items
           .map((i, n) => ({ i, n }))
           .filter(({ i }) => vs.get(i.varianteId)!.controla_stock)
           .map(({ i, n }) => ({ varianteId: i.varianteId, cantidad: new Decimal(i.cantidad), tipo: 'compra' as const, origenId: compra.id, motivo: `Compra N.º ${numero}`, costo: calc.lineas[n]!.total.div(i.cantidad).toDecimalPlaces(2).toFixed(2), lote: lotes[n] ?? undefined })),
@@ -652,7 +666,7 @@ export class ComprasController {
       );
 
       if (orden) {
-        for (const i of d.items) {
+        for (const i of items) {
           if (!i.ordenLinea) continue;
           await tx
             .updateTable('orden_compra_item')

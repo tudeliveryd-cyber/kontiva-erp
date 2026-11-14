@@ -119,3 +119,21 @@ export function calcularPagos(total: Decimal.Value, pagos: readonly PagoCalculo[
   }
   return { detalle, pagado, vueltoPyg, vuelto };
 }
+
+/**
+ * Presentación (caja x 12, rollo de 50 m): la línea se guarda en la unidad base del stock.
+ * Cantidad base = presentaciones × factor; precio por unidad = precio de la presentación / factor (4 decimales),
+ * de modo que el total de la línea redondea al precio de las presentaciones.
+ */
+export function lineaPresentacion(cantidadPresentaciones: Decimal.Value, factor: Decimal.Value, precioPresentacion: Decimal.Value) {
+  const f = new Decimal(factor);
+  return {
+    cantidad: new Decimal(cantidadPresentaciones).mul(f).toDecimalPlaces(4),
+    precioUnitario: new Decimal(precioPresentacion).div(f).toDecimalPlaces(4),
+  };
+}
+
+/** Precio de una presentación: el propio o, si no tiene, factor × precio de la unidad (redondeado a guaraníes). */
+export function precioPresentacion(precioUnidad: Decimal.Value, factor: Decimal.Value, precioPropio?: Decimal.Value | null) {
+  return precioPropio === null || precioPropio === undefined ? new Decimal(precioUnidad).mul(factor).toDecimalPlaces(0) : new Decimal(precioPropio);
+}

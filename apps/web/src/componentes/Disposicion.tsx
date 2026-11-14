@@ -49,6 +49,7 @@ export function Disposicion() {
   const operacion = [
     { a: '/cajas', icono: Store, texto: 'Cajas y PDV', visible: puede('caja.ver') },
     { a: '/ventas', icono: Receipt, texto: 'Ventas', visible: puede('venta.ver') },
+    { a: '/repartos', icono: Truck, texto: 'Repartos', visible: puede('entrega.ver') && (['distribuidora', 'general'].includes(yo?.empresa.rubro ?? '') || !puede('venta.ver')) },
     { a: '/vales', icono: TicketCheck, texto: 'Vales de cambio', visible: puede('venta.ver') && ['ropa', 'general'].includes(yo?.empresa.rubro ?? '') },
     { a: '/presupuestos', icono: FileText, texto: 'Presupuestos', visible: puede('presupuesto.ver') },
     { a: '/pedidos', icono: ClipboardCheck, texto: 'Pedidos', visible: puede('pedido.ver') },

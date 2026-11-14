@@ -35,6 +35,7 @@ interface ProductoCompra {
   tasaIva: 0 | 5 | 10;
   costo: string | null;
   controlaLote?: boolean;
+  presentaciones?: { id: string; nombre: string; factor: string }[];
 }
 
 interface LineaCompra {
@@ -50,6 +51,10 @@ interface LineaCompra {
   controlaLote?: boolean;
   loteCodigo?: string;
   loteVencimiento?: string;
+  /** Comprado por caja o rollo: cantidad y costo son por presentación. */
+  presentaciones?: { id: string; nombre: string; factor: string }[];
+  presentacionId?: string | null;
+  costoUnidad?: string;
 }
 
 const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Asuncion' }).format(new Date());
@@ -66,6 +71,8 @@ function useDepositos() {
 
 /** Editor de líneas de compra u orden: buscar productos, cantidades, costos (IVA incluido) y descuentos. */
 function Lineas({ lineas, setLineas, ruta, conDescuento, conLote = false }: { lineas: LineaCompra[]; setLineas: (f: (l: LineaCompra[]) => LineaCompra[]) => void; ruta: string; conDescuento: boolean; conLote?: boolean }) {
+  // Las presentaciones (caja, rollo) se usan al recibir la compra; las órdenes van en unidades.
+  const conPresentacion = conLote;
   const [q, setQ] = useState('');
   const [qDif, setQDif] = useState('');
   useEffect(() => {
@@ -78,7 +85,7 @@ function Lineas({ lineas, setLineas, ruta, conDescuento, conLote = false }: { li
       // Con lote, cada lote es una línea: el mismo producto se puede agregar de nuevo.
       const i = ls.findIndex((l) => l.varianteId === p.varianteId && !l.ordenLinea && !(conLote && p.controlaLote));
       if (i >= 0) return ls.map((l, j) => (j === i ? { ...l, cantidad: String(Number(l.cantidad) + 1) } : l));
-      return [...ls, { varianteId: p.varianteId, descripcion: p.descripcion, unidad: p.unidad, tasaIva: p.tasaIva, cantidad: '1', costo: p.costo ? String(Math.round(Number(p.costo))) : '', descuento: '', controlaLote: p.controlaLote }];
+      return [...ls, { varianteId: p.varianteId, descripcion: p.descripcion, unidad: p.unidad, tasaIva: p.tasaIva, cantidad: '1', costo: p.costo ? String(Math.round(Number(p.costo))) : '', costoUnidad: p.costo ?? undefined, descuento: '', controlaLote: p.controlaLote, presentaciones: p.presentaciones }];
     });
     setQ('');
     setQDif('');
@@ -133,6 +140,25 @@ function Lineas({ lineas, setLineas, ruta, conDescuento, conLote = false }: { li
                 <td>
                   {l.descripcion}
                   <div className="tenue peq">IVA {l.tasaIva ? `${l.tasaIva} %` : 'exento'}{l.maximo !== undefined ? ` · pendiente en la orden: ${fmtCant(String(l.maximo))}` : ''}</div>
+                  {conPresentacion && !l.ordenLinea && !!l.presentaciones?.length && (
+                    <select
+                      className="entrada chica"
+                      style={{ marginTop: 6, width: 'auto' }}
+                      aria-label={`Presentación de ${l.descripcion}`}
+                      value={l.presentacionId ?? ''}
+                      onChange={(e) => {
+                        const p = l.presentaciones!.find((x) => x.id === e.target.value);
+                        const unidad = Number(l.costoUnidad ?? 0);
+                        cambiar(i, { presentacionId: p?.id ?? null, costo: unidad ? String(Math.round(unidad * (p ? Number(p.factor) : 1))) : l.costo });
+                      }}
+                    >
+                      <option value="">Por {l.unidad === 'unidad' ? 'unidad' : l.unidad}</option>
+                      {l.presentaciones.map((p) => <option key={p.id} value={p.id}>{p.nombre} ({fmtCant(p.factor)} {l.unidad === 'unidad' ? 'u.' : l.unidad})</option>)}
+                    </select>
+                  )}
+                  {l.presentacionId && Number(l.cantidad) > 0 && (
+                    <div className="tenue peq">= {fmtCant(String(Number(l.cantidad) * Number(l.presentaciones?.find((x) => x.id === l.presentacionId)?.factor ?? 1)))} {l.unidad === 'unidad' ? 'unidades' : l.unidad} al stock</div>
+                  )}
                   {conLote && l.controlaLote && (
                     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                       <input className="entrada" aria-label="Lote" style={{ height: 30, width: 120 }} placeholder="Lote" value={l.loteCodigo ?? ''} onChange={(e) => cambiar(i, { loteCodigo: e.target.value.toUpperCase() })} />
@@ -652,6 +678,7 @@ function NuevaCompra({ orden, alCerrar }: { orden?: Orden; alCerrar: (id?: strin
           nota: nota || null,
           items: lineas.map((l) => ({
             varianteId: l.varianteId,
+            ...(l.presentacionId && { presentacionId: l.presentacionId }),
             cantidad: Number(l.cantidad),
             costoUnitario: Number(l.costo),
             ...(Number(l.descuento) > 0 && { descuento: Number(l.descuento) }),

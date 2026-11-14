@@ -32,6 +32,7 @@ import { InformesController } from '../src/informes/informes.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { ValesController } from '../src/operacion/vales.controller';
+import { RepartosController, RutasController } from '../src/distribucion/distribucion.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
 import { prepararVenta } from './ayudas';
 import { crearEmpresa, crearUsuario, http, iniciarApp, login, type EmpresaPrueba } from './ayudas';
@@ -66,6 +67,8 @@ const CONTROLADORES = [
   TransferenciasController,
   DevolucionesController,
   ValesController,
+  RutasController,
+  RepartosController,
   FacturacionController,
   ProveedoresController,
   OrdenesCompraController,
@@ -186,6 +189,13 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/presupuestos'] = pr.body.id;
     const pe = await http(app).post('/api/pedidos').set(hB).send({ sucursalId: b.sucursalId, clienteNombre: 'Cliente B', items: [{ varianteId: vb.varianteId, cantidad: 1 }] }).expect(201);
     idsDeB['/api/pedidos'] = pe.body.id;
+    // Distribución en B: ruta y reparto con un pedido de cliente registrado.
+    const ruB = await http(app).post('/api/rutas').set(hB).send({ sucursalId: b.sucursalId, nombre: 'Ruta B', dias: [1] }).expect(201);
+    idsDeB['/api/rutas'] = ruB.body.id;
+    const clB = await http(app).post('/api/clientes').set(hB).send({ nombre: 'Almacén B' }).expect(201);
+    const peB = await http(app).post('/api/pedidos').set(hB).send({ sucursalId: b.sucursalId, clienteId: clB.body.id, items: [{ varianteId: vb.varianteId, cantidad: 1 }] }).expect(201);
+    const reB = await http(app).post('/api/repartos').set(hB).send({ cajaId: vb.cajaId, fecha: '2026-11-14', repartidor: 'Chofer B', pedidoIds: [peB.body.id] }).expect(201);
+    idsDeB['/api/repartos'] = reB.body.id;
     // Facturación: registros de B (la empresa A nunca los ve).
     idsDeB['/api/facturacion/establecimientos'] = b.sucursalId;
     idsDeB['/api/facturacion/puntos'] = vb.cajaId;
@@ -341,6 +351,11 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/restaurante/cuentas/:id/mover': { mesaId: '00000000-0000-7000-8000-000000000000' },
           'PUT /api/produccion/recetas/:id': { varianteId: '00000000-0000-7000-8000-000000000000', rendimiento: 1, insumos: [{ varianteId: '00000000-0000-7000-8000-000000000001', cantidad: 1 }] },
           'POST /api/produccion/ordenes/:id/terminar': { cantidadProducida: 1 },
+          'PUT /api/rutas/:id': { sucursalId: '00000000-0000-7000-8000-000000000000', nombre: 'Intento ajeno' },
+          'PUT /api/rutas/:id/clientes': { clienteIds: [] },
+          'PUT /api/repartos/:id': { cajaId: '00000000-0000-7000-8000-000000000000', fecha: '2026-11-14', repartidor: 'Intento ajeno', pedidoIds: ['00000000-0000-7000-8000-000000000000'] },
+          'POST /api/repartos/:id/anular': { motivo: 'Intento ajeno' },
+          'POST /api/repartos/:id/rendir': { entregas: [{ pedidoId: '00000000-0000-7000-8000-000000000000', estado: 'entregado' }], efectivoEntregado: 0 },
           'POST /api/produccion/ordenes/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/contabilidad/cuentas/:id': { codigo: '1.1.01', nombre: 'Intento ajeno', imputable: true },
           'POST /api/contabilidad/asientos/:id/anular': { motivo: 'Intento ajeno' },

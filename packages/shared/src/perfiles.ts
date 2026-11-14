@@ -54,7 +54,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'sucursal.ver', 'producto.ver', 'precio.ver', 'stock.ver', 'stock.editar', 'conteo.ver', 'conteo.crear',
       'venta.ver', 'venta.crear', 'venta.cancelar', 'venta.imprimir', 'descuento.aprobar',
       'devolucion.*', 'cliente.ver', 'cliente.crear', 'caja.*', 'arqueo.*', 'documento_fiscal.ver', 'documento_fiscal.imprimir',
-      'credito_cliente.ver', 'credito_cliente.aprobar', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear', 'asistencia.ver', 'asistencia.editar', 'receta.ver', 'salon.ver', 'salon.crear', 'salon.cancelar', 'cocina.ver', 'produccion.ver', 'produccion.crear',
+      'credito_cliente.ver', 'credito_cliente.aprobar', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear', 'asistencia.ver', 'asistencia.editar', 'receta.ver', 'salon.ver', 'salon.crear', 'salon.cancelar', 'cocina.ver', 'produccion.ver', 'produccion.crear', 'entrega.ver', 'entrega.crear',
     ],
   },
   {
