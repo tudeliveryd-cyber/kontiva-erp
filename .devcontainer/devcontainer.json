@@ -1,0 +1,19 @@
+{
+  "name": "KONTIVA ERP · entorno de prueba",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": { "label": "KONTIVA ERP", "onAutoForward": "openBrowser" },
+    "3000": { "label": "API", "onAutoForward": "silent" },
+    "3001": { "label": "API Panel Master", "onAutoForward": "silent" },
+    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "bash .devcontainer/preparar.sh",
+  "postStartCommand": "bash .devcontainer/iniciar.sh",
+  "hostRequirements": { "cpus": 2, "memory": "4gb" },
+  "customizations": {
+    "codespaces": { "openFiles": [".devcontainer/PROBAR.md"] }
+  }
+}

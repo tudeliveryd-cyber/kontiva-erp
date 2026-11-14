@@ -1,3 +1,4 @@
+import type { ConfigBalanza } from '@kontiva/shared';
 /**
  * Cliente HTTP de KONTIVA.
  * - El token de acceso vive solo en memoria (nunca en localStorage).
@@ -39,8 +40,19 @@ async function leerError(r: Response): Promise<FalloApi> {
 /** Rutas de ingreso: un 401 ahí es la respuesta, no una sesión vencida. */
 const SIN_REINTENTO = ['/auth/login', '/auth/empresa', '/auth/2fa/verificar', '/auth/2fa/enrolar', '/auth/renovar', '/auth/recuperar', '/auth/restablecer'];
 
+export interface OpcionesApi {
+  metodo?: string;
+  cuerpo?: unknown;
+  reintento?: boolean;
+  /** Encabezados extra, ej. X-Autorizacion con el token del PIN de un supervisor. */
+  encabezados?: Record<string, string>;
+  /** Tiempo máximo de espera (ms). Vencido, se trata como falta de conexión (el PDV pasa a vender sin conexión). */
+  tiempo?: number;
+}
+
 export interface Cliente {
-  api: <T = unknown>(ruta: string, opciones?: { metodo?: string; cuerpo?: unknown; reintento?: boolean }) => Promise<T>;
+  api: <T = unknown>(ruta: string, opciones?: OpcionesApi) => Promise<T>;
+  archivo: (ruta: string) => Promise<Blob>;
   renovarSesion: () => Promise<boolean>;
   fijarToken: (t: string | null) => void;
   alPerderSesion: (fn: () => void) => void;
@@ -71,17 +83,25 @@ export function crearCliente(base: string): Cliente {
     return renovando;
   };
 
-  const api = async <T = unknown>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown; reintento?: boolean } = {}): Promise<T> => {
+  const api = async <T = unknown>(ruta: string, opciones: OpcionesApi = {}): Promise<T> => {
     const { metodo = 'GET', cuerpo, reintento = true } = opciones;
-    const headers: Record<string, string> = { 'X-Kontiva': '1' };
+    const headers: Record<string, string> = { 'X-Kontiva': '1', ...opciones.encabezados };
     if (cuerpo !== undefined) headers['Content-Type'] = 'application/json';
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-    const r = await fetch(`${base}${ruta}`, {
-      method: metodo,
-      headers,
-      credentials: 'same-origin',
-      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
-    });
+    const corte = opciones.tiempo ? new AbortController() : null;
+    const reloj = corte ? setTimeout(() => corte.abort(), opciones.tiempo) : null;
+    let r: Response;
+    try {
+      r = await fetch(`${base}${ruta}`, {
+        method: metodo,
+        headers,
+        credentials: 'same-origin',
+        body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+        signal: corte?.signal,
+      });
+    } finally {
+      if (reloj) clearTimeout(reloj);
+    }
     if (r.status === 401 && reintento && !SIN_REINTENTO.some((p) => ruta.startsWith(p))) {
       if (await renovarSesion()) return api<T>(ruta, { ...opciones, reintento: false });
       alExpirar?.();
@@ -91,8 +111,22 @@ export function crearCliente(base: string): Cliente {
     return (await r.json()) as T;
   };
 
+  /** Descarga un archivo (PDF, XML) con la sesión; devuelve el contenido como Blob. */
+  const archivo = async (ruta: string, reintento = true): Promise<Blob> => {
+    const headers: Record<string, string> = { 'X-Kontiva': '1' };
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    const r = await fetch(`${base}${ruta}`, { headers, credentials: 'same-origin' });
+    if (r.status === 401 && reintento) {
+      if (await renovarSesion()) return archivo(ruta, false);
+      alExpirar?.();
+    }
+    if (!r.ok) throw await leerError(r);
+    return r.blob();
+  };
+
   return {
     api,
+    archivo,
     renovarSesion,
     fijarToken: (t) => (accessToken = t),
     alPerderSesion: (fn) => (alExpirar = fn),
@@ -101,6 +135,7 @@ export function crearCliente(base: string): Cliente {
 
 const empresas = crearCliente('/api');
 export const api = empresas.api;
+export const archivo = empresas.archivo;
 export const renovarSesion = empresas.renovarSesion;
 export const fijarToken = empresas.fijarToken;
 export const alPerderSesion = empresas.alPerderSesion;
@@ -109,7 +144,7 @@ export const alPerderSesion = empresas.alPerderSesion;
 export type Alcance = 'propia' | 'sucursal' | 'empresa';
 
 export interface Yo {
-  usuario: { id: string; nombre: string; email: string; perfil: { id: string; nombre: string }; esPropietario: boolean; tienePin: boolean };
+  usuario: { id: string; nombre: string; email: string; perfil: { id: string; nombre: string }; esPropietario: boolean; tienePin: boolean; idioma: 'es' | 'pt' };
   empresa: { id: string; nombre: string; razonSocial: string; ruc: string | null; rubro: string; plan: string };
   sucursales: { id: string; codigo: string; nombre: string }[];
   permisos: Record<string, Alcance>;
@@ -160,6 +195,9 @@ export interface EmpresaDatos {
   telefono: string | null;
   email: string | null;
   direccion: string | null;
+  permiteStockNegativo: boolean;
+  valeDias: number;
+  balanza: ConfigBalanza;
   plan: { codigo: string; limites: { usuarios: number | null; sucursales: number | null; cajas: number | null }; uso: { usuarios: number; sucursales: number } };
 }
 

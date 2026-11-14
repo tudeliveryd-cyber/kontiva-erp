@@ -1,0 +1,10 @@
+DROP TABLE liquidacion_concepto;
+DROP TABLE liquidacion_final;
+DELETE FROM liquidacion_item i USING liquidacion l WHERE l.id = i.liquidacion_id AND l.tipo = 'final';
+DELETE FROM liquidacion WHERE tipo = 'final';
+DROP INDEX liquidacion_periodo;
+CREATE UNIQUE INDEX liquidacion_periodo ON liquidacion (empresa_id, tipo, periodo) WHERE estado <> 'anulada';
+ALTER TABLE liquidacion DROP CONSTRAINT liquidacion_tipo_check;
+ALTER TABLE liquidacion ADD CONSTRAINT liquidacion_tipo_check CHECK (tipo IN ('mensual', 'aguinaldo'));
+DROP TABLE vacacion;
+DROP TABLE novedad;

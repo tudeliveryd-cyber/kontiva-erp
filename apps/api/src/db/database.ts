@@ -35,7 +35,9 @@ export class Db implements OnModuleDestroy {
 
   /** La API de empresas usa DATABASE_URL (kontiva_app); el Panel Master, DATABASE_MASTER_URL (kontiva_master). */
   constructor(url: string) {
-    this.k = crearKysely(url);
+    // Se lee aquí sin config(): construir la conexión no debe fijar el resto de la configuración.
+    const conexiones = Number(process.env.DB_CONEXIONES);
+    this.k = crearKysely(url, Number.isInteger(conexiones) && conexiones >= 2 && conexiones <= 200 ? conexiones : 20);
   }
 
   async enEmpresa<T>(empresaId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {

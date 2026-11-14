@@ -60,6 +60,24 @@ describe('Autenticación', () => {
       expect(r.body.permisos['usuario.crear']).toBe('empresa');
       expect(r.body.sucursales).toHaveLength(1);
     });
+
+    it('guarda el idioma de la interfaz en la cuenta y lo audita', async () => {
+      const u = await crearUsuario(app, e, 'cajero');
+      const yo = () => http(app).get('/api/me').set('Authorization', `Bearer ${u.token}`).expect(200);
+      expect((await yo()).body.usuario.idioma).toBe('es');
+      await http(app).put('/api/idioma').set('Authorization', `Bearer ${u.token}`).send({ idioma: 'pt' }).expect(204);
+      expect((await yo()).body.usuario.idioma).toBe('pt');
+      await http(app).put('/api/idioma').set('Authorization', `Bearer ${u.token}`).send({ idioma: 'en' }).expect(400);
+      await http(app).put('/api/idioma').send({ idioma: 'es' }).expect(401);
+      const db = app.get(Db);
+      const ev = await db.enEmpresa(e.empresaId, (tx) =>
+        tx.selectFrom('auditoria').select(['accion', 'despues']).where('usuario_id', '=', u.id).where('accion', '=', 'cambiar_idioma').execute(),
+      );
+      expect(ev).toHaveLength(1);
+      // Vale para la cuenta, en cualquier sesión nueva.
+      const otra = await login(app, u.email);
+      expect((await http(app).get('/api/me').set('Authorization', `Bearer ${otra.token}`).expect(200)).body.usuario.idioma).toBe('pt');
+    });
   });
 
   describe('renovación rotativa', () => {
@@ -227,7 +245,7 @@ describe('Autenticación', () => {
         usuarios: await tx.selectFrom('usuario').select('id').execute(),
         auditoria: await tx.selectFrom('auditoria').select('accion').execute(),
       }));
-      expect(datos.perfiles).toHaveLength(11);
+      expect(datos.perfiles).toHaveLength(15);
       expect(datos.sucursales).toEqual([{ codigo: '001', nombre: 'Casa matriz' }]);
       expect(datos.usuarios).toHaveLength(1);
       expect(datos.auditoria.map((a) => a.accion)).toContain('alta_empresa');

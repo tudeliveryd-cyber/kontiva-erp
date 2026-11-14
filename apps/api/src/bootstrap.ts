@@ -26,11 +26,18 @@ export async function crearApp(op: Opciones = { modulo: AppModule, prefijo: 'api
   });
   app.set('trust proxy', c.TRUST_PROXY);
   app.disable('x-powered-by');
-  app.useBodyParser('json', { limit: '1mb' });
+  // 4 MB: importaciones de hasta 5.000 filas.
+  app.useBodyParser('json', { limit: '4mb' });
   app.use(
     helmet({
       contentSecurityPolicy: {
-        directives: { 'img-src': ["'self'", 'data:'], 'script-src': ["'self'"], 'style-src': ["'self'", "'unsafe-inline'"] },
+        directives: {
+          'img-src': ["'self'", 'data:'],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          // El PDV habla con el agente local de impresión (programa en la computadora de la caja).
+          'connect-src': ["'self'", 'http://127.0.0.1:*', 'http://localhost:*'],
+        },
       },
     }),
   );
@@ -42,7 +49,17 @@ export async function crearApp(op: Opciones = { modulo: AppModule, prefijo: 'api
   // Producción: la misma aplicación sirve la web compilada (un solo contenedor por servicio).
   if (c.WEB_DIST && existsSync(path.join(c.WEB_DIST, op.pagina))) {
     const dist = path.resolve(c.WEB_DIST);
-    app.use(express.static(dist, { index: false, maxAge: '1h', setHeaders: (res, f) => f.includes('/assets/') && res.setHeader('Cache-Control', 'public, max-age=31536000, immutable') }));
+    app.use(
+      express.static(dist, {
+        index: false,
+        maxAge: '1h',
+        setHeaders: (res, f) => {
+          if (f.includes('/assets/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          // El service worker y el manifiesto de la app instalable se revisan siempre.
+          else if (f.endsWith('sw.js') || f.endsWith('.webmanifest')) res.setHeader('Cache-Control', 'no-cache');
+        },
+      }),
+    );
     app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
       if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
       res.sendFile(path.join(dist, op.pagina));

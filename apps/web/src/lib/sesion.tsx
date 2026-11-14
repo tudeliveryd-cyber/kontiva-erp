@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { fijarIdioma } from '../i18n/traductor';
 import { alPerderSesion, api, fijarToken, renovarSesion, type Yo } from './api';
 
 interface EstadoSesion {
@@ -48,6 +49,12 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     qc.clear();
     setAutenticado(false);
   }, [qc]);
+
+  // El idioma elegido en la cuenta sigue a la persona en cualquier equipo.
+  const idioma = yo.data?.usuario.idioma;
+  useEffect(() => {
+    if (idioma) fijarIdioma(idioma);
+  }, [idioma]);
 
   const puede = useCallback((permiso: string) => Boolean(yo.data?.permisos[permiso]), [yo.data]);
 

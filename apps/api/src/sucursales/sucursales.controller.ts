@@ -74,6 +74,8 @@ export class SucursalesController {
         .values({ empresa_id: ctx.empresaId, nombre: d.nombre, codigo: d.codigo, direccion: d.direccion ?? null, telefono: d.telefono ?? null, creado_por: ctx.usuarioId })
         .returningAll()
         .executeTakeFirstOrThrow();
+      // Cada sucursal nace con su depósito, para poder recibir stock y abrir cajas.
+      await tx.insertInto('deposito').values({ empresa_id: ctx.empresaId, sucursal_id: s.id, nombre: 'Depósito principal' }).execute();
       await auditar(tx, { ...ctx, ...o }, { accion: 'crear', entidad: 'sucursal', entidadId: s.id, despues: aDto(s) });
       return aDto(s);
     });

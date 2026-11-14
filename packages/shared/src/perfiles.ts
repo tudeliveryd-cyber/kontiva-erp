@@ -42,7 +42,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'venta.*', 'descuento.aprobar', 'devolucion.*', 'presupuesto.*', 'pedido.*',
       'cliente.*', 'credito_cliente.*', 'caja.*', 'arqueo.*',
       'proveedor.ver', 'orden_compra.*', 'recepcion.*',
-      'cuenta_cobrar.ver', 'informe_ganancias.ver', 'documento_fiscal.*', 'entrega.*',
+      'cuenta_cobrar.*', 'informe_ventas.*', 'informe_ganancias.ver', 'documento_fiscal.*', 'entrega.*', 'asistencia.*', 'receta.*', 'salon.*', 'cocina.*', 'produccion.*',
     ],
   },
   {
@@ -54,6 +54,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'sucursal.ver', 'producto.ver', 'precio.ver', 'stock.ver', 'stock.editar', 'conteo.ver', 'conteo.crear',
       'venta.ver', 'venta.crear', 'venta.cancelar', 'venta.imprimir', 'descuento.aprobar',
       'devolucion.*', 'cliente.ver', 'cliente.crear', 'caja.*', 'arqueo.*', 'documento_fiscal.ver', 'documento_fiscal.imprimir',
+      'credito_cliente.ver', 'credito_cliente.aprobar', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear', 'asistencia.ver', 'asistencia.editar', 'receta.ver', 'salon.ver', 'salon.crear', 'salon.cancelar', 'cocina.ver', 'produccion.ver', 'produccion.crear', 'entrega.ver', 'entrega.crear',
     ],
   },
   {
@@ -63,8 +64,29 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
     alcance: 'propia',
     permisos: [
       'producto.ver', 'precio.ver', 'stock.ver', 'venta.ver', 'venta.crear', 'venta.imprimir',
-      'cliente.ver', 'cliente.crear', 'caja.ver', 'caja.crear', 'arqueo.crear', 'documento_fiscal.imprimir',
+      'cliente.ver', 'cliente.crear', 'caja.ver', 'caja.crear', 'arqueo.crear', 'documento_fiscal.imprimir', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear', 'salon.ver',
     ],
+  },
+  {
+    clave: 'mozo',
+    nombre: 'Mozo',
+    descripcion: 'Mesas y comandas de su sucursal; no cobra.',
+    alcance: 'sucursal',
+    permisos: ['producto.ver', 'precio.ver', 'salon.ver', 'salon.crear'],
+  },
+  {
+    clave: 'produccion',
+    nombre: 'Producción',
+    descripcion: 'Recetas, órdenes de producción y mermas; ve el stock de su sucursal.',
+    alcance: 'sucursal',
+    permisos: ['producto.ver', 'stock.ver', 'produccion.ver', 'produccion.crear'],
+  },
+  {
+    clave: 'cocina',
+    nombre: 'Cocina',
+    descripcion: 'Pantalla de cocina y bar de su sucursal.',
+    alcance: 'sucursal',
+    permisos: ['cocina.ver', 'cocina.editar'],
   },
   {
     clave: 'vendedor',
@@ -92,7 +114,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
     nombre: 'Financiero',
     descripcion: 'Cuentas a pagar y cobrar, bancos y flujo de caja.',
     alcance: 'empresa',
-    permisos: ['cuenta_pagar.*', 'cuenta_cobrar.*', 'banco.*', 'credito_cliente.ver', 'cliente.ver', 'proveedor.ver', 'caja.ver', 'arqueo.ver', 'informe_ganancias.ver'],
+    permisos: ['cuenta_pagar.*', 'cuenta_cobrar.*', 'banco.*', 'flujo_caja.*', 'informe_ventas.ver', 'credito_cliente.ver', 'cliente.ver', 'proveedor.ver', 'caja.ver', 'arqueo.ver', 'informe_ganancias.ver'],
   },
   {
     clave: 'contador',
@@ -102,8 +124,15 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
     permisos: [
       'cuenta_pagar.ver', 'cuenta_pagar.exportar', 'cuenta_cobrar.ver', 'cuenta_cobrar.exportar', 'banco.ver',
       'contabilidad.*', 'documento_fiscal.ver', 'documento_fiscal.imprimir', 'venta.ver', 'venta.exportar',
-      'informe_ganancias.*', 'auditoria.ver',
+      'informe_ventas.*', 'informe_ganancias.*', 'auditoria.ver',
     ],
+  },
+  {
+    clave: 'rrhh',
+    nombre: 'Recursos humanos',
+    descripcion: 'Legajos de funcionarios, sueldos, aguinaldo y planillas.',
+    alcance: 'empresa',
+    permisos: ['funcionario.*', 'salario.*', 'asistencia.*', 'sucursal.ver'],
   },
   {
     clave: 'repartidor',

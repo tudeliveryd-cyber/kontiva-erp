@@ -1,3 +1,4 @@
+import { configBalanza } from './balanza';
 import { z } from 'zod';
 import { ALCANCES, esPermisoValido } from './permisos';
 import { validarRuc } from './ruc';
@@ -37,6 +38,10 @@ export const autorizarEntrada = z.object({
 });
 
 export const empresaEditar = z.object({
+  permiteStockNegativo: z.boolean().optional(),
+  /** Días de validez de los vales de cambio (0 = no vencen). */
+  valeDias: z.coerce.number().int().min(0).max(3650).optional(),
+  balanza: configBalanza.optional(),
   razonSocial: z.string().trim().min(2).max(200).optional(),
   nombreFantasia: z.string().trim().max(200).nullable().optional(),
   ruc: ruc.optional(),
@@ -91,4 +96,771 @@ export const auditoriaFiltro = z.object({
   accion: z.string().max(60).optional(),
   cursor: z.coerce.number().int().positive().optional(),
   limite: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+// ---------------------------------------------------------------------------
+// Fase 1 · catálogo, stock, clientes, cajas y ventas
+// ---------------------------------------------------------------------------
+
+const textoOpcional = (max: number) => z.string().trim().max(max).nullable().optional();
+const dinero = z.coerce.number().min(0).max(1e13);
+const cantidad = z.coerce.number().positive().max(1e9);
+const codigoBarras = z.string().trim().regex(/^[0-9A-Za-z\-.]{3,40}$/, 'Código de barras inválido');
+
+export const UNIDADES = ['unidad', 'kg', 'g', 'litro', 'ml', 'metro', 'm2', 'm3', 'caja', 'paquete'] as const;
+
+export const varianteEntrada = z.object({
+  id: uuid.optional(),
+  nombre: textoOpcional(80),
+  sku: textoOpcional(60),
+  /** Grade de ropa y calzado: talle y color (el nombre se arma solo si no se indica). */
+  talle: textoOpcional(20),
+  color: textoOpcional(40),
+  codigos: z.array(codigoBarras).max(20).default([]),
+  /** Ferretería y mayorista: se vende o compra por caja, rollo o paquete; el stock sigue en la unidad. */
+  presentaciones: z
+    .array(
+      z.object({
+        id: uuid.optional(),
+        nombre: z.string().trim().min(1, 'Nombre de la presentación').max(40),
+        factor: z.coerce.number().positive().max(1e6).refine((n) => n !== 1, 'La presentación contiene más (o menos) de una unidad'),
+        precio: z.coerce.number().min(0).max(1e13).nullable().optional(),
+        codigos: z.array(codigoBarras).max(10).default([]),
+      }),
+    )
+    .max(10)
+    .default([]),
+  precio: dinero,
+  costo: dinero.optional(),
+  stockMinimo: z.coerce.number().min(0).max(1e9).optional(),
+  activa: z.boolean().default(true),
+});
+
+export const productoEntrada = z.object({
+  nombre: z.string().trim().min(1, 'Ingrese el nombre').max(200),
+  descripcion: textoOpcional(1000),
+  categoriaId: uuid.nullable().optional(),
+  marcaId: uuid.nullable().optional(),
+  tipo: z.enum(['producto', 'servicio']).default('producto'),
+  unidad: z.enum(UNIDADES).default('unidad'),
+  tasaIva: z.coerce.number().refine((v) => v === 0 || v === 5 || v === 10, 'IVA 10, 5 o exento').default(10),
+  controlaStock: z.boolean().default(true),
+  controlaLote: z.boolean().default(false),
+  /** Farmacia: datos del medicamento y condición de venta (DNVS). */
+  principioActivo: textoOpcional(200),
+  concentracion: textoOpcional(60),
+  forma: textoOpcional(60),
+  registroSanitario: textoOpcional(40),
+  condicionVenta: z.enum(['libre', 'receta', 'receta_archivada']).default('libre'),
+  /** Restaurante: estación donde se prepara (su comanda aparece en esa pantalla). */
+  estacion: z.enum(['cocina', 'bar']).nullable().default(null),
+  activo: z.boolean().default(true),
+  variantes: z.array(varianteEntrada).min(1).max(200),
+});
+export type ProductoEntrada = z.infer<typeof productoEntrada>;
+
+export const nombreSimple = z.object({ nombre: z.string().trim().min(1).max(80) });
+
+export const ajusteStockEntrada = z.object({
+  depositoId: uuid,
+  motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
+  tipo: z.enum(['inicial', 'ajuste']).default('ajuste'),
+  items: z
+    .array(
+      z.object({
+        varianteId: uuid,
+        cantidadNueva: z.coerce.number().min(-1e9).max(1e9),
+        /** Productos con lote: el saldo contado es el de este lote (existente o nuevo). */
+        loteId: uuid.optional(),
+        lote: z.object({ codigo: z.string().trim().min(1).max(40), vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() }).optional(),
+      }),
+    )
+    .min(1)
+    .max(2000),
+});
+
+export const clienteEntrada = z.object({
+  nombre: z.string().trim().min(2, 'Ingrese el nombre').max(200),
+  documento: z
+    .string()
+    .trim()
+    .max(20)
+    .regex(/^[0-9A-Za-z-]*$/, 'Solo números y guion')
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null)),
+  telefono: textoOpcional(40),
+  email: email.nullable().optional().or(z.literal('').transform(() => null)),
+  direccion: textoOpcional(300),
+  listaPrecioId: uuid.nullable().optional(),
+  /** Solo con credito_cliente.editar. 0 = sin crédito. */
+  limiteCredito: z.coerce.number().min(0).max(1e13).optional(),
+  plazoCreditoDias: z.coerce.number().int().min(1).max(365).optional(),
+  activo: z.boolean().optional(),
+});
+
+export const listaPrecioEntrada = z.object({
+  nombre: z.string().trim().min(2, 'Ingrese el nombre').max(80),
+  activa: z.boolean().optional(),
+});
+
+/** precio null = quitar el precio especial (rige el general). */
+export const preciosListaEntrada = z.object({
+  sucursalId: uuid.nullable().optional(),
+  items: z.array(z.object({ varianteId: uuid, precio: dinero.nullable() })).min(1).max(2000),
+});
+
+/** Genera precios de la lista a partir del precio normal: -10 = 10 % menos. */
+export const ajusteListaEntrada = z.object({
+  porcentaje: z.coerce.number().min(-90).max(500),
+  redondeo: z.coerce.number().refine((v) => [1, 50, 100, 500, 1000].includes(v), 'Redondeo inválido').default(1),
+  categoriaId: uuid.nullable().optional(),
+  soloSinPrecio: z.boolean().default(false),
+});
+
+export const cotizacionEntrada = z
+  .object({
+    sucursalId: uuid,
+    moneda: z.enum(['USD', 'BRL']),
+    compra: z.coerce.number().positive().max(1e7),
+    venta: z.coerce.number().positive().max(1e7),
+  })
+  .refine((d) => d.venta >= d.compra, { message: 'La cotización de venta no puede ser menor que la de compra', path: ['venta'] });
+
+export const cajaEntrada = z.object({
+  nombre: z.string().trim().min(1).max(60),
+  sucursalId: uuid,
+  depositoId: uuid,
+  activa: z.boolean().optional(),
+});
+
+const montoMoneda = z.object({ moneda: z.enum(['PYG', 'USD', 'BRL']), monto: z.coerce.number().min(0).max(1e13) });
+
+export const aperturaCajaEntrada = z.object({ fondos: z.array(montoMoneda).max(3).default([]) });
+
+export const movimientoCajaEntrada = z.object({
+  tipo: z.enum(['retiro', 'ingreso']),
+  moneda: z.enum(['PYG', 'USD', 'BRL']),
+  monto: z.coerce.number().positive().max(1e13),
+  motivo: z.string().trim().min(3).max(300),
+});
+
+export const cierreCajaEntrada = z.object({
+  contado: z
+    .array(
+      z.object({
+        moneda: z.enum(['PYG', 'USD', 'BRL']),
+        medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro']),
+        monto: z.coerce.number().min(0).max(1e13),
+      }),
+    )
+    .max(12),
+});
+
+export const ventaEntrada = z.object({
+  claveIdempotencia: z.string().min(8).max(80),
+  cajaId: uuid,
+  clienteId: uuid.nullable().optional(),
+  /** Pedido que se entrega con esta venta: rigen sus precios y descuentos. */
+  pedidoId: uuid.nullable().optional(),
+  items: z
+    .array(
+      z.object({
+        varianteId: uuid,
+        /** Vendido en una presentación (caja, rollo): la cantidad es de presentaciones. */
+        presentacionId: uuid.nullable().optional(),
+        cantidad,
+        /** Solo con permiso precio.editar; si no, se usa el precio de lista. */
+        precioUnitario: dinero.optional(),
+        descuento: dinero.optional(),
+      }),
+    )
+    .min(1, 'La venta no tiene productos')
+    .max(500),
+  pagos: z
+    .array(
+      z.object({
+        /** Vale: saldo a favor de un cambio; la referencia es el código del vale. */
+        medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro', 'vale']),
+        moneda: z.enum(['PYG', 'USD', 'BRL']),
+        monto: z.coerce.number().positive().max(1e13),
+        referencia: textoOpcional(80),
+      }).refine((p) => p.medio !== 'vale' || (p.moneda === 'PYG' && !!p.referencia), 'El vale se paga en guaraníes con su código'),
+    )
+    .max(10),
+  vueltoMoneda: z.enum(['PYG', 'USD', 'BRL']).default('PYG'),
+  /** Parte del total que queda en la cuenta corriente del cliente (venta a crédito). */
+  credito: z.coerce.number().min(0).max(1e13).optional(),
+  /** Restaurante: cuenta que se cobra (entera o los ítems elegidos) y propina para el personal. */
+  cuentaId: uuid.optional(),
+  cuentaItems: z.array(uuid).min(1).max(300).optional(),
+  propina: z.object({ monto: z.coerce.number().positive().max(1e10), medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro']) }).optional(),
+  /** Receta de los medicamentos de venta bajo receta (obligatoria si la venta tiene alguno). */
+  receta: z
+    .object({
+      medico: z.string().trim().min(3, 'Nombre del médico').max(120),
+      matricula: z.string().trim().min(1, 'Registro profesional del médico').max(30),
+      paciente: z.string().trim().min(3, 'Nombre del paciente').max(120),
+      pacienteDocumento: z.string().trim().min(3).max(20).nullable().optional().or(z.literal('').transform(() => null)),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de la receta'),
+      numero: z.string().trim().max(30).nullable().optional().or(z.literal('').transform(() => null)),
+      retenida: z.boolean().default(false),
+    })
+    .nullable()
+    .optional(),
+  /** Venta hecha en el PDV sin conexión: momento real; los precios de los ítems son los que tenía la caja. */
+  offline: z.object({ registradaEn: z.string().datetime({ offset: true }) }).optional(),
+}).refine((v) => v.pagos.length > 0 || (v.credito ?? 0) > 0, { message: 'Registre al menos un pago', path: ['pagos'] });
+export type VentaEntrada = z.infer<typeof ventaEntrada>;
+
+export const anularVentaEntrada = z.object({ motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
+
+/** Booleano en query string: solo "true" es verdadero (z.coerce.boolean convierte "false" en true). */
+export const booleanoQuery = z.preprocess((v) => v === true || v === 'true' || v === '1', z.boolean()).default(false);
+
+export const transferenciaEntrada = z.object({
+  origenId: uuid,
+  destinoId: uuid,
+  /** true: sale y entra en el acto. false: queda en tránsito hasta que el destino confirme. */
+  directa: z.boolean().default(false),
+  nota: z.string().trim().max(300).nullable().optional(),
+  items: z.array(z.object({ varianteId: uuid, cantidad: z.coerce.number().positive().max(1e9) })).min(1, 'Agregue productos').max(1000),
+});
+
+export const recepcionEntrada = z.object({
+  items: z.array(z.object({ linea: z.number().int().positive(), cantidadRecibida: z.coerce.number().min(0).max(1e9) })).max(1000).default([]),
+});
+
+export const cancelarEntrada = z.object({ motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
+
+export const devolucionEntrada = z.object({
+  ventaId: uuid,
+  /** Caja abierta del usuario: de ahí sale el dinero y al depósito de esa caja vuelve la mercadería. */
+  cajaId: uuid,
+  /** Vale: no sale dinero; queda un vale de cambio con el importe para usar en otra compra. */
+  medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro', 'vale']).default('efectivo'),
+  motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
+  items: z.array(z.object({ linea: z.number().int().positive(), cantidad: z.coerce.number().positive().max(1e9) })).min(1, 'Elija qué se devuelve').max(500),
+});
+
+// ---------------------------------------------------------------------------
+// Presupuestos y pedidos
+// ---------------------------------------------------------------------------
+
+const fecha = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
+  .nullable()
+  .optional()
+  .or(z.literal('').transform(() => null));
+
+export const pedidoEntrada = z
+  .object({
+    sucursalId: uuid,
+    clienteId: uuid.nullable().optional(),
+    clienteNombre: z.string().trim().max(200).nullable().optional().transform((v) => (v ? v : null)),
+    validoHasta: fecha,
+    entregaPrevista: fecha,
+    nota: textoOpcional(1000),
+    items: z
+      .array(
+        z.object({
+          varianteId: uuid,
+          cantidad,
+          /** Solo con permiso precio.editar; si no, el precio de lista del cliente. */
+          precioUnitario: dinero.optional(),
+          descuento: dinero.optional(),
+        }),
+      )
+      .min(1, 'Agregue al menos un producto')
+      .max(500),
+  });
+export type PedidoEntrada = z.infer<typeof pedidoEntrada>;
+
+export const cerrarPedidoEntrada = z.object({ motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
+export const estadoPedidoEntrada = z.object({ estado: z.enum(['pendiente', 'preparado']) });
+
+// ---------------------------------------------------------------------------
+// Facturación electrónica (SIFEN)
+// ---------------------------------------------------------------------------
+
+export const feConfiguracionEntrada = z.object({
+  ambiente: z.enum(['test', 'produccion']),
+  tipoContribuyente: z.coerce.number().refine((v) => v === 1 || v === 2, 'Persona física o jurídica'),
+  tipoRegimen: z.coerce.number().int().min(1).max(99).nullable().optional(),
+  actividadCodigo: z.string().trim().regex(/^[0-9]{3,8}$/, 'Código de actividad económica (números)'),
+  actividadDescripcion: z.string().trim().min(3, 'Describa la actividad').max(300),
+  timbradoNumero: z.string().trim().regex(/^[0-9]{8}$/, 'El timbrado tiene 8 dígitos'),
+  timbradoFecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de inicio de vigencia'),
+  cscId: z.string().trim().regex(/^[0-9]{1,4}$/, 'Identificador del CSC (ej. 0001)'),
+  /** Vacío = conservar el CSC cargado. */
+  csc: z.string().trim().max(64).optional().transform((v) => (v ? v : undefined)),
+  /** Enviar al cliente el KuDE y el XML por correo cuando SIFEN aprueba el documento. */
+  envioCorreo: z.boolean().optional(),
+});
+
+export const feCertificadoEntrada = z.object({
+  archivo: z.string().min(100, 'Seleccione el archivo .p12 / .pfx').max(40000),
+  clave: z.string().min(1, 'Ingrese la contraseña del certificado').max(200),
+});
+
+export const feEstablecimientoEntrada = z.object({
+  direccion: z.string().trim().min(3, 'Ingrese la dirección').max(255),
+  numeroCasa: z.string().trim().max(10).optional().transform((v) => (v ? v : null)),
+  departamento: z.coerce.number().int().positive('Elija el departamento'),
+  distrito: z.coerce.number().int().positive('Elija el distrito'),
+  ciudad: z.coerce.number().int().positive('Elija la ciudad'),
+  telefono: z.string().trim().min(6, 'Teléfono (mínimo 6 dígitos)').max(20),
+  email: email.nullable().optional().or(z.literal('').transform(() => null)),
+});
+
+export const fePuntoEntrada = z.object({ punto: z.string().regex(/^[0-9]{3}$/, 'Tres dígitos: 001').nullable() });
+
+// ---------------------------------------------------------------------------
+// Fase 2 · compras y cuentas a pagar
+// ---------------------------------------------------------------------------
+
+export const proveedorEntrada = z.object({
+  nombre: z.string().trim().min(2, 'Ingrese el nombre').max(200),
+  ruc: z.string().trim().max(20).regex(/^[0-9A-Za-z-]*$/, 'Solo números y guion').nullable().optional().transform((v) => (v ? v : null)),
+  telefono: textoOpcional(40),
+  email: email.nullable().optional().or(z.literal('').transform(() => null)),
+  direccion: textoOpcional(300),
+  contacto: textoOpcional(120),
+  plazoPagoDias: z.coerce.number().int().min(0).max(365).default(0),
+  nota: textoOpcional(1000),
+  activo: z.boolean().optional(),
+});
+
+const fechaObligatoria = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida');
+
+export const ordenCompraEntrada = z.object({
+  proveedorId: uuid,
+  depositoId: uuid,
+  fechaEntrega: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
+  nota: textoOpcional(1000),
+  items: z
+    .array(z.object({ varianteId: uuid, cantidad, costoUnitario: dinero }))
+    .min(1, 'Agregue al menos un producto')
+    .max(500),
+});
+
+export const compraEntrada = z
+  .object({
+    proveedorId: uuid,
+    depositoId: uuid,
+    ordenId: uuid.nullable().optional(),
+    documentoTipo: z.enum(['factura', 'factura_electronica', 'remision', 'otro']),
+    timbrado: z.string().trim().regex(/^[0-9]{8}$/, 'El timbrado tiene 8 dígitos').nullable().optional().or(z.literal('').transform(() => null)),
+    documentoNumero: z.string().trim().regex(/^[0-9]{3}-[0-9]{3}-[0-9]{7}$/, 'Número con formato 001-001-0000001').nullable().optional().or(z.literal('').transform(() => null)),
+    cdc: z.string().trim().regex(/^[0-9]{44}$/, 'El CDC tiene 44 dígitos').nullable().optional().or(z.literal('').transform(() => null)),
+    fechaDocumento: fechaObligatoria,
+    condicion: z.enum(['contado', 'credito']),
+    vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
+    /** Contado: cómo se pagó (efectivo desde la caja abierta o por otro medio). */
+    pago: z
+      .object({ medio: z.enum(['efectivo', 'transferencia', 'cheque', 'tarjeta', 'otro']), cajaId: uuid.nullable().optional(), cuentaBancariaId: uuid.nullable().optional(), referencia: textoOpcional(80) })
+      .nullable()
+      .optional(),
+    nota: textoOpcional(1000),
+    items: z
+      .array(
+        z.object({
+          varianteId: uuid,
+          /** Comprado en una presentación (caja, rollo): cantidad y costo son por presentación. */
+          presentacionId: uuid.nullable().optional(),
+          cantidad,
+          costoUnitario: dinero,
+          descuento: dinero.optional(),
+          ordenLinea: z.number().int().positive().optional(),
+          /** Productos con control de lote: código del lote y/o vencimiento. */
+          lote: z
+            .object({
+              codigo: z.string().trim().max(40).nullable().optional().or(z.literal('').transform(() => null)),
+              vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
+            })
+            .nullable()
+            .optional(),
+        }),
+      )
+      .min(1, 'Agregue al menos un producto')
+      .max(1000),
+  })
+  .superRefine((d, c) => {
+    if ((d.documentoTipo === 'factura' || d.documentoTipo === 'factura_electronica') && !d.documentoNumero) c.addIssue({ code: 'custom', path: ['documentoNumero'], message: 'Ingrese el número de la factura' });
+    if (d.documentoTipo === 'factura' && !d.timbrado) c.addIssue({ code: 'custom', path: ['timbrado'], message: 'Ingrese el timbrado de la factura' });
+    if (d.documentoTipo === 'factura_electronica' && !d.cdc) c.addIssue({ code: 'custom', path: ['cdc'], message: 'Ingrese el CDC de la factura electrónica' });
+  });
+export type CompraEntrada = z.infer<typeof compraEntrada>;
+
+export const pagoProveedorEntrada = z.object({
+  proveedorId: uuid,
+  fecha: fechaObligatoria,
+  medio: z.enum(['efectivo', 'transferencia', 'cheque', 'tarjeta', 'otro']),
+  cajaId: uuid.nullable().optional(),
+  /** Sale de esta cuenta bancaria (transferencia, cheque, débito). */
+  cuentaBancariaId: uuid.nullable().optional(),
+  referencia: textoOpcional(80),
+  nota: textoOpcional(500),
+  aplicaciones: z.array(z.object({ cuentaId: uuid, monto: z.coerce.number().positive().max(1e13) })).min(1, 'Elija qué cuentas paga').max(200),
+});
+
+export const cuentaPagarEntrada = z.object({
+  proveedorId: uuid,
+  descripcion: z.string().trim().min(3).max(300),
+  fecha: fechaObligatoria,
+  vencimiento: fechaObligatoria,
+  monto: z.coerce.number().positive().max(1e13),
+});
+
+// ---------------------------------------------------------------------------
+// Fase 2 · cuentas a cobrar
+// ---------------------------------------------------------------------------
+
+export const cobroEntrada = z.object({
+  clienteId: uuid,
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+  medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'cheque', 'otro']),
+  /** Caja abierta propia donde entra el dinero (obligatoria en efectivo). */
+  cajaId: uuid.nullable().optional(),
+  /** Entra a esta cuenta bancaria (transferencia, depósito). */
+  cuentaBancariaId: uuid.nullable().optional(),
+  referencia: textoOpcional(80),
+  nota: textoOpcional(500),
+  aplicaciones: z.array(z.object({ cuentaId: uuid, monto: z.coerce.number().positive().max(1e13) })).min(1, 'Elija qué cuentas cobra').max(200),
+});
+
+// ---------------------------------------------------------------------------
+// Fase 2 · bancos y flujo de caja
+// ---------------------------------------------------------------------------
+
+const fechaDia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida');
+
+export const cuentaBancariaEntrada = z.object({
+  banco: z.string().trim().min(2, 'Ingrese el banco').max(120),
+  nombre: z.string().trim().min(2, 'Ingrese un nombre para la cuenta').max(120),
+  numero: textoOpcional(40),
+  saldoInicial: z.coerce.number().min(-1e13).max(1e13).default(0),
+  fechaSaldoInicial: fechaDia,
+  activa: z.boolean().optional(),
+});
+
+export const movimientoBancarioEntrada = z.object({
+  tipo: z.enum(['deposito', 'extraccion', 'gasto', 'ingreso']),
+  fecha: fechaDia,
+  descripcion: z.string().trim().min(3, 'Describa el movimiento').max(300),
+  monto: z.coerce.number().positive('El monto debe ser mayor a cero').max(1e13),
+  referencia: textoOpcional(80),
+});
+
+export const transferenciaBancariaEntrada = z.object({
+  destinoId: uuid,
+  fecha: fechaDia,
+  monto: z.coerce.number().positive().max(1e13),
+  referencia: textoOpcional(80),
+});
+
+export const depositoCajaEntrada = z.object({
+  cajaId: uuid,
+  fecha: fechaDia,
+  monto: z.coerce.number().positive().max(1e13),
+  referencia: textoOpcional(80),
+});
+
+// ── Contabilidad ──────────────────────────────────────────────────────────────
+
+export const CONCEPTOS_CONTABLES = {
+  caja: 'Caja (efectivo)',
+  valores: 'Valores a depositar (tarjetas, cheques, otros medios)',
+  bancos: 'Bancos (si la cuenta bancaria no tiene una propia)',
+  transferencias: 'Transferencias entre cuentas en tránsito',
+  deudores: 'Deudores por ventas (cuentas a cobrar)',
+  iva_credito: 'IVA crédito fiscal (compras)',
+  mercaderias: 'Mercaderías (inventario)',
+  proveedores: 'Proveedores (cuentas a pagar)',
+  iva_debito: 'IVA débito fiscal (ventas)',
+  ventas: 'Ventas de mercaderías',
+  devoluciones_ventas: 'Devoluciones sobre ventas',
+  costo_ventas: 'Costo de mercaderías vendidas',
+  gastos_generales: 'Gastos (cuentas a pagar sin compra)',
+  gastos_bancarios: 'Gastos bancarios',
+  ingresos_financieros: 'Ingresos financieros (intereses)',
+  deposito_manual: 'Contrapartida de depósitos bancarios manuales',
+  extraccion_manual: 'Contrapartida de extracciones bancarias',
+  sueldos: 'Sueldos, jornales y aguinaldos',
+  aportes_patronales: 'Aporte patronal al IPS',
+  sueldos_pagar: 'Sueldos a pagar',
+  ips_pagar: 'IPS a pagar',
+  anticipos_personal: 'Anticipos y descuentos al personal',
+  vales: 'Vales de cambio a canjear (saldo a favor de clientes)',
+} as const;
+export type ConceptoContable = keyof typeof CONCEPTOS_CONTABLES;
+
+export const cuentaContableEntrada = z.object({
+  codigo: z.string().trim().regex(/^[0-9]+(\.[0-9]+)*$/, 'Use números separados por punto, por ejemplo 1.1.08'),
+  nombre: z.string().trim().min(2, 'Ingrese el nombre de la cuenta').max(120),
+  imputable: z.boolean(),
+  activa: z.boolean().optional(),
+});
+
+export const conceptosContablesEntrada = z.object({
+  conceptos: z.partialRecord(z.enum(Object.keys(CONCEPTOS_CONTABLES) as [ConceptoContable, ...ConceptoContable[]]), z.string().uuid()).default({}),
+  bancos: z.record(z.string().uuid(), z.string().uuid().nullable()).default({}),
+});
+
+export const asientoManualEntrada = z
+  .object({
+    fecha: fechaDia,
+    descripcion: z.string().trim().min(3, 'Describa el asiento').max(300),
+    lineas: z
+      .array(
+        z.object({
+          cuentaId: z.string().uuid('Elija la cuenta'),
+          debe: z.coerce.number().min(0).max(1e13).default(0),
+          haber: z.coerce.number().min(0).max(1e13).default(0),
+          detalle: textoOpcional(200),
+        }),
+      )
+      .min(2, 'Un asiento necesita al menos dos líneas')
+      .max(200),
+  })
+  .refine((a) => a.lineas.every((l) => (l.debe > 0) !== (l.haber > 0)), { message: 'Cada línea va al debe o al haber, con un monto', path: ['lineas'] })
+  .refine((a) => Math.round(a.lineas.reduce((s, l) => s + l.debe - l.haber, 0) * 100) === 0, { message: 'El debe y el haber deben sumar lo mismo', path: ['lineas'] });
+
+export const cierreContableEntrada = z.object({ hasta: fechaDia, motivo: textoOpcional(300) });
+
+// ── RRHH ──────────────────────────────────────────────────────────────────────
+
+export const funcionarioEntrada = z.object({
+  sucursalId: z.string().uuid('Elija la sucursal'),
+  nombre: z.string().trim().min(3, 'Ingrese el nombre completo').max(160),
+  documento: z.string().trim().min(3, 'Ingrese el número de cédula').max(20),
+  fechaNacimiento: fechaDia.nullable().optional(),
+  telefono: textoOpcional(40),
+  email: z.string().trim().email('Correo inválido').max(160).nullable().optional().or(z.literal('').transform(() => null)),
+  direccion: textoOpcional(200),
+  cargo: z.string().trim().min(2, 'Ingrese el cargo').max(80),
+  fechaIngreso: fechaDia,
+  remuneracion: z.enum(['mensual', 'jornal']),
+  salario: z.coerce.number().min(0).max(1e12).optional(),
+  hijos: z.coerce.number().int().min(0).max(30).default(0),
+  aseguradoIps: z.boolean().default(true),
+  numeroIps: textoOpcional(30),
+  banco: textoOpcional(80),
+  cuentaBancaria: textoOpcional(40),
+  nota: textoOpcional(500),
+  codigoReloj: z.string().trim().regex(/^[0-9A-Za-z]{1,20}$/, 'Código del reloj: solo letras y números').nullable().optional().or(z.literal('').transform(() => null)),
+  horarioEntrada: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida').nullable().optional().or(z.literal('').transform(() => null)),
+  horarioSalida: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida').nullable().optional().or(z.literal('').transform(() => null)),
+  trabajaSabado: z.boolean().default(true),
+  sabadoSalida: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida').nullable().optional().or(z.literal('').transform(() => null)),
+}).refine((f) => !f.horarioEntrada === !f.horarioSalida && (!f.horarioEntrada || f.horarioSalida! > f.horarioEntrada), { message: 'Indique la entrada y una salida posterior', path: ['horarioSalida'] });
+
+export const marcacionManualEntrada = z.object({ funcionarioId: z.string().uuid(), fecha: fechaDia, hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida') });
+
+export const bajaFuncionarioEntrada = z.object({ fechaEgreso: fechaDia, motivo: z.string().trim().min(3, 'Indique el motivo').max(300) });
+
+export const rrhhConfiguracionEntrada = z.object({
+  salarioMinimo: z.coerce.number().positive().max(1e10),
+  ipsObrero: z.coerce.number().min(0).max(100),
+  ipsPatronal: z.coerce.number().min(0).max(100),
+  bonificacionPct: z.coerce.number().min(0).max(100),
+  bonificacionTope: z.coerce.number().positive().max(100),
+});
+
+export const liquidacionNuevaEntrada = z.discriminatedUnion('tipo', [
+  z.object({ tipo: z.literal('mensual'), periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mes inválido') }),
+  z.object({ tipo: z.literal('aguinaldo'), anio: z.coerce.number().int().min(2020).max(2100) }),
+]);
+
+export const liquidacionItemEntrada = z.object({
+  dias: z.coerce.number().min(0).max(31).optional(),
+  horasExtra50: z.coerce.number().min(0).max(400).optional(),
+  horasExtra100: z.coerce.number().min(0).max(400).optional(),
+  otrosIngresos: z.coerce.number().min(0).max(1e12).optional(),
+  descuentos: z.coerce.number().min(0).max(1e12).optional(),
+  detalleDescuentos: textoOpcional(200),
+  monto: z.coerce.number().min(0).max(1e12).optional(), // aguinaldo
+});
+
+export const TIPOS_NOVEDAD = ['ausencia', 'ausencia_justificada', 'reposo', 'permiso', 'llegada_tardia', 'horas_extra'] as const;
+
+/** Novedad de asistencia de un día, o de un rango de días (reposo, ausencias). */
+export const novedadEntrada = z
+  .object({
+    funcionarioId: z.string().uuid('Elija el funcionario'),
+    fecha: fechaDia,
+    hasta: fechaDia.optional(),
+    tipo: z.enum(TIPOS_NOVEDAD),
+    horas: z.coerce.number().min(0).max(24).optional(),
+    recargo: z.union([z.literal(50), z.literal(100)]).optional(),
+    observacion: textoOpcional(200),
+  })
+  .refine((n) => n.tipo !== 'horas_extra' || ((n.horas ?? 0) > 0 && !!n.recargo), { message: 'Indique las horas y el recargo', path: ['horas'] })
+  .refine((n) => !['llegada_tardia', 'permiso'].includes(n.tipo) || (n.horas ?? 0) > 0, { message: 'Indique las horas', path: ['horas'] })
+  .refine((n) => !n.hasta || n.hasta >= n.fecha, { message: 'El rango de fechas es inválido', path: ['hasta'] });
+
+export const vacacionGoceEntrada = z
+  .object({ funcionarioId: z.string().uuid(), desde: fechaDia, hasta: fechaDia, dias: z.coerce.number().positive('Indique los días hábiles').max(90), observacion: textoOpcional(200) })
+  .refine((v) => v.hasta >= v.desde, { message: 'El rango de fechas es inválido', path: ['hasta'] });
+
+export const vacacionAjusteEntrada = z.object({
+  funcionarioId: z.string().uuid(),
+  dias: z.coerce.number().min(-400).max(400).refine((n) => n !== 0, 'Indique los días'),
+  observacion: z.string().trim().min(5, 'Explique el ajuste').max(200),
+});
+
+export const opcionesFiniquitoEntrada = z.object({
+  diasTrabajados: z.coerce.number().min(0).max(31).optional(),
+  preavisoOtorgado: z.coerce.number().int().min(0).max(90).optional(),
+  vacacionesPendientes: z.coerce.number().min(0).max(400).optional(),
+  vacacionesProporcionales: z.boolean().optional(),
+  ipsPreaviso: z.boolean().optional(),
+  ipsVacaciones: z.boolean().optional(),
+  otrosIngresos: z.coerce.number().min(0).max(1e12).optional(),
+  descuentos: z.coerce.number().min(0).max(1e12).optional(),
+  detalleDescuentos: textoOpcional(200),
+});
+
+export const liquidacionFinalEntrada = z.object({
+  funcionarioId: z.string().uuid('Elija el funcionario'),
+  fechaEgreso: fechaDia,
+  motivo: z.enum(['renuncia', 'despido_injustificado', 'despido_justificado', 'mutuo_acuerdo', 'fin_contrato']),
+  detalleMotivo: textoOpcional(300),
+  opciones: opcionesFiniquitoEntrada.optional(),
+});
+
+export const pagoLiquidacionEntrada = z
+  .object({ fecha: fechaDia, medio: z.enum(['banco', 'efectivo']), cuentaBancariaId: z.string().uuid().optional(), cajaId: z.string().uuid().optional() })
+  .refine((p) => (p.medio === 'banco' ? !!p.cuentaBancariaId : !!p.cajaId), { message: 'Elija la cuenta bancaria o la caja', path: ['medio'] });
+
+// ── Restaurante ──────────────────────────────────────────────────────────────
+
+export const salonEntrada = z.object({
+  sucursalId: z.string().uuid('Elija la sucursal'),
+  nombre: z.string().trim().min(1, 'Indique el nombre').max(60),
+  orden: z.coerce.number().int().min(0).max(99).default(0),
+});
+
+export const mesaEntrada = z.object({
+  salonId: z.string().uuid(),
+  nombre: z.string().trim().min(1, 'Indique el nombre o número').max(20),
+  capacidad: z.coerce.number().int().min(1).max(50).default(4),
+  forma: z.enum(['cuadrada', 'redonda', 'rectangular']).default('cuadrada'),
+  posX: z.coerce.number().int().min(0).max(23).default(0),
+  posY: z.coerce.number().int().min(0).max(23).default(0),
+});
+
+export const cuentaAbrirEntrada = z
+  .object({
+    mesaId: z.string().uuid().optional(),
+    sucursalId: z.string().uuid().optional(),
+    nombre: z.string().trim().max(60).nullable().optional().or(z.literal('').transform(() => null)),
+    comensales: z.coerce.number().int().min(1).max(99).default(1),
+  })
+  .refine((c) => !!c.mesaId !== !!c.sucursalId, { message: 'Elija una mesa o, para mostrador, la sucursal' });
+
+export const cuentaItemsEntrada = z.object({
+  items: z
+    .array(
+      z.object({
+        varianteId: z.string().uuid(),
+        cantidad: z.coerce.number().positive().max(999),
+        nota: z.string().trim().max(200).nullable().optional().or(z.literal('').transform(() => null)),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+// ── Producción ───────────────────────────────────────────────────────────────
+
+const cantidadPositiva = z.coerce.number().positive().max(1e9);
+
+export const recetaProduccionEntrada = z
+  .object({
+    varianteId: z.string().uuid('Elija el producto'),
+    rendimiento: cantidadPositiva,
+    minutos: z.coerce.number().int().min(1).max(10080).nullable().optional(),
+    nota: z.string().trim().max(1000).nullable().optional().or(z.literal('').transform(() => null)),
+    activa: z.boolean().default(true),
+    insumos: z.array(z.object({ varianteId: z.string().uuid(), cantidad: cantidadPositiva })).min(1, 'Agregue al menos un insumo').max(100),
+  })
+  .refine((r) => !r.insumos.some((i) => i.varianteId === r.varianteId), { message: 'El producto no puede ser insumo de sí mismo', path: ['insumos'] })
+  .refine((r) => new Set(r.insumos.map((i) => i.varianteId)).size === r.insumos.length, { message: 'Hay insumos repetidos', path: ['insumos'] });
+
+export const ordenProduccionEntrada = z.object({
+  varianteId: z.string().uuid('Elija el producto'),
+  depositoId: z.string().uuid('Elija el depósito'),
+  cantidad: cantidadPositiva,
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  nota: z.string().trim().max(500).nullable().optional().or(z.literal('').transform(() => null)),
+});
+
+export const terminarProduccionEntrada = z.object({
+  cantidadProducida: cantidadPositiva,
+  /** Cantidad real usada de cada insumo (si difiere de la teórica). */
+  insumos: z.array(z.object({ linea: z.number().int().positive(), cantidadReal: z.coerce.number().min(0).max(1e9) })).max(100).optional(),
+  lote: z
+    .object({
+      codigo: z.string().trim().max(40).nullable().optional().or(z.literal('').transform(() => null)),
+      vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
+    })
+    .nullable()
+    .optional(),
+});
+
+export const mermaEntrada = z.object({
+  depositoId: z.string().uuid('Elija el depósito'),
+  motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
+  items: z.array(z.object({ varianteId: z.string().uuid(), cantidad: cantidadPositiva, loteId: z.string().uuid().optional() })).min(1).max(500),
+});
+
+// ---------------------------------------------------------------------------
+// Fase 5 · distribuidora: rutas, repartos y rendición
+// ---------------------------------------------------------------------------
+
+export const rutaEntrada = z.object({
+  sucursalId: uuid,
+  nombre: z.string().trim().min(2, 'Nombre de la ruta').max(80),
+  /** Días de visita: 0 domingo … 6 sábado. */
+  dias: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+  nota: textoOpcional(500),
+  activa: z.boolean().default(true),
+});
+
+/** Clientes de la ruta en el orden de visita (reemplaza la lista). */
+export const rutaClientesEntrada = z.object({ clienteIds: z.array(uuid).max(2000) });
+
+export const repartoEntrada = z.object({
+  cajaId: uuid,
+  rutaId: uuid.nullable().optional(),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida'),
+  repartidor: z.string().trim().min(2, 'Nombre del repartidor').max(120),
+  funcionarioId: uuid.nullable().optional(),
+  vehiculo: textoOpcional(60),
+  nota: textoOpcional(500),
+  /** En el orden de entrega. */
+  pedidoIds: z.array(uuid).min(1, 'Elija los pedidos').max(300),
+});
+
+export const rendicionEntrada = z.object({
+  entregas: z
+    .array(
+      z.object({
+        pedidoId: uuid,
+        estado: z.enum(['entregado', 'parcial', 'rechazado']),
+        /** Lo que el cliente pagó al repartidor (el resto queda en su cuenta corriente). */
+        cobrado: z.coerce.number().min(0).max(1e13).default(0),
+        medio: z.enum(['efectivo', 'transferencia', 'cheque', 'otro']).default('efectivo'),
+        /** Entrega parcial: lo que volvió (líneas de la venta). */
+        devuelto: z.array(z.object({ linea: z.number().int().positive(), cantidad })).max(500).default([]),
+        motivo: textoOpcional(300),
+      }),
+    )
+    .min(1)
+    .max(300),
+  /** Efectivo que entregó el repartidor al rendir. */
+  efectivoEntregado: z.coerce.number().min(0).max(1e13),
+  nota: textoOpcional(500),
 });

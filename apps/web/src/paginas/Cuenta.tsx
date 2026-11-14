@@ -10,6 +10,7 @@ import { Aviso, Campo, Encabezado, ErrorApi } from '../componentes/ui';
 import { api, type SesionFila } from '../lib/api';
 import { dispositivo, fechaHora } from '../lib/formato';
 import { useSesion } from '../lib/sesion';
+import { fijarIdioma, type Idioma } from '../i18n/traductor';
 
 export function Cuenta() {
   const { yo, entrar } = useSesion();
@@ -36,6 +37,7 @@ export function Cuenta() {
               {yo.usuario.email} · {yo.usuario.perfil.nombre} en {yo.empresa.nombre}
             </span>
           </div>
+          <IdiomaCuenta actual={yo.usuario.idioma} />
           {yo.empresas.length > 1 && (
             <div className="panel-cuerpo">
               <ErrorApi error={cambiarEmpresa.error} />
@@ -330,5 +332,26 @@ function SegundoFactorCuenta() {
         )}
       </div>
     </section>
+  );
+}
+
+/** Idioma de la interfaz: lo guarda en la cuenta (sigue a la persona en cualquier equipo) y recarga la pantalla. */
+function IdiomaCuenta({ actual }: { actual: Idioma }) {
+  const guardar = useMutation({
+    mutationFn: (idioma: Idioma) => api('/idioma', { metodo: 'PUT', cuerpo: { idioma } }).then(() => idioma),
+    onSuccess: (idioma) => fijarIdioma(idioma),
+  });
+  return (
+    <div className="panel-cuerpo">
+      <ErrorApi error={guardar.error} />
+      <div className="campo" style={{ maxWidth: 360 }}>
+        <label htmlFor="idioma">Idioma de la interfaz</label>
+        <select id="idioma" className="entrada" translate="no" value={actual} disabled={guardar.isPending} onChange={(e) => guardar.mutate(e.target.value as Idioma)}>
+          <option value="es">Español</option>
+          <option value="pt">Português</option>
+        </select>
+        <span className="tenue peq">Las facturas, el KuDE y los tickets se emiten siempre en español.</span>
+      </div>
+    </div>
   );
 }

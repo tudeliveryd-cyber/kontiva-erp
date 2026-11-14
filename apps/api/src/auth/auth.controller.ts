@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   PERMISOS,
   RECURSOS,
   autorizarEntrada,
+  codigoPermiso as codigoPermisoEsquema,
   cambiarContrasenaEntrada,
   cambiarEmpresaEntrada,
   elegirEmpresaEntrada,
@@ -14,12 +15,14 @@ import {
 } from '@kontiva/shared';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import { auditar } from '../comun/auditoria';
 import { Contexto, OrigenPeticion, type Ctx, type Origen } from '../comun/contexto';
 import { Publico, SoloSesion } from '../comun/decoradores';
 import { noAutenticado, prohibido } from '../comun/errores';
 import { validar } from '../comun/validar';
 import { config } from '../config';
 import { Db } from '../db/database';
+import { cargarPermisos } from './permisos';
 import { AuthService, DURACION_SESION_DIAS, type RespuestaLogin, type SesionEmitida } from './auth.service';
 
 export const COOKIE_RENOVACION = 'kontiva_rt';
@@ -256,7 +259,7 @@ export class CuentaController {
       const sucursales = await q.orderBy('codigo').execute();
       return { u, e, sucursales };
     });
-    const cuenta = await this.db.k.selectFrom('cuenta').select(['email']).where('id', '=', ctx.cuentaId).executeTakeFirstOrThrow();
+    const cuenta = await this.db.k.selectFrom('cuenta').select(['email', 'idioma']).where('id', '=', ctx.cuentaId).executeTakeFirstOrThrow();
     const empresas = (await this.auth.membresias(ctx.cuentaId))
       .filter((m) => m.empresa_estado === 'activa')
       .map((m) => ({ id: m.empresa_id, nombre: m.empresa_nombre }));
@@ -268,6 +271,7 @@ export class CuentaController {
         perfil: { id: datos.u.perfil_id, nombre: datos.u.perfil_nombre },
         esPropietario: ctx.esPropietario,
         tienePin: datos.u.hash_pin !== null,
+        idioma: cuenta.idioma,
       },
       empresa: {
         id: datos.e.id,
@@ -281,6 +285,20 @@ export class CuentaController {
       permisos: Object.fromEntries(ctx.permisos),
       empresas,
     };
+  }
+
+  /** Idioma de la interfaz de la cuenta (vale en todas sus empresas). */
+  @SoloSesion()
+  @Put('idioma')
+  @HttpCode(204)
+  async idioma(@Contexto() ctx: Ctx, @Body() body: unknown, @OrigenPeticion() o: Origen) {
+    const d = validar(z.object({ idioma: z.enum(['es', 'pt']) }), body);
+    await this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const antes = await tx.selectFrom('cuenta').select('idioma').where('id', '=', ctx.cuentaId).executeTakeFirstOrThrow();
+      if (antes.idioma === d.idioma) return;
+      await tx.updateTable('cuenta').set({ idioma: d.idioma }).where('id', '=', ctx.cuentaId).execute();
+      await auditar(tx, { ...ctx, ...o }, { accion: 'cambiar_idioma', entidad: 'cuenta', entidadId: ctx.cuentaId, antes, despues: { idioma: d.idioma } });
+    });
   }
 
   /** Catálogo de permisos (para la pantalla de perfiles). */
@@ -297,6 +315,22 @@ export class CuentaController {
       })),
       permisos: PERMISOS,
     };
+  }
+
+  /** Quiénes pueden autorizar una acción con su PIN (solo nombres), para el diálogo del PDV. */
+  @SoloSesion()
+  @Get('autorizadores')
+  async autorizadores(@Contexto() ctx: Ctx, @Query('permiso') permiso: string) {
+    validar(codigoPermisoEsquema, permiso);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const candidatos = await tx.selectFrom('usuario').select(['id', 'nombre']).where('activo', '=', true).where('hash_pin', 'is not', null).where('id', '!=', ctx.usuarioId).orderBy('nombre').execute();
+      const out: { id: string; nombre: string }[] = [];
+      for (const c of candidatos) {
+        const p = await cargarPermisos(tx, c.id);
+        if (p?.permisos.has(permiso)) out.push(c);
+      }
+      return out;
+    });
   }
 
   @SoloSesion()

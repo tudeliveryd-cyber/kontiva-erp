@@ -69,11 +69,17 @@ export const RECURSOS = {
   // Compras y finanzas (Fase 2)
   proveedor: { nombre: 'Proveedores', modulo: 'compras', acciones: ['ver', 'crear', 'editar', 'eliminar'] },
   orden_compra: { nombre: 'Órdenes de compra', modulo: 'compras', acciones: ['ver', 'crear', 'editar', 'aprobar', 'cancelar'] },
-  recepcion: { nombre: 'Recepciones de mercadería', modulo: 'compras', acciones: ['ver', 'crear'] },
-  cuenta_pagar: { nombre: 'Cuentas a pagar', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'aprobar', 'exportar'] },
-  cuenta_cobrar: { nombre: 'Cuentas a cobrar', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'exportar'] },
+  recepcion: { nombre: 'Compras y recepciones de mercadería', modulo: 'compras', acciones: ['ver', 'crear', 'cancelar'] },
+  cuenta_pagar: { nombre: 'Cuentas a pagar y pagos a proveedores', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'aprobar', 'cancelar', 'exportar'] },
+  cuenta_cobrar: { nombre: 'Cuentas a cobrar y cobros', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar', 'cancelar', 'exportar'] },
   banco: { nombre: 'Bancos y conciliación', modulo: 'finanzas', acciones: ['ver', 'crear', 'editar'] },
+  flujo_caja: { nombre: 'Flujo de caja', modulo: 'finanzas', acciones: ['ver', 'exportar'], confidencial: true },
   contabilidad: { nombre: 'Asientos y cierres', modulo: 'finanzas', acciones: ['ver', 'crear', 'aprobar', 'exportar'] },
+  informe_ventas: { nombre: 'Informes de ventas y tablero', modulo: 'informes', acciones: ['ver', 'exportar'] },
+  receta: { nombre: 'Recetario de farmacia', modulo: 'informes', acciones: ['ver', 'exportar'] },
+  salon: { nombre: 'Salón y comandas (restaurante)', modulo: 'ventas', acciones: ['ver', 'crear', 'editar', 'cancelar'] },
+  cocina: { nombre: 'Pantalla de cocina y bar', modulo: 'ventas', acciones: ['ver', 'editar'] },
+  produccion: { nombre: 'Producción, recetas y mermas', modulo: 'stock', acciones: ['ver', 'crear', 'editar', 'cancelar'] },
   informe_ganancias: { nombre: 'Informe de ganancias', modulo: 'informes', acciones: ['ver', 'exportar'], confidencial: true },
 
   // Fiscal (Fase 3)
@@ -83,9 +89,10 @@ export const RECURSOS = {
   // RRHH (Fase 4)
   funcionario: { nombre: 'Funcionarios', modulo: 'rrhh', acciones: ['ver', 'crear', 'editar', 'eliminar'] },
   salario: { nombre: 'Salarios', modulo: 'rrhh', acciones: ['ver', 'editar'], confidencial: true },
+  asistencia: { nombre: 'Asistencia y vacaciones', modulo: 'rrhh', acciones: ['ver', 'editar'] },
 
   // Logística (verticales)
-  entrega: { nombre: 'Entregas y rutas', modulo: 'logistica', acciones: ['ver', 'crear', 'editar'] },
+  entrega: { nombre: 'Rutas, repartos y rendición', modulo: 'logistica', acciones: ['ver', 'crear', 'editar', 'cancelar'] },
 } as const satisfies Record<string, DefRecurso>;
 
 export type Recurso = keyof typeof RECURSOS;

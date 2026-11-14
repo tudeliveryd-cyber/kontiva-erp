@@ -3,6 +3,10 @@ import { z } from 'zod';
 const esquema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(3000),
+  /** Peticiones por minuto por IP (varias cajas detrás de una misma conexión comparten la IP). */
+  /** Conexiones a PostgreSQL por proceso de la API. */
+  DB_CONEXIONES: z.coerce.number().int().min(2).max(200).default(20),
+  LIMITE_POR_MINUTO: z.coerce.number().int().min(60).max(100000).default(1200),
   DATABASE_URL: z.string().url(),
   DATABASE_OWNER_URL: z.string().url().optional(),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
@@ -22,6 +26,14 @@ const esquema = z.object({
   MAIL_FROM: z.string().default('KONTIVA ERP <no-responder@kontiva.com.py>'),
   /** Detrás de un proxy (Nginx, balanceador): confiar en X-Forwarded-For. */
   TRUST_PROXY: z.coerce.number().int().min(0).default(1),
+  // Facturación electrónica (SIFEN)
+  /** Emisor en segundo plano (envío de lotes y consulta de resultados). */
+  SIFEN_EMISOR: z.enum(['activo', 'inactivo']).default('activo'),
+  SIFEN_INTERVALO_MS: z.coerce.number().int().min(1000).default(15000),
+  SIFEN_URL_TEST: z.string().url().default('https://sifen-test.set.gov.py'),
+  SIFEN_URL_PRODUCCION: z.string().url().default('https://sifen.set.gov.py'),
+  /** Certificados raíz adicionales (PEM) para validar el servidor de la DNIT, si hiciera falta. */
+  SIFEN_CA: z.string().optional(),
 });
 
 export type Config = z.infer<typeof esquema>;

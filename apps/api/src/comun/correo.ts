@@ -6,6 +6,7 @@ export interface Mensaje {
   para: string;
   asunto: string;
   texto: string;
+  adjuntos?: { nombre: string; contenido: Buffer | string; tipo: string }[];
 }
 
 /**
@@ -29,9 +30,15 @@ export class Correo {
       return;
     }
     if (!this.transporte) {
-      this.log.log(`[sin SMTP] Para: ${m.para} · ${m.asunto}\n${m.texto}`);
+      this.log.log(`[sin SMTP] Para: ${m.para} · ${m.asunto}${m.adjuntos?.length ? ` · ${m.adjuntos.length} adjuntos` : ''}\n${m.texto}`);
       return;
     }
-    await this.transporte.sendMail({ from: config().MAIL_FROM, to: m.para, subject: m.asunto, text: m.texto });
+    await this.transporte.sendMail({
+      from: config().MAIL_FROM,
+      to: m.para,
+      subject: m.asunto,
+      text: m.texto,
+      attachments: m.adjuntos?.map((a) => ({ filename: a.nombre, content: a.contenido, contentType: a.tipo })),
+    });
   }
 }

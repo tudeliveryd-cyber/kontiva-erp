@@ -3,9 +3,12 @@ import './env';
 import { NestFactory } from '@nestjs/core';
 import { parseArgs } from 'node:util';
 import { AppModule } from './app.module';
+import { Db } from './db/database';
+import { UsuariosController } from './usuarios/usuarios.controller';
 import { config } from './config';
 import { migrar, revertirUltima } from './db/migrador';
 import { ProvisionService } from './provision/provision.service';
+import { AuthService } from './auth/auth.service';
 import { randomBytes } from 'node:crypto';
 import { hashear } from './auth/cripto';
 import { crearKysely } from './db/database';
@@ -25,6 +28,9 @@ const AYUDA = `KONTIVA ERP · herramientas de línea de comandos
       --plan START|BUSINESS|ENTERPRISE   (obligatorio)
       --email propietario@correo      (obligatorio)
       --nombre "Nombre del propietario" (obligatorio)
+      --contrasena "..."            (solo pruebas: define la contraseña sin invitación)
+  usuario:crear [opciones]       Solo pruebas (no en producción): usuario de una empresa con contraseña
+      --empresa <id> --email x --nombre "Nombre" --perfil cajero --contrasena "..."
   master:crear --email x --nombre "Nombre"   Crea un usuario del Panel Master (imprime una contraseña temporal)
   master:reiniciar-2fa --email x             Quita el segundo factor de un usuario master (lo vuelve a configurar al entrar)
   suscripciones:procesar                     Suspende / reactiva empresas según sus vencimientos
@@ -62,9 +68,12 @@ async function main() {
           plan: { type: 'string' },
           email: { type: 'string' },
           nombre: { type: 'string' },
+          // Solo fuera de producción (entornos de prueba): define la contraseña sin enlace de invitación.
+          contrasena: { type: 'string' },
         },
       });
       if (!v.razon || !v.plan || !v.email || !v.nombre) throw new Error('Faltan opciones obligatorias.\n\n' + AYUDA);
+      if (v.contrasena && config().NODE_ENV === 'production') throw new Error('--contrasena no está permitido en producción');
       const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
       try {
         const r = await app.get(ProvisionService).crearEmpresa({
@@ -76,7 +85,33 @@ async function main() {
           propietario: { email: v.email, nombre: v.nombre },
         });
         console.log(`Empresa creada: ${r.empresaId}`);
-        console.log(r.enlaceInvitacion ? `Enlace para crear la contraseña: ${r.enlaceInvitacion}` : 'La cuenta ya existía: ingresa con su contraseña actual.');
+        if (v.contrasena && r.enlaceInvitacion) {
+          const token = new URL(r.enlaceInvitacion).searchParams.get('token')!;
+          await app.get(AuthService).restablecer(token, v.contrasena, { ip: null, agente: 'cli' });
+          console.log(`Ingrese con ${v.email} y la contraseña indicada.`);
+        } else console.log(r.enlaceInvitacion ? `Enlace para crear la contraseña: ${r.enlaceInvitacion}` : 'La cuenta ya existía: ingresa con su contraseña actual.');
+      } finally {
+        await app.close();
+      }
+      return;
+    }
+    case 'usuario:crear': {
+      // Para pruebas de carga y de pantallas: varios cajeros sin pasar por el correo de invitación.
+      if (config().NODE_ENV === 'production') throw new Error('usuario:crear no está permitido en producción');
+      const { values: v } = parseArgs({ args: resto, options: { empresa: { type: 'string' }, email: { type: 'string' }, nombre: { type: 'string' }, perfil: { type: 'string' }, contrasena: { type: 'string' } } });
+      if (!v.empresa || !v.email || !v.nombre || !v.perfil || !v.contrasena) throw new Error('Faltan opciones obligatorias.\n\n' + AYUDA);
+      const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
+      try {
+        const db = app.get(Db);
+        const { propietario, perfilId, sucursalIds } = await db.enEmpresa(v.empresa, async (tx) => ({
+          propietario: await tx.selectFrom('usuario as u').innerJoin('perfil as p', 'p.id', 'u.perfil_id').select(['u.id', 'u.cuenta_id']).where('p.es_propietario', '=', true).executeTakeFirstOrThrow(),
+          perfilId: (await tx.selectFrom('perfil').select('id').where('clave', '=', v.perfil!).executeTakeFirstOrThrow()).id,
+          sucursalIds: (await tx.selectFrom('sucursal').select('id').execute()).map((s) => s.id),
+        }));
+        const ctx = { empresaId: v.empresa, usuarioId: propietario.id, cuentaId: propietario.cuenta_id, sesionId: 'cli', esPropietario: true, permisos: new Map(), sucursalIds, ip: null, agente: 'cli' };
+        const u = await app.get(UsuariosController).crear(ctx, { email: v.email, nombre: v.nombre, perfilId, sucursalIds }, { ip: null, agente: 'cli' });
+        await db.k.updateTable('cuenta').set({ hash_contrasena: await hashear(v.contrasena) }).where('email', '=', v.email.trim().toLowerCase()).execute();
+        console.log(`Usuario creado: ${u!.id} (${v.perfil})`);
       } finally {
         await app.close();
       }
