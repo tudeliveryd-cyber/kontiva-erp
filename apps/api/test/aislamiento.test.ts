@@ -32,6 +32,7 @@ import { InformesController } from '../src/informes/informes.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
 import { ValesController } from '../src/operacion/vales.controller';
+import { ExportacionController } from '../src/empresa/exportacion.controller';
 import { RepartosController, RutasController } from '../src/distribucion/distribucion.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
 import { prepararVenta } from './ayudas';
@@ -67,6 +68,7 @@ const CONTROLADORES = [
   TransferenciasController,
   DevolucionesController,
   ValesController,
+  ExportacionController,
   RutasController,
   RepartosController,
   FacturacionController,

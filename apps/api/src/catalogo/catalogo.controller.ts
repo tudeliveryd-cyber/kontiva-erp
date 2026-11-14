@@ -12,9 +12,17 @@ import { conciliarLotes } from '../comun/lotes';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
 
-/** Producto con sus variantes, códigos y precio general. El costo solo con costo_producto.ver. */
+/** Un producto con sus variantes, precios, códigos y presentaciones. */
 export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
-  const p = await tx
+  const [p] = await leerProductos(tx, ctx, [id]);
+  if (!p) throw noEncontrado('Producto');
+  return p;
+}
+
+/** Varios productos en un número fijo de consultas (el listado no hace una consulta por producto). */
+export async function leerProductos(tx: Tx, ctx: Ctx, ids: string[]) {
+  if (!ids.length) return [];
+  const productos = await tx
     .selectFrom('producto as p')
     .leftJoin('categoria as c', 'c.id', 'p.categoria_id')
     .leftJoin('marca as m', 'm.id', 'p.marca_id')
@@ -22,60 +30,67 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
       'p.id', 'p.nombre', 'p.descripcion', 'p.categoria_id', 'p.marca_id', 'p.tipo', 'p.unidad', 'p.tasa_iva',
       'p.controla_stock', 'p.controla_lote', 'p.principio_activo', 'p.concentracion', 'p.forma', 'p.registro_sanitario', 'p.condicion_venta', 'p.estacion', 'p.activo', 'p.creado_en', 'c.nombre as categoria', 'm.nombre as marca',
     ])
-    .where('p.id', '=', id)
-    .executeTakeFirst();
-  if (!p) throw noEncontrado('Producto');
+    .where('p.id', 'in', ids)
+    .execute();
   const lista = await listaPredeterminada(tx);
   const variantes = await tx
     .selectFrom('variante as v')
     .leftJoin('precio as pr', (j) => j.onRef('pr.variante_id', '=', 'v.id').on('pr.lista_id', '=', lista).on('pr.sucursal_id', 'is', null))
-    .select(['v.id', 'v.nombre', 'v.sku', 'v.talle', 'v.color', 'v.costo', 'v.stock_minimo', 'v.activa', 'pr.precio'])
-    .where('v.producto_id', '=', id)
+    .select(['v.id', 'v.producto_id', 'v.nombre', 'v.sku', 'v.talle', 'v.color', 'v.costo', 'v.stock_minimo', 'v.activa', 'pr.precio'])
+    .where('v.producto_id', 'in', ids)
     .orderBy('v.creado_en')
     .orderBy('v.id')
     .execute();
-  const codigos = variantes.length
-    ? await tx.selectFrom('codigo_barras').select(['codigo', 'variante_id', 'presentacion_id']).where('variante_id', 'in', variantes.map((v) => v.id)).execute()
-    : [];
-  const presentaciones = variantes.length
-    ? await tx.selectFrom('presentacion').select(['id', 'variante_id', 'nombre', 'factor', 'precio']).where('variante_id', 'in', variantes.map((v) => v.id)).where('activa', '=', true).orderBy('factor').execute()
+  const vids = variantes.map((v) => v.id);
+  const codigos = vids.length ? await tx.selectFrom('codigo_barras').select(['codigo', 'variante_id', 'presentacion_id']).where('variante_id', 'in', vids).execute() : [];
+  const presentaciones = vids.length
+    ? await tx.selectFrom('presentacion').select(['id', 'variante_id', 'nombre', 'factor', 'precio']).where('variante_id', 'in', vids).where('activa', '=', true).orderBy('factor').execute()
     : [];
   const verCosto = tiene(ctx, 'costo_producto.ver');
-  return {
-    id: p.id,
-    nombre: p.nombre,
-    descripcion: p.descripcion,
-    categoria: p.categoria_id ? { id: p.categoria_id, nombre: p.categoria } : null,
-    marca: p.marca_id ? { id: p.marca_id, nombre: p.marca } : null,
-    tipo: p.tipo,
-    unidad: p.unidad,
-    tasaIva: Number(p.tasa_iva),
-    controlaStock: p.controla_stock,
-    controlaLote: p.controla_lote,
-    principioActivo: p.principio_activo,
-    concentracion: p.concentracion,
-    forma: p.forma,
-    registroSanitario: p.registro_sanitario,
-    condicionVenta: p.condicion_venta,
-    estacion: p.estacion,
-    activo: p.activo,
-    creadoEn: p.creado_en,
-    variantes: variantes.map((v) => ({
-      id: v.id,
-      nombre: v.nombre,
-      sku: v.sku,
-      talle: v.talle,
-      color: v.color,
-      activa: v.activa,
-      precio: v.precio ?? '0.00',
-      stockMinimo: v.stock_minimo,
-      ...(verCosto ? { costo: v.costo } : {}),
-      codigos: codigos.filter((c) => c.variante_id === v.id && !c.presentacion_id).map((c) => c.codigo),
-      presentaciones: presentaciones
-        .filter((x) => x.variante_id === v.id)
-        .map((x) => ({ id: x.id, nombre: x.nombre, factor: x.factor, precio: x.precio, codigos: codigos.filter((c) => c.presentacion_id === x.id).map((c) => c.codigo) })),
-    })),
-  };
+  const porId = new Map(productos.map((p) => [p.id, p]));
+  return ids.flatMap((id) => {
+    const p = porId.get(id);
+    if (!p) return [];
+    return [
+      {
+        id: p.id,
+        nombre: p.nombre,
+        descripcion: p.descripcion,
+        categoria: p.categoria_id ? { id: p.categoria_id, nombre: p.categoria } : null,
+        marca: p.marca_id ? { id: p.marca_id, nombre: p.marca } : null,
+        tipo: p.tipo,
+        unidad: p.unidad,
+        tasaIva: Number(p.tasa_iva),
+        controlaStock: p.controla_stock,
+        controlaLote: p.controla_lote,
+        principioActivo: p.principio_activo,
+        concentracion: p.concentracion,
+        forma: p.forma,
+        registroSanitario: p.registro_sanitario,
+        condicionVenta: p.condicion_venta,
+        estacion: p.estacion,
+        activo: p.activo,
+        creadoEn: p.creado_en,
+        variantes: variantes
+          .filter((v) => v.producto_id === id)
+          .map((v) => ({
+            id: v.id,
+            nombre: v.nombre,
+            sku: v.sku,
+            talle: v.talle,
+            color: v.color,
+            activa: v.activa,
+            precio: v.precio ?? '0.00',
+            stockMinimo: v.stock_minimo,
+            ...(verCosto ? { costo: v.costo } : {}),
+            codigos: codigos.filter((c) => c.variante_id === v.id && !c.presentacion_id).map((c) => c.codigo),
+            presentaciones: presentaciones
+              .filter((x) => x.variante_id === v.id)
+              .map((x) => ({ id: x.id, nombre: x.nombre, factor: x.factor, precio: x.precio, codigos: codigos.filter((c) => c.presentacion_id === x.id).map((c) => c.codigo) })),
+          })),
+      },
+    ];
+  });
 }
 
 @Controller('productos')
@@ -114,7 +129,7 @@ export class ProductosController {
       }
       const total = await q.clearSelect().select((eb) => eb.fn.countAll<string>().as('n')).executeTakeFirstOrThrow();
       const ids = await q.orderBy('p.nombre').limit(f.limite).offset((f.pagina - 1) * f.limite).execute();
-      return { total: Number(total.n), items: await Promise.all(ids.map((r) => leerProducto(tx, ctx, r.id))) };
+      return { total: Number(total.n), items: await leerProductos(tx, ctx, ids.map((r) => r.id)) };
     });
   }
 

@@ -16,7 +16,8 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
-| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia, restaurante, panadería y producción, tienda de ropa, distribuidora y ferretería |
+| 5 | Verticales por rubro e integraciones | Lista · lotes y vencimientos, farmacia, restaurante, panadería y producción, tienda de ropa, distribuidora y ferretería |
+| Cierre | Exportación de datos, documentación de la API, pruebas de pantallas y de carga | Lista |
 
 ### Fase 0 · hecho
 - **Autenticación**: Argon2id, bloqueo progresivo tras 5 intentos, token de acceso de 15 min + renovación rotativa
@@ -303,6 +304,27 @@ Fase 2 completa.
   compran por presentación; el stock y el costo siguen en la unidad. Sin precio propio: factor × precio unitario.
 - Permiso `entrega` (rutas, repartos y rendición). Menú Repartos en los rubros distribuidora y general.
 
+### Cierre · hecho
+- **Exportación de datos** (Empresa → "Descargar todos los datos", solo el propietario): ZIP con un CSV por tabla
+  (UTF-8 con BOM para Excel), `manifiesto.json` y `LEEME.txt`. Lee con el aislamiento por empresa activo; no
+  incluye contraseñas, PIN, segundos factores, certificados ni claves (ni cifrados). Queda en la auditoría.
+- **Documentación de la API**: [docs/api](docs/api/README.md) (guía por módulo con el permiso de cada ruta) y
+  [openapi.json](docs/api/openapi.json) (OpenAPI 3.1, válido; se importa en Postman o Insomnia). Se genera del
+  código con `pnpm docs:api` y la CI falla si no está al día.
+- **Pruebas de pantallas** (`apps/e2e`, Chrome sin ventana): ingreso, todas las pantallas del menú (sin errores
+  de la página ni del servidor, con el pie y sin emojis), una venta completa en la caja con vuelto, y cierre de sesión.
+- **Prueba de carga** (`apps/e2e`): cada cajero vende sin pausa en su caja (mismos productos, compiten por el
+  stock) mientras 20 usuarios consultan; al final verifica que el efectivo y el stock cierran exactos con las
+  ventas confirmadas. Umbrales: 0 errores, p95 de consultas < 800 ms, p95 de ventas < 1500 ms.
+  Resultado en un solo equipo (API, PostgreSQL y generador de carga juntos), 60 s, 3 cajas + 20 usuarios:
+  ~120 pedidos/s, 0 errores, p95 consultas 572 ms, p95 ventas 669 ms, integridad exacta.
+- La carga encontró y se corrigió: el listado de productos hacía una consulta por producto (de 1.140 ms a
+  143 ms de mediana; también el de transferencias); el límite por IP (300/min) era bajo para varias cajas detrás
+  de una misma conexión (`LIMITE_POR_MINUTO`, 1.200 por omisión) y el pool de conexiones era fijo
+  (`DB_CONEXIONES`, 20 por omisión).
+- CI: además de tipos, pruebas de la API, build e imagen, un trabajo levanta API y web con datos de prueba
+  (`cli usuario:crear`, solo fuera de producción) y corre pantallas y carga.
+
 ## Estructura
 
 ```
@@ -341,6 +363,16 @@ pnpm --filter @kontiva/api cli empresa:crear --razon "Mi Empresa S.A." --plan BU
 ```
 
 Pruebas: `pnpm test` (recrea la base `kontiva_test` en cada ejecución).
+
+Pantallas y carga, con la API y la web en marcha:
+
+```bash
+pnpm --filter @kontiva/api cli empresa:crear --razon "Pruebas" --plan ENTERPRISE --email dueno@prueba.test --nombre "Dueño" --contrasena "Dueno-2026!"
+pnpm --filter @kontiva/api cli usuario:crear --empresa <id> --email cajero1@prueba.test --nombre "Cajero 1" --perfil cajero --contrasena "Cajero-2026!"
+E2E_EMAIL=dueno@prueba.test E2E_CONTRASENA=Dueno-2026! CHROME_PATH=/usr/bin/google-chrome pnpm e2e:pantallas
+LIMITE_POR_MINUTO=100000 pnpm dev:api   # la carga sale de una sola IP
+E2E_EMAIL=... E2E_CONTRASENA=... E2E_CAJEROS=cajero1@prueba.test E2E_CONTRASENA_CAJEROS=Cajero-2026! pnpm e2e:carga
+```
 
 ## Decisiones técnicas respecto del documento de arquitectura
 

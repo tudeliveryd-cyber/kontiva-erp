@@ -1,0 +1,15 @@
+{
+  "name": "@kontiva/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pruebas de pantallas (navegador real) y de carga contra una instalación en marcha.",
+  "scripts": {
+    "pantallas": "node --test --test-concurrency=1 src/pantallas.test.mjs",
+    "carga": "node src/carga.mjs",
+    "preparar": "node src/preparar.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}

@@ -23,43 +23,68 @@ async function depositoDe(tx: Tx, id: string) {
 }
 
 async function leerTransferencia(tx: Tx, id: string) {
-  const t = await tx.selectFrom('transferencia').selectAll().where('id', '=', id).executeTakeFirst();
-  if (!t) return null;
-  const [origen, destino] = await Promise.all([depositoDe(tx, t.origen_id), depositoDe(tx, t.destino_id)]);
+  return (await leerTransferencias(tx, [id]))[0] ?? null;
+}
+
+/** Varias transferencias en un número fijo de consultas (el listado no consulta una por una). */
+async function leerTransferencias(tx: Tx, ids: string[]) {
+  if (!ids.length) return [];
+  const ts = await tx.selectFrom('transferencia').selectAll().where('id', 'in', ids).execute();
+  if (!ts.length) return [];
+  const depositos = await tx
+    .selectFrom('deposito as d')
+    .innerJoin('sucursal as s', 's.id', 'd.sucursal_id')
+    .select(['d.id', 'd.nombre', 'd.sucursal_id', 's.nombre as sucursal'])
+    .where('d.id', 'in', [...new Set(ts.flatMap((t) => [t.origen_id, t.destino_id]))])
+    .execute();
   const items = await tx
     .selectFrom('transferencia_item as i')
     .innerJoin('variante as v', 'v.id', 'i.variante_id')
     .innerJoin('producto as p', 'p.id', 'v.producto_id')
-    .select(['i.linea', 'i.variante_id', 'i.cantidad', 'i.cantidad_recibida', 'p.nombre', 'v.nombre as variante', 'p.unidad'])
-    .where('i.transferencia_id', '=', id)
+    .select(['i.transferencia_id', 'i.linea', 'i.variante_id', 'i.cantidad', 'i.cantidad_recibida', 'p.nombre', 'v.nombre as variante', 'p.unidad'])
+    .where('i.transferencia_id', 'in', ts.map((t) => t.id))
     .orderBy('i.linea')
     .execute();
-  const usuarios = await tx.selectFrom('usuario').select(['id', 'nombre']).where('id', 'in', [t.creado_por, t.recibida_por ?? t.creado_por, t.cancelada_por ?? t.creado_por]).execute();
+  const usuarioIds = [...new Set(ts.flatMap((t) => [t.creado_por, t.recibida_por, t.cancelada_por]).filter((x): x is string => !!x))];
+  const usuarios = usuarioIds.length ? await tx.selectFrom('usuario').select(['id', 'nombre']).where('id', 'in', usuarioIds).execute() : [];
   const nombre = (id: string | null) => (id ? (usuarios.find((u) => u.id === id)?.nombre ?? null) : null);
-  return {
-    id: t.id,
-    numero: Number(t.numero),
-    estado: t.estado,
-    nota: t.nota,
-    origen: { id: origen.id, nombre: origen.nombre, sucursal: origen.sucursal, sucursalId: origen.sucursal_id },
-    destino: { id: destino.id, nombre: destino.nombre, sucursal: destino.sucursal, sucursalId: destino.sucursal_id },
-    creadoEn: t.creado_en,
-    creadoPor: nombre(t.creado_por),
-    recibidaEn: t.recibida_en,
-    recibidaPor: nombre(t.recibida_por),
-    canceladaEn: t.cancelada_en,
-    canceladaPor: nombre(t.cancelada_por),
-    motivoCancelacion: t.motivo_cancelacion,
-    items: items.map((i) => ({
-      linea: i.linea,
-      varianteId: i.variante_id,
-      descripcion: i.variante ? `${i.nombre} · ${i.variante}` : i.nombre,
-      unidad: i.unidad,
-      cantidad: i.cantidad,
-      cantidadRecibida: i.cantidad_recibida,
-      faltante: i.cantidad_recibida === null ? null : new Decimal(i.cantidad).minus(i.cantidad_recibida).toFixed(4),
-    })),
+  const deposito = (id: string) => {
+    const d = depositos.find((x) => x.id === id)!;
+    return { id: d.id, nombre: d.nombre, sucursal: d.sucursal, sucursalId: d.sucursal_id };
   };
+  const porId = new Map(ts.map((t) => [t.id, t]));
+  return ids.flatMap((id) => {
+    const t = porId.get(id);
+    if (!t) return [];
+    return [
+      {
+        id: t.id,
+        numero: Number(t.numero),
+        estado: t.estado,
+        nota: t.nota,
+        origen: deposito(t.origen_id),
+        destino: deposito(t.destino_id),
+        creadoEn: t.creado_en,
+        creadoPor: nombre(t.creado_por),
+        recibidaEn: t.recibida_en,
+        recibidaPor: nombre(t.recibida_por),
+        canceladaEn: t.cancelada_en,
+        canceladaPor: nombre(t.cancelada_por),
+        motivoCancelacion: t.motivo_cancelacion,
+        items: items
+          .filter((i) => i.transferencia_id === id)
+          .map((i) => ({
+            linea: i.linea,
+            varianteId: i.variante_id,
+            descripcion: i.variante ? `${i.nombre} · ${i.variante}` : i.nombre,
+            unidad: i.unidad,
+            cantidad: i.cantidad,
+            cantidadRecibida: i.cantidad_recibida,
+            faltante: i.cantidad_recibida === null ? null : new Decimal(i.cantidad).minus(i.cantidad_recibida).toFixed(4),
+          })),
+      },
+    ];
+  });
 }
 type TransferenciaDto = NonNullable<Awaited<ReturnType<typeof leerTransferencia>>>;
 
@@ -78,7 +103,7 @@ export class TransferenciasController {
       let q = tx.selectFrom('transferencia').select('id').orderBy('numero', 'desc').limit(200);
       if (f.estado) q = q.where('estado', '=', f.estado);
       const ids = await q.execute();
-      const todas = await Promise.all(ids.map((r) => leerTransferencia(tx, r.id)));
+      const todas = await leerTransferencias(tx, ids.map((r) => r.id));
       return todas.filter((t): t is TransferenciaDto => t !== null && visible(ctx, t));
     });
   }

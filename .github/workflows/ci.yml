@@ -36,6 +36,8 @@ jobs:
         run: pnpm -r test
       - name: Build
         run: pnpm build
+      - name: Documentación de la API al día
+        run: node scripts/documentar-api.mjs && git diff --exit-code docs/api
       - name: Dependencias con vulnerabilidades altas
         run: pnpm audit --prod --audit-level high
 
@@ -62,6 +64,67 @@ jobs:
           curl -fsS localhost:3001/api/master/salud
           curl -fsS localhost:3000/ | grep -q "KONTIVA ERP"
           curl -fsS localhost:3001/ | grep -q "KONTIVA Master"
+
+  # Instalación real (API + web) con datos de prueba: pantallas en Chrome y prueba de carga con verificación de integridad.
+  pantallas-y-carga:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Roles y base
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f scripts/db-roles.sql
+      - run: cp .env.example .env
+      - run: pnpm build
+      - run: pnpm db:migrate
+      - name: Empresa y cajeros de prueba
+        working-directory: apps/api
+        run: |
+          node dist/cli.js empresa:crear --razon "Pruebas CI S.A." --plan ENTERPRISE --email dueno@ci.test --nombre "Dueño CI" --contrasena "Dueno-CI-2026!" | tee /tmp/empresa.txt
+          EMPRESA=$(grep -oE '[0-9a-f]{8}-[0-9a-f-]{27}' /tmp/empresa.txt | head -1)
+          for i in 1 2 3 4; do
+            node dist/cli.js usuario:crear --empresa "$EMPRESA" --email "cajero$i@ci.test" --nombre "Cajero $i" --perfil cajero --contrasena "Cajero-CI-2026!"
+          done
+      - name: API y web en marcha
+        run: |
+          (cd apps/api && LIMITE_POR_MINUTO=100000 nohup node dist/main.js > /tmp/api.log 2>&1 &)
+          (cd apps/web && nohup pnpm exec vite preview --port 5173 > /tmp/web.log 2>&1 &)
+          for i in $(seq 1 30); do curl -fsS localhost:3000/api/salud > /dev/null && break; sleep 1; done
+          for i in $(seq 1 30); do curl -fsS localhost:5173/ > /dev/null && break; sleep 1; done
+      - name: Pantallas (Chrome)
+        env:
+          E2E_WEB: http://localhost:5173
+          E2E_EMAIL: dueno@ci.test
+          E2E_CONTRASENA: Dueno-CI-2026!
+          CHROME_PATH: /usr/bin/google-chrome
+        run: pnpm --filter @kontiva/e2e pantallas
+      - name: Carga (60 s, 4 cajas vendiendo y 20 usuarios consultando)
+        env:
+          E2E_API: http://localhost:3000/api
+          E2E_EMAIL: dueno@ci.test
+          E2E_CONTRASENA: Dueno-CI-2026!
+          E2E_CAJEROS: cajero1@ci.test,cajero2@ci.test,cajero3@ci.test,cajero4@ci.test
+          E2E_CONTRASENA_CAJEROS: Cajero-CI-2026!
+          CARGA_SEGUNDOS: "60"
+          CARGA_USUARIOS: "20"
+        run: pnpm --filter @kontiva/e2e carga
+      - name: Registro de la API (si falla)
+        if: failure()
+        run: tail -n 200 /tmp/api.log
 
   # Agente local del PDV como ejecutable de Windows (kontiva-agente.exe), descargable desde la ejecución.
   agente-windows:

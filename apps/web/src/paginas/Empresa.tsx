@@ -15,13 +15,14 @@ import {
   Encabezado,
   ErrorApi,
 } from "../componentes/ui";
-import { api, type EmpresaDatos } from "../lib/api";
+import { api, archivo, type EmpresaDatos } from "../lib/api";
+import { Download } from "lucide-react";
 import { useSesion } from "../lib/sesion";
 
 type Datos = z.input<typeof empresaEditar>;
 
 export function Empresa() {
-  const { puede } = useSesion();
+  const { puede, yo } = useSesion();
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["empresa"],
@@ -232,8 +233,54 @@ export function Empresa() {
             </tbody>
           </table>
         </section>
+        {yo?.usuario.esPropietario && <ExportarDatos />}
       </div>
     </>
+  );
+}
+
+/** Portabilidad: la empresa es dueña de sus datos y los puede llevar a donde quiera. */
+function ExportarDatos() {
+  const [estado, setEstado] = useState<"" | "generando" | "listo">("");
+  const [error, setError] = useState<unknown>(null);
+  const exportar = async () => {
+    setEstado("generando");
+    setError(null);
+    try {
+      const zip = await archivo("/empresa/exportar");
+      const url = URL.createObjectURL(zip);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `kontiva-datos-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setEstado("listo");
+    } catch (e) {
+      setError(e);
+      setEstado("");
+    }
+  };
+  return (
+    <section className="panel" style={{ marginTop: 16 }}>
+      <div className="panel-cab">
+        <h2>Exportar los datos de la empresa</h2>
+        <span className="sub">Solo el propietario</span>
+      </div>
+      <div style={{ padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <p className="tenue" style={{ margin: 0 }}>
+          Un archivo ZIP con todas las tablas en CSV (ventas, compras, stock, clientes, contabilidad, documentos
+          electrónicos, personal y auditoría), para abrir en Excel o llevar a otro sistema. No incluye contraseñas,
+          PIN, segundos factores ni certificados. Queda registrado en la auditoría.
+        </p>
+        <ErrorApi error={error} />
+        {estado === "listo" && <Aviso tipo="ok">Exportación descargada.</Aviso>}
+        <div>
+          <button className="btn" disabled={estado === "generando"} onClick={exportar}>
+            <Download size={16} /> {estado === "generando" ? "Generando…" : "Descargar todos los datos"}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

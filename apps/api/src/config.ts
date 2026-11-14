@@ -3,6 +3,10 @@ import { z } from 'zod';
 const esquema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(3000),
+  /** Peticiones por minuto por IP (varias cajas detrás de una misma conexión comparten la IP). */
+  /** Conexiones a PostgreSQL por proceso de la API. */
+  DB_CONEXIONES: z.coerce.number().int().min(2).max(200).default(20),
+  LIMITE_POR_MINUTO: z.coerce.number().int().min(60).max(100000).default(1200),
   DATABASE_URL: z.string().url(),
   DATABASE_OWNER_URL: z.string().url().optional(),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),

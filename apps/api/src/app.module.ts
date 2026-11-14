@@ -36,6 +36,7 @@ import { FiltroErrores } from './comun/errores';
 import { config } from './config';
 import { DbModule } from './db/db.module';
 import { EmpresaController } from './empresa/empresa.controller';
+import { ExportacionController } from './empresa/exportacion.controller';
 import { PerfilesController } from './perfiles/perfiles.controller';
 import { ProvisionService } from './provision/provision.service';
 import { SaludController } from './salud.controller';
@@ -47,7 +48,7 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     DbModule,
     ThrottlerModule.forRoot({
       // Límite general por IP; los endpoints de acceso tienen límites propios más bajos.
-      throttlers: [{ name: 'default', ttl: 60000, limit: 300 }],
+      throttlers: [{ name: 'default', ttl: 60000, limit: () => config().LIMITE_POR_MINUTO }],
       skipIf: () => config().NODE_ENV === 'test',
     }),
   ],
@@ -56,6 +57,7 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     AuthController,
     CuentaController,
     EmpresaController,
+    ExportacionController,
     SucursalesController,
     PerfilesController,
     UsuariosController,
