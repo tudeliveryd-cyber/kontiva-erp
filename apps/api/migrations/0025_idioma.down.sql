@@ -1,0 +1,1 @@
+ALTER TABLE cuenta DROP COLUMN idioma;

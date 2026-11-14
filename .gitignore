@@ -10,3 +10,4 @@ deploy/.env
 deploy/backups/
 .devcontainer/ACCESO.txt
 ejecutable/
+scripts/textos.json

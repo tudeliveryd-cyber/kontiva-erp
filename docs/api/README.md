@@ -2,7 +2,7 @@
 
 > Generado por `node scripts/documentar-api.mjs` a partir del código. No editar a mano.
 
-277 rutas · OpenAPI 3.1 en [openapi.json](./openapi.json) (se importa en Postman o Insomnia).
+278 rutas · OpenAPI 3.1 en [openapi.json](./openapi.json) (se importa en Postman o Insomnia).
 
 ## Cómo se usa
 
@@ -18,7 +18,7 @@ Acceso: **permiso** = el perfil del usuario debe tenerlo (el propietario tiene t
 
 ## Módulos
 
-- [Acceso y sesión](#acceso-y-sesion) (23)
+- [Acceso y sesión](#acceso-y-sesion) (24)
 - [Auditoría](#auditoria) (1)
 - [Caja y ventas](#caja-y-ventas) (48)
 - [Catálogo y stock](#catalogo-y-stock) (29)
@@ -59,6 +59,7 @@ Acceso: **permiso** = el perfil del usuario debe tenerlo (el propietario tiene t
 | POST | `/api/auth/contrasena` | sesion | cuerpo: `cambiarContrasenaEntrada` |  |
 | PUT | `/api/auth/pin` | sesion | cuerpo: `pinEntrada…` |  |
 | GET | `/api/me` | sesion | — | Quién soy: usuario, empresa, permisos efectivos y empresas a las que puedo cambiar. |
+| PUT | `/api/idioma` | sesion | cuerpo: en el controlador | Idioma de la interfaz de la cuenta (vale en todas sus empresas). |
 | GET | `/api/permisos` | sesion | — | Catálogo de permisos (para la pantalla de perfiles). |
 | GET | `/api/autorizadores` | sesion | — | Quiénes pueden autorizar una acción con su PIN (solo nombres), para el diálogo del PDV. |
 | POST | `/api/autorizaciones` | sesion | cuerpo: `autorizarEntrada` |  |

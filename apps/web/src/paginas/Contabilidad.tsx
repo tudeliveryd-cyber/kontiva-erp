@@ -113,7 +113,14 @@ export function Contabilidad() {
               <div className="cifra">
                 <span>Documentos sin contabilizar</span>
                 <b className="num">{e.pendientes.total}</b>
-                {e.pendientes.total > 0 && <small className="tenue">{e.pendientes.porTipo.filter((p) => p.cantidad).map((p) => `${p.nombre}: ${p.cantidad}`).join(' · ')}</small>}
+                {e.pendientes.total > 0 && <small className="tenue">{e.pendientes.porTipo
+                      .filter((p) => p.cantidad)
+                      .map((p, i) => (
+                        <span key={p.tipo}>
+                          {i > 0 && ' · '}
+                          <span>{p.nombre}</span>: {p.cantidad}
+                        </span>
+                      ))}</small>}
               </div>
               <div className="cifra">
                 <span>Período cerrado hasta</span>

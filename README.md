@@ -46,7 +46,6 @@ Producto comercial de **Araújo Tech Sistemas**.
   que verifica 401 / 403 / 404 (otra empresa) en cada endpoint. El CI además construye la imagen y la arranca.
 
 ### Fase 0 · pendiente menor
-- Interfaz en portugués (hoy solo español).
 - Monitoreo y alertas externas (depende del proveedor de hosting elegido).
 
 ### Fase 1 · hecho (circuito central)
@@ -321,6 +320,17 @@ Fase 2 completa.
   (`DB_CONEXIONES`, 20 por omisión).
 - CI: además de tipos, pruebas de la API, build e imagen, un trabajo levanta API y web con datos de prueba
   (`cli usuario:crear`, solo fuera de producción) y corre pantallas y carga.
+
+### Interfaz en portugués · hecho
+- Cada usuario elige Español o Português en "Mi cuenta"; se guarda en la cuenta (`PUT /idioma`, auditado) y lo
+  sigue en cualquier equipo y empresa. Las facturas, el KuDE, los tickets y vales se emiten siempre en español
+  (valor fiscal en Paraguay); lo que la persona escribe (nombres, productos, notas) no se traduce.
+- La pantalla se escribe en español y se traduce al dibujarse (`apps/web/src/i18n`): diccionario revisado
+  `pt.ts` (unos 2.800 textos, incluidos los mensajes de error de la API) y frases con datos por patrón
+  ("Venta N.º {0}" → "Venda N.º {0}"). No se traduce lo marcado `translate="no"`, `.ticket` ni `.doc-a4`.
+- Textos nuevos: `node scripts/extraer-textos.mjs --faltantes` lista los que faltan en `pt.ts`; la CI falla si
+  falta alguno. Terminología: caja → caixa, sucursal → filial, stock → estoque, cobro → recebimento,
+  retiro/ingreso → sangria/suprimento, reparto → entrega, rendición → prestação de contas.
 
 ## Estructura
 

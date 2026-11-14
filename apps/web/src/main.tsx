@@ -9,6 +9,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Disposicion } from './componentes/Disposicion';
+import { aplicarIdioma, idiomaActual } from './i18n/traductor';
 import { FalloApi } from './lib/api';
 import { ProveedorSesion, useSesion } from './lib/sesion';
 import { Acceso, Restablecer } from './paginas/Acceso';
@@ -108,6 +109,8 @@ function Rutas() {
     </Routes>
   );
 }
+
+aplicarIdioma(idiomaActual());
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

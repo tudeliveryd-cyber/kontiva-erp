@@ -144,7 +144,7 @@ export const alPerderSesion = empresas.alPerderSesion;
 export type Alcance = 'propia' | 'sucursal' | 'empresa';
 
 export interface Yo {
-  usuario: { id: string; nombre: string; email: string; perfil: { id: string; nombre: string }; esPropietario: boolean; tienePin: boolean };
+  usuario: { id: string; nombre: string; email: string; perfil: { id: string; nombre: string }; esPropietario: boolean; tienePin: boolean; idioma: 'es' | 'pt' };
   empresa: { id: string; nombre: string; razonSocial: string; ruc: string | null; rubro: string; plan: string };
   sucursales: { id: string; codigo: string; nombre: string }[];
   permisos: Record<string, Alcance>;

@@ -5450,6 +5450,52 @@
         }
       }
     },
+    "/api/idioma": {
+      "put": {
+        "tags": [
+          "Acceso y sesión"
+        ],
+        "operationId": "auth_idioma_put",
+        "summary": "Idioma de la interfaz de la cuenta (vale en todas sus empresas).",
+        "description": "Idioma de la interfaz de la cuenta (vale en todas sus empresas).",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Validación en el controlador:\nz.object({ idioma: z.enum(['es', 'pt']) })"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/permisos": {
       "get": {
         "tags": [

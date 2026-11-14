@@ -151,6 +151,31 @@ test('venta en la caja: código de barras, cobro en efectivo con vuelto y ticket
   assert.equal(await efectivoDe(), antes + 37000, 'El efectivo de la caja sube lo vendido (el vuelto sale)');
 });
 
+test('interfaz en portugués: la elige cada usuario y los documentos siguen en español', async () => {
+  await pagina.goto(`${WEB}/cuenta`, { waitUntil: 'networkidle0' });
+  await Promise.all([pagina.waitForNavigation({ waitUntil: 'networkidle0' }), pagina.select('#idioma', 'pt')]);
+  await pagina.waitForFunction(() => document.querySelector('.superior h1')?.textContent === 'Minha conta', { timeout: 10000 });
+  assert.equal(await pagina.evaluate(() => document.documentElement.lang), 'pt-BR');
+  const menu = await pagina.$$eval('.lateral nav a', (as) => as.map((a) => a.textContent.trim()));
+  assert.ok(menu.includes('Vendas') && menu.includes('Estoque'), `Menú: ${menu.join(', ')}`);
+  assert.ok((await pagina.$eval('body', (b) => b.innerText)).includes(PIE), 'El pie no se traduce');
+  // La traducción no toca lo marcado como documento.
+  const ticket = await pagina.evaluate(() => {
+    const d = document.createElement('div');
+    d.className = 'ticket';
+    d.textContent = 'Venta';
+    document.body.append(d);
+    return new Promise((r) => setTimeout(() => r(d.textContent), 100));
+  });
+  assert.equal(ticket, 'Venta');
+  assert.equal((await api('/me')).usuario.idioma, 'pt', 'Queda guardado en la cuenta');
+  // De vuelta al español: al recargar, la sesión trae el idioma de la cuenta.
+  await api('/idioma', 'PUT', { idioma: 'es' });
+  await pagina.reload({ waitUntil: 'networkidle0' });
+  await pagina.waitForFunction(() => document.querySelector('.superior h1')?.textContent === 'Mi cuenta', { timeout: 15000 });
+  sinErrores('Interfaz en portugués');
+});
+
 test('cerrar sesión vuelve a la pantalla de ingreso', async () => {
   await pagina.goto(`${WEB}/`, { waitUntil: 'networkidle0' });
   await pagina.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Cerrar sesión')).click());

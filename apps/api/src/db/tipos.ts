@@ -80,6 +80,7 @@ export interface CuentaTabla {
   totp_activo: Generated<boolean>;
   totp_pendiente: string | null;
   totp_ultimo_paso: Paso;
+  idioma: Generated<'es' | 'pt'>;
   creado_en: Creado;
   actualizado_en: Actualizado;
 }

@@ -161,7 +161,7 @@ export function Alertas({ d }: { d: DatosTablero }) {
   if (d.pagar && Number(d.pagar.vencido)) a.push({ icono: Wallet, texto: `${dinero(d.pagar.vencido)} vencido por pagar`, a: '/cuentas-pagar', tono: 'bad' });
   if (d.pagar && Number(d.pagar.proximos7)) a.push({ icono: Wallet, texto: `${dinero(d.pagar.proximos7)} a pagar en los próximos 7 días`, a: '/cuentas-pagar', tono: 'warn' });
   if (d.ventas?.anuladas.cantidad) a.push({ icono: AlertTriangle, texto: `${d.ventas.anuladas.cantidad} venta${d.ventas.anuladas.cantidad > 1 ? 's' : ''} anulada${d.ventas.anuladas.cantidad > 1 ? 's' : ''} por ${dinero(d.ventas.anuladas.total)}`, a: '/ventas', tono: 'n' });
-  if (d.ventas?.devoluciones.cantidad) a.push({ icono: Undo2, texto: `${d.ventas.devoluciones.cantidad} ${d.ventas.devoluciones.cantidad > 1 ? 'devoluciones' : 'devolución'} por ${dinero(d.ventas.devoluciones.total)}`, a: '/ventas', tono: 'n' });
+  if (d.ventas?.devoluciones.cantidad) a.push({ icono: Undo2, texto: d.ventas.devoluciones.cantidad > 1 ? `${d.ventas.devoluciones.cantidad} devoluciones por ${dinero(d.ventas.devoluciones.total)}` : `1 devolución por ${dinero(d.ventas.devoluciones.total)}`, a: '/ventas', tono: 'n' });
   if (!a.length) return <p className="tenue peq" style={{ margin: 0, padding: '4px 0' }}>Sin alertas para el período.</p>;
   return (
     <ul className="alertas">
@@ -199,7 +199,7 @@ export function Tablero({ d }: { d: DatosTablero }) {
           </>
         )}
         {d.ganancia && <div className="cifra"><span>Margen bruto</span><b className="num">{dinero(d.ganancia.margen)}</b><small className="tenue">{d.ganancia.porcentaje.replace('.', ',')} % sobre ventas</small></div>}
-        {d.cajas && <div className="cifra"><span>Efectivo en cajas abiertas</span><b className="num">{dinero(d.cajas.efectivo)}</b><small className="tenue">{d.cajas.abiertas} caja{d.cajas.abiertas === 1 ? '' : 's'} abierta{d.cajas.abiertas === 1 ? '' : 's'}</small></div>}
+        {d.cajas && <div className="cifra"><span>Efectivo en cajas abiertas</span><b className="num">{dinero(d.cajas.efectivo)}</b><small className="tenue">{d.cajas.abiertas === 1 ? '1 caja abierta' : `${d.cajas.abiertas} cajas abiertas`}</small></div>}
         {d.bancos && <div className="cifra"><span>Saldo en bancos</span><b className="num">{dinero(d.bancos.saldo)}</b></div>}
       </section>
 
@@ -216,7 +216,7 @@ export function Tablero({ d }: { d: DatosTablero }) {
         <Tarjeta titulo="Alertas"><Alertas d={d} /></Tarjeta>
         {v && v.topProductos.length > 0 && (
           <Tarjeta titulo="Productos más vendidos" accion={<Link className="peq" to="/informes">Ver informe</Link>}>
-            <Ranking filas={v.topProductos.map((p) => ({ nombre: p.nombre, valor: Number(p.total), texto: corto(Number(p.total)), detalle: `${unidades(p.cantidad)}${p.margen ? ` · margen ${dinero(p.margen)}` : ''}` }))} />
+            <Ranking filas={v.topProductos.map((p) => ({ nombre: p.nombre, valor: Number(p.total), texto: corto(Number(p.total)), detalle: p.margen ? `${unidades(p.cantidad)} · margen ${dinero(p.margen)}` : unidades(p.cantidad) }))} />
           </Tarjeta>
         )}
         {v && v.porMedio.length > 0 && (
@@ -244,7 +244,7 @@ export function Tablero({ d }: { d: DatosTablero }) {
         )}
         {d.cajas && d.cajas.lista.length > 0 && (
           <Tarjeta titulo="Cajas abiertas">
-            <Ranking filas={d.cajas.lista.map((c) => ({ nombre: `${c.caja} · ${c.usuario}`, valor: Number(c.efectivo), texto: dinero(c.efectivo), detalle: `${c.sucursal} · desde las ${new Date(c.abiertaEn).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}` }))} />
+            <Ranking filas={d.cajas.lista.map((c) => ({ nombre: `${c.caja} · ${c.usuario}`, valor: Number(c.efectivo), texto: dinero(c.efectivo), detalle: `${c.sucursal} · desde las ${new Date(c.abiertaEn).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}` }))} />
           </Tarjeta>
         )}
       </div>
