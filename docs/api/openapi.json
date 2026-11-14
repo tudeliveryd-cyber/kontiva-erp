@@ -4667,7 +4667,7 @@
         ],
         "operationId": "auditoria_listar_get",
         "summary": "Registro de auditoría, del más reciente al más antiguo, paginado por cursor (id).",
-        "description": "Registro de auditoría, del más reciente al más antiguo, paginado por cursor (id). */",
+        "description": "Registro de auditoría, del más reciente al más antiguo, paginado por cursor (id).",
         "security": [
           {
             "bearer": []
@@ -5422,7 +5422,7 @@
         ],
         "operationId": "auth_yo_get",
         "summary": "Quién soy:",
-        "description": "Quién soy: usuario, empresa, permisos efectivos y empresas a las que puedo cambiar. */",
+        "description": "Quién soy: usuario, empresa, permisos efectivos y empresas a las que puedo cambiar.",
         "security": [
           {
             "bearer": []
@@ -5457,7 +5457,7 @@
         ],
         "operationId": "auth_catalogo_get",
         "summary": "Catálogo de permisos (para la pantalla de perfiles).",
-        "description": "Catálogo de permisos (para la pantalla de perfiles). */",
+        "description": "Catálogo de permisos (para la pantalla de perfiles).",
         "security": [
           {
             "bearer": []
@@ -5492,7 +5492,7 @@
         ],
         "operationId": "auth_autorizadores_get",
         "summary": "Quiénes pueden autorizar una acción con su PIN (solo nombres), para el diálogo del PDV.",
-        "description": "Quiénes pueden autorizar una acción con su PIN (solo nombres), para el diálogo del PDV. */",
+        "description": "Quiénes pueden autorizar una acción con su PIN (solo nombres), para el diálogo del PDV.",
         "security": [
           {
             "bearer": []
@@ -5756,7 +5756,7 @@
         ],
         "operationId": "catalogo_desactivar_delete",
         "summary": "Los productos con historia no se borran:",
-        "description": "Los productos con historia no se borran: se desactivan. */",
+        "description": "Los productos con historia no se borran: se desactivan.",
         "security": [
           {
             "bearer": []
@@ -6188,7 +6188,7 @@
         ],
         "operationId": "catalogo_productos_post",
         "summary": "Productos (con variantes, códigos, precio, costo y stock) desde una planilla.",
-        "description": "Productos (con variantes, códigos, precio, costo y stock) desde una planilla. Empareja por código de barras, luego SKU, luego nombre + variante: reimportar la misma planilla actualiza en lugar de duplicar. Con simular=true no escribe nada. Con simular=false escribe todo en una transacción, o nada si alguna fila tiene errores. /",
+        "description": "Productos (con variantes, códigos, precio, costo y stock) desde una planilla. Empareja por código de barras, luego SKU, luego nombre + variante: reimportar la misma planilla actualiza en lugar de duplicar. Con simular=true no escribe nada. Con simular=false escribe todo en una transacción, o nada si alguna fila tiene errores.",
         "security": [
           {
             "bearer": []
@@ -6235,7 +6235,7 @@
         ],
         "operationId": "catalogo_clientes_post",
         "summary": "Clientes:",
-        "description": "Clientes: empareja por RUC o cédula, luego por nombre exacto. */",
+        "description": "Clientes: empareja por RUC o cédula, luego por nombre exacto.",
         "security": [
           {
             "bearer": []
@@ -6415,7 +6415,7 @@
         ],
         "operationId": "catalogo_precios_get",
         "summary": "Productos con el precio normal y el de esta lista (en general o para una sucursal).",
-        "description": "Productos con el precio normal y el de esta lista (en general o para una sucursal). */",
+        "description": "Productos con el precio normal y el de esta lista (en general o para una sucursal).",
         "security": [
           {
             "bearer": []
@@ -6524,7 +6524,7 @@
         ],
         "operationId": "catalogo_ajuste_post",
         "summary": "Carga la lista a partir del precio normal con un porcentaje y redondeo (p.",
-        "description": "Carga la lista a partir del precio normal con un porcentaje y redondeo (p. ej. mayorista -10 %). */",
+        "description": "Carga la lista a partir del precio normal con un porcentaje y redondeo (p. ej. mayorista -10 %).",
         "security": [
           {
             "bearer": []
@@ -6615,7 +6615,7 @@
         ],
         "operationId": "catalogo_grade_get",
         "summary": "Grade de un producto:",
-        "description": "Grade de un producto: stock de cada talle × color en cada depósito al que el usuario tiene acceso. */",
+        "description": "Grade de un producto: stock de cada talle × color en cada depósito al que el usuario tiene acceso.",
         "security": [
           {
             "bearer": []
@@ -6662,7 +6662,7 @@
         ],
         "operationId": "catalogo_listar_get",
         "summary": "Stock de un depósito:",
-        "description": "Stock de un depósito: todas las variantes que controlan stock, con su saldo (0 si nunca se movió). */",
+        "description": "Stock de un depósito: todas las variantes que controlan stock, con su saldo (0 si nunca se movió).",
         "security": [
           {
             "bearer": []
@@ -6709,7 +6709,7 @@
         ],
         "operationId": "catalogo_ajustar_post",
         "summary": "Fija el saldo contado de cada variante.",
-        "description": "Fija el saldo contado de cada variante. Cada diferencia queda como movimiento con motivo. */",
+        "description": "Fija el saldo contado de cada variante. Cada diferencia queda como movimiento con motivo.",
         "security": [
           {
             "bearer": []
@@ -6755,7 +6755,7 @@
         ],
         "operationId": "catalogo_lotes_get",
         "summary": "Lotes de una variante con su saldo en cada depósito visible.",
-        "description": "Lotes de una variante con su saldo en cada depósito visible. */",
+        "description": "Lotes de una variante con su saldo en cada depósito visible.",
         "security": [
           {
             "bearer": []
@@ -6802,7 +6802,7 @@
         ],
         "operationId": "catalogo_vencimientos_get",
         "summary": "Lotes con stock vencidos o que vencen dentro de los próximos días, del que vence antes al que vence después.",
-        "description": "Lotes con stock vencidos o que vencen dentro de los próximos días, del que vence antes al que vence después. */",
+        "description": "Lotes con stock vencidos o que vencen dentro de los próximos días, del que vence antes al que vence después.",
         "security": [
           {
             "bearer": []
@@ -7358,7 +7358,7 @@
         ],
         "operationId": "compras_enviar_post",
         "summary": "Aprobada y enviada al proveedor:",
-        "description": "Aprobada y enviada al proveedor: ya se puede recibir. */",
+        "description": "Aprobada y enviada al proveedor: ya se puede recibir.",
         "security": [
           {
             "bearer": []
@@ -7504,7 +7504,7 @@
         ],
         "operationId": "compras_crear_post",
         "summary": "Compra confirmada en una transacción:",
-        "description": "Compra confirmada en una transacción: stock al depósito, costo promedio ponderado, avance de la orden de compra, cuenta a pagar y, si fue al contado, el pago. /",
+        "description": "Compra confirmada en una transacción: stock al depósito, costo promedio ponderado, avance de la orden de compra, cuenta a pagar y, si fue al contado, el pago.",
         "security": [
           {
             "bearer": []
@@ -7641,7 +7641,7 @@
         ],
         "operationId": "compras_anular_post",
         "summary": "Anula una compra sin pagos:",
-        "description": "Anula una compra sin pagos: revierte el stock (si alcanza) y la orden; la cuenta queda anulada. */",
+        "description": "Anula una compra sin pagos: revierte el stock (si alcanza) y la orden; la cuenta queda anulada.",
         "security": [
           {
             "bearer": []
@@ -7742,7 +7742,7 @@
         ],
         "operationId": "compras_crear_post",
         "summary": "Cuenta manual (servicios, alquiler, fletes…) a un proveedor.",
-        "description": "Cuenta manual (servicios, alquiler, fletes…) a un proveedor. */",
+        "description": "Cuenta manual (servicios, alquiler, fletes…) a un proveedor.",
         "security": [
           {
             "bearer": []
@@ -7788,7 +7788,7 @@
         ],
         "operationId": "compras_resumen_get",
         "summary": "Totales para el tablero:",
-        "description": "Totales para el tablero: abierto, vencido y a vencer en 7 días. */",
+        "description": "Totales para el tablero: abierto, vencido y a vencer en 7 días.",
         "security": [
           {
             "bearer": []
@@ -7824,7 +7824,7 @@
         ],
         "operationId": "compras_anular_post",
         "summary": "Anula una cuenta manual sin pagos.",
-        "description": "Anula una cuenta manual sin pagos. */",
+        "description": "Anula una cuenta manual sin pagos.",
         "security": [
           {
             "bearer": []
@@ -7959,7 +7959,7 @@
         ],
         "operationId": "compras_anular_post",
         "summary": "Anula un pago:",
-        "description": "Anula un pago: devuelve el saldo a las cuentas y, si salió de una caja todavía abierta, el efectivo. */",
+        "description": "Anula un pago: devuelve el saldo a las cuentas y, si salió de una caja todavía abierta, el efectivo.",
         "security": [
           {
             "bearer": []
@@ -8129,7 +8129,7 @@
         ],
         "operationId": "contabilidad_completarSugerido_post",
         "summary": "Agrega al plan las cuentas sugeridas que falten (por ejemplo, las de sueldos) y asigna los conceptos sin cuenta.",
-        "description": "Agrega al plan las cuentas sugeridas que falten (por ejemplo, las de sueldos) y asigna los conceptos sin cuenta. No cambia lo existente. */",
+        "description": "Agrega al plan las cuentas sugeridas que falten (por ejemplo, las de sueldos) y asigna los conceptos sin cuenta. No cambia lo existente.",
         "security": [
           {
             "bearer": []
@@ -8437,7 +8437,7 @@
         ],
         "operationId": "contabilidad_diario_get",
         "summary": "Libro diario.",
-        "description": "Libro diario. */",
+        "description": "Libro diario.",
         "security": [
           {
             "bearer": []
@@ -8572,7 +8572,7 @@
         ],
         "operationId": "contabilidad_anular_post",
         "summary": "Solo los asientos manuales se anulan:",
-        "description": "Solo los asientos manuales se anulan: se registra el asiento inverso. Los automáticos siguen a su documento. */",
+        "description": "Solo los asientos manuales se anulan: se registra el asiento inverso. Los automáticos siguen a su documento.",
         "security": [
           {
             "bearer": []
@@ -8629,7 +8629,7 @@
         ],
         "operationId": "contabilidad_mayor_get",
         "summary": "Libro mayor de una cuenta (si es un grupo, incluye todas sus subcuentas).",
-        "description": "Libro mayor de una cuenta (si es un grupo, incluye todas sus subcuentas). */",
+        "description": "Libro mayor de una cuenta (si es un grupo, incluye todas sus subcuentas).",
         "security": [
           {
             "bearer": []
@@ -8676,7 +8676,7 @@
         ],
         "operationId": "contabilidad_balance_get",
         "summary": "Balance de sumas y saldos del período, con los grupos acumulados.",
-        "description": "Balance de sumas y saldos del período, con los grupos acumulados. Saldo = debe − haber (positivo deudor, negativo acreedor). Sirve también para el balance general (activo, pasivo, patrimonio al cierre) y el estado de resultados (ingresos y egresos del período). /",
+        "description": "Balance de sumas y saldos del período, con los grupos acumulados. Saldo = debe − haber (positivo deudor, negativo acreedor). Sirve también para el balance general (activo, pasivo, patrimonio al cierre) y el estado de resultados (ingresos y egresos del período).",
         "security": [
           {
             "bearer": []
@@ -8856,7 +8856,7 @@
         ],
         "operationId": "distribucion_clientes_get",
         "summary": "Clientes de la ruta en el orden de visita, y los clientes sin ruta para agregar.",
-        "description": "Clientes de la ruta en el orden de visita, y los clientes sin ruta para agregar. */",
+        "description": "Clientes de la ruta en el orden de visita, y los clientes sin ruta para agregar.",
         "security": [
           {
             "bearer": []
@@ -9044,7 +9044,7 @@
         ],
         "operationId": "distribucion_pedidos_get",
         "summary": "Pedidos para armar un reparto:",
-        "description": "Pedidos para armar un reparto: por fecha de entrega y ruta del cliente, en el orden de visita. */",
+        "description": "Pedidos para armar un reparto: por fecha de entrega y ruta del cliente, en el orden de visita.",
         "security": [
           {
             "bearer": []
@@ -9134,7 +9134,7 @@
         ],
         "operationId": "distribucion_editar_put",
         "summary": "Mientras se prepara:",
-        "description": "Mientras se prepara: cambiar datos, pedidos y su orden. */",
+        "description": "Mientras se prepara: cambiar datos, pedidos y su orden.",
         "security": [
           {
             "bearer": []
@@ -9246,7 +9246,7 @@
         ],
         "operationId": "distribucion_despachar_post",
         "summary": "Despacho:",
-        "description": "Despacho: cada pedido se factura (la factura viaja con la mercadería) a la cuenta del cliente y la mercadería sale del depósito de la caja. Si un pedido falla, los demás quedan facturados y se puede reintentar. /",
+        "description": "Despacho: cada pedido se factura (la factura viaja con la mercadería) a la cuenta del cliente y la mercadería sale del depósito de la caja. Si un pedido falla, los demás quedan facturados y se puede reintentar.",
         "security": [
           {
             "bearer": []
@@ -9292,7 +9292,7 @@
         ],
         "operationId": "distribucion_rendir_post",
         "summary": "Rendición:",
-        "description": "Rendición: por cada pedido, lo entregado, lo que volvió (nota de crédito) y lo cobrado (entra a la caja del reparto; lo no cobrado queda en la cuenta del cliente). Se compara el efectivo entregado con el cobrado. Cada pedido se registra una sola vez: si algo falla, se corrige y se vuelve a enviar. /",
+        "description": "Rendición: por cada pedido, lo entregado, lo que volvió (nota de crédito) y lo cobrado (entra a la caja del reparto; lo no cobrado queda en la cuenta del cliente). Se compara el efectivo entregado con el cobrado. Cada pedido se registra una sola vez: si algo falla, se corrige y se vuelve a enviar.",
         "security": [
           {
             "bearer": []
@@ -9431,7 +9431,7 @@
         ],
         "operationId": "empresa_exportar_get",
         "summary": "Exporta todos los datos de la empresa en un ZIP de CSV (portabilidad:",
-        "description": "Exporta todos los datos de la empresa en un ZIP de CSV (portabilidad: la empresa es dueña de sus datos). Solo el propietario. Cada tabla se lee con el aislamiento por empresa activo. /",
+        "description": "Exporta todos los datos de la empresa en un ZIP de CSV (portabilidad: la empresa es dueña de sus datos). Solo el propietario. Cada tabla se lee con el aislamiento por empresa activo.",
         "security": [
           {
             "bearer": []
@@ -9602,7 +9602,7 @@
         ],
         "operationId": "finanzas_movimientos_get",
         "summary": "Extracto:",
-        "description": "Extracto: movimientos del período con saldo corrido. */",
+        "description": "Extracto: movimientos del período con saldo corrido.",
         "security": [
           {
             "bearer": []
@@ -9656,7 +9656,7 @@
         ],
         "operationId": "finanzas_manual_post",
         "summary": "Movimiento manual:",
-        "description": "Movimiento manual: depósito, extracción, gasto bancario (comisiones, impuestos) o ingreso (intereses). */",
+        "description": "Movimiento manual: depósito, extracción, gasto bancario (comisiones, impuestos) o ingreso (intereses).",
         "security": [
           {
             "bearer": []
@@ -9767,7 +9767,7 @@
         ],
         "operationId": "finanzas_depositoCaja_post",
         "summary": "Depósito del efectivo de una caja abierta (propia) en la cuenta:",
-        "description": "Depósito del efectivo de una caja abierta (propia) en la cuenta: sale de la caja y entra al banco. */",
+        "description": "Depósito del efectivo de una caja abierta (propia) en la cuenta: sale de la caja y entra al banco.",
         "security": [
           {
             "bearer": []
@@ -9823,7 +9823,7 @@
         ],
         "operationId": "finanzas_conciliar_post",
         "summary": "Marca o desmarca movimientos como conciliados con el extracto del banco.",
-        "description": "Marca o desmarca movimientos como conciliados con el extracto del banco. */",
+        "description": "Marca o desmarca movimientos como conciliados con el extracto del banco.",
         "security": [
           {
             "bearer": []
@@ -9951,7 +9951,7 @@
         ],
         "operationId": "finanzas_estadoCuenta_get",
         "summary": "Estado de cuenta del cliente:",
-        "description": "Estado de cuenta del cliente: crédito, deuda, cuentas y movimientos (ventas a crédito, cobros, devoluciones). */",
+        "description": "Estado de cuenta del cliente: crédito, deuda, cuentas y movimientos (ventas a crédito, cobros, devoluciones).",
         "security": [
           {
             "bearer": []
@@ -10041,7 +10041,7 @@
         ],
         "operationId": "finanzas_crear_post",
         "summary": "Cobro de una o varias cuentas del cliente.",
-        "description": "Cobro de una o varias cuentas del cliente. En caja: el dinero entra a la sesión abierta del cajero. */",
+        "description": "Cobro de una o varias cuentas del cliente. En caja: el dinero entra a la sesión abierta del cajero.",
         "security": [
           {
             "bearer": []
@@ -10087,7 +10087,7 @@
         ],
         "operationId": "finanzas_anular_post",
         "summary": "Anula un cobro:",
-        "description": "Anula un cobro: devuelve la deuda a las cuentas y, si entró a una caja todavía abierta, saca el dinero. */",
+        "description": "Anula un cobro: devuelve la deuda a las cuentas y, si entró a una caja todavía abierta, saca el dinero.",
         "security": [
           {
             "bearer": []
@@ -10190,7 +10190,7 @@
         ],
         "operationId": "informes_tablero_get",
         "summary": "Tablero del dueño:",
-        "description": "Tablero del dueño: cada bloque aparece solo si el usuario tiene el permiso correspondiente. Con alcance de sucursal, solo sus sucursales. /",
+        "description": "Tablero del dueño: cada bloque aparece solo si el usuario tiene el permiso correspondiente. Con alcance de sucursal, solo sus sucursales.",
         "security": [
           {
             "bearer": []
@@ -10236,7 +10236,7 @@
         ],
         "operationId": "informes_ventas_get",
         "summary": "Ventas agrupadas.",
-        "description": "Ventas agrupadas. Costo y margen solo con informe_ganancias.ver. */",
+        "description": "Ventas agrupadas. Costo y margen solo con informe_ganancias.ver.",
         "security": [
           {
             "bearer": []
@@ -10283,7 +10283,7 @@
         ],
         "operationId": "informes_stock_get",
         "summary": "Existencias por depósito, con valor al costo (si lo puede ver) y alerta de stock mínimo.",
-        "description": "Existencias por depósito, con valor al costo (si lo puede ver) y alerta de stock mínimo. */",
+        "description": "Existencias por depósito, con valor al costo (si lo puede ver) y alerta de stock mínimo.",
         "security": [
           {
             "bearer": []
@@ -10330,7 +10330,7 @@
         ],
         "operationId": "informes_compras_get",
         "summary": "Compras agrupadas por proveedor, producto o mes (confirmadas).",
-        "description": "Compras agrupadas por proveedor, producto o mes (confirmadas). */",
+        "description": "Compras agrupadas por proveedor, producto o mes (confirmadas).",
         "security": [
           {
             "bearer": []
@@ -10661,7 +10661,7 @@
         ],
         "operationId": "operacion_movimiento_post",
         "summary": "Retiro (sangría) o ingreso de efectivo.",
-        "description": "Retiro (sangría) o ingreso de efectivo. Requiere caja.aprobar o la autorización con PIN de un supervisor. */",
+        "description": "Retiro (sangría) o ingreso de efectivo. Requiere caja.aprobar o la autorización con PIN de un supervisor.",
         "security": [
           {
             "bearer": []
@@ -10717,7 +10717,7 @@
         ],
         "operationId": "operacion_cerrar_post",
         "summary": "Cierre con arqueo:",
-        "description": "Cierre con arqueo: lo contado contra lo esperado, por moneda y medio. La diferencia queda registrada. */",
+        "description": "Cierre con arqueo: lo contado contra lo esperado, por moneda y medio. La diferencia queda registrada.",
         "security": [
           {
             "bearer": []
@@ -10951,7 +10951,7 @@
         ],
         "operationId": "operacion_crear_post",
         "summary": "Devolución parcial o total de una venta (de esta caja o de una ya cerrada).",
-        "description": "Devolución parcial o total de una venta (de esta caja o de una ya cerrada). El dinero sale de la caja abierta de quien atiende y la mercadería vuelve al depósito de esa caja. Requiere devolucion.crear o el PIN de un supervisor (devolucion.aprobar). /",
+        "description": "Devolución parcial o total de una venta (de esta caja o de una ya cerrada). El dinero sale de la caja abierta de quien atiende y la mercadería vuelve al depósito de esa caja. Requiere devolucion.crear o el PIN de un supervisor (devolucion.aprobar).",
         "security": [
           {
             "bearer": []
@@ -11275,7 +11275,7 @@
         ],
         "operationId": "operacion_aceptar_post",
         "summary": "El cliente aceptó:",
-        "description": "El cliente aceptó: se genera el pedido con los mismos precios cotizados. */",
+        "description": "El cliente aceptó: se genera el pedido con los mismos precios cotizados.",
         "security": [
           {
             "bearer": []
@@ -11675,7 +11675,7 @@
         ],
         "operationId": "operacion_estado_post",
         "summary": "Pendiente ↔ preparado (armado y listo para entregar).",
-        "description": "Pendiente ↔ preparado (armado y listo para entregar). */",
+        "description": "Pendiente ↔ preparado (armado y listo para entregar).",
         "security": [
           {
             "bearer": []
@@ -11830,7 +11830,7 @@
         ],
         "operationId": "operacion_crear_post",
         "summary": "Sale del origen en el acto.",
-        "description": "Sale del origen en el acto. Directa: entra al destino en la misma transacción. */",
+        "description": "Sale del origen en el acto. Directa: entra al destino en la misma transacción.",
         "security": [
           {
             "bearer": []
@@ -11921,7 +11921,7 @@
         ],
         "operationId": "operacion_recibir_post",
         "summary": "El destino confirma lo que llegó.",
-        "description": "El destino confirma lo que llegó. Lo que falte queda registrado como faltante. */",
+        "description": "El destino confirma lo que llegó. Lo que falte queda registrado como faltante.",
         "security": [
           {
             "bearer": []
@@ -11977,7 +11977,7 @@
         ],
         "operationId": "operacion_cancelar_post",
         "summary": "Cancelar una transferencia en tránsito:",
-        "description": "Cancelar una transferencia en tránsito: la mercadería vuelve al origen. */",
+        "description": "Cancelar una transferencia en tránsito: la mercadería vuelve al origen.",
         "security": [
           {
             "bearer": []
@@ -12079,7 +12079,7 @@
         ],
         "operationId": "operacion_porCodigo_get",
         "summary": "Consulta desde la caja:",
-        "description": "Consulta desde la caja: saldo disponible del vale para usarlo como pago. */",
+        "description": "Consulta desde la caja: saldo disponible del vale para usarlo como pago.",
         "security": [
           {
             "bearer": []
@@ -12169,7 +12169,7 @@
         ],
         "operationId": "operacion_contexto_get",
         "summary": "Lo que el PDV necesita al abrir:",
-        "description": "Lo que el PDV necesita al abrir: caja, sesión propia, cotizaciones y configuración. */",
+        "description": "Lo que el PDV necesita al abrir: caja, sesión propia, cotizaciones y configuración.",
         "security": [
           {
             "bearer": []
@@ -12216,7 +12216,7 @@
         ],
         "operationId": "operacion_catalogo_get",
         "summary": "Catálogo completo de la caja para vender sin conexión:",
-        "description": "Catálogo completo de la caja para vender sin conexión: productos activos con sus códigos de barras, el precio de la sucursal (lista general) y el stock del depósito. La caja lo guarda y lo renueva. /",
+        "description": "Catálogo completo de la caja para vender sin conexión: productos activos con sus códigos de barras, el precio de la sucursal (lista general) y el stock del depósito. La caja lo guarda y lo renueva.",
         "security": [
           {
             "bearer": []
@@ -12263,7 +12263,7 @@
         ],
         "operationId": "operacion_buscar_get",
         "summary": "Búsqueda para la caja:",
-        "description": "Búsqueda para la caja: código de barras exacto primero (lector), luego SKU y nombre. Devuelve precio de la sucursal y stock del depósito de la caja. /",
+        "description": "Búsqueda para la caja: código de barras exacto primero (lector), luego SKU y nombre. Devuelve precio de la sucursal y stock del depósito de la caja.",
         "security": [
           {
             "bearer": []
@@ -12310,7 +12310,7 @@
         ],
         "operationId": "operacion_ventaCambio_get",
         "summary": "Cambio desde la caja:",
-        "description": "Cambio desde la caja: ventas confirmadas de la sucursal de la caja con ese número (una por caja), con lo que todavía se puede devolver. El cajero puede cambiar lo vendido por otro. /",
+        "description": "Cambio desde la caja: ventas confirmadas de la sucursal de la caja con ese número (una por caja), con lo que todavía se puede devolver. El cajero puede cambiar lo vendido por otro.",
         "security": [
           {
             "bearer": []
@@ -12357,7 +12357,7 @@
         ],
         "operationId": "operacion_grade_get",
         "summary": "Grade de un producto (talle × color) con precio y stock del depósito de la caja, para elegir la variante.",
-        "description": "Grade de un producto (talle × color) con precio y stock del depósito de la caja, para elegir la variante. */",
+        "description": "Grade de un producto (talle × color) con precio y stock del depósito de la caja, para elegir la variante.",
         "security": [
           {
             "bearer": []
@@ -12404,7 +12404,7 @@
         ],
         "operationId": "operacion_equivalentes_get",
         "summary": "Productos con el mismo principio activo (y concentración, si la tiene):",
-        "description": "Productos con el mismo principio activo (y concentración, si la tiene): alternativas para ofrecer. */",
+        "description": "Productos con el mismo principio activo (y concentración, si la tiene): alternativas para ofrecer.",
         "security": [
           {
             "bearer": []
@@ -12451,7 +12451,7 @@
         ],
         "operationId": "operacion_precios_post",
         "summary": "Precios de las líneas del carrito al elegir o quitar el cliente (su lista de precios).",
-        "description": "Precios de las líneas del carrito al elegir o quitar el cliente (su lista de precios). */",
+        "description": "Precios de las líneas del carrito al elegir o quitar el cliente (su lista de precios).",
         "security": [
           {
             "bearer": []
@@ -12498,7 +12498,7 @@
         ],
         "operationId": "operacion_pedidos_get",
         "summary": "Pedidos abiertos de la sucursal de la caja, para cargarlos en el carrito y cobrarlos.",
-        "description": "Pedidos abiertos de la sucursal de la caja, para cargarlos en el carrito y cobrarlos. */",
+        "description": "Pedidos abiertos de la sucursal de la caja, para cargarlos en el carrito y cobrarlos.",
         "security": [
           {
             "bearer": []
@@ -12545,7 +12545,7 @@
         ],
         "operationId": "operacion_crear_post",
         "summary": "Venta atómica:",
-        "description": "Venta atómica: todo o nada en una transacción. 1. Idempotencia: la misma clave devuelve la misma venta (reintentos por cortes de red). 2. Caja bloqueada (numeración) y sesión abierta del propio cajero. 3. Precios desde la base; descuentos y cambios de precio solo con permiso o PIN de supervisor. 4. Stock bloqueado en orden de id (sin interbloqueos) y validado. 5. Venta, ítems, pagos, movimientos de stock y de caja, auditoría. /",
+        "description": "Venta atómica: todo o nada en una transacción. 1. Idempotencia: la misma clave devuelve la misma venta (reintentos por cortes de red). 2. Caja bloqueada (numeración) y sesión abierta del propio cajero. 3. Precios desde la base; descuentos y cambios de precio solo con permiso o PIN de supervisor. 4. Stock bloqueado en orden de id (sin interbloqueos) y validado. 5. Venta, ítems, pagos, movimientos de stock y de caja, auditoría.",
         "security": [
           {
             "bearer": []
@@ -12680,7 +12680,7 @@
         ],
         "operationId": "operacion_anular_post",
         "summary": "Anulación en la misma sesión de caja:",
-        "description": "Anulación en la misma sesión de caja: devuelve el stock y registra la salida de dinero. Requiere venta.cancelar o el PIN de un supervisor (X-Autorizacion). /",
+        "description": "Anulación en la misma sesión de caja: devuelve el stock y registra la salida de dinero. Requiere venta.cancelar o el PIN de un supervisor (X-Autorizacion).",
         "security": [
           {
             "bearer": []
@@ -13196,7 +13196,7 @@
         ],
         "operationId": "produccion_crear_post",
         "summary": "Planifica una orden:",
-        "description": "Planifica una orden: los insumos teóricos salen de la receta en proporción a la cantidad. */",
+        "description": "Planifica una orden: los insumos teóricos salen de la receta en proporción a la cantidad.",
         "security": [
           {
             "bearer": []
@@ -13287,7 +13287,7 @@
         ],
         "operationId": "produccion_terminar_post",
         "summary": "Termina la orden:",
-        "description": "Termina la orden: descuenta los insumos realmente usados, ingresa lo producido al costo real (insumos / unidades producidas) y actualiza el costo promedio del producto. /",
+        "description": "Termina la orden: descuenta los insumos realmente usados, ingresa lo producido al costo real (insumos / unidades producidas) y actualiza el costo promedio del producto.",
         "security": [
           {
             "bearer": []
@@ -13343,7 +13343,7 @@
         ],
         "operationId": "produccion_anular_post",
         "summary": "Anula una orden planificada o, si está terminada, revierte el stock (los insumos vuelven a sus lotes).",
-        "description": "Anula una orden planificada o, si está terminada, revierte el stock (los insumos vuelven a sus lotes). */",
+        "description": "Anula una orden planificada o, si está terminada, revierte el stock (los insumos vuelven a sus lotes).",
         "security": [
           {
             "bearer": []
@@ -13400,7 +13400,7 @@
         ],
         "operationId": "produccion_necesidades_get",
         "summary": "Qué producir para los pedidos (encargos) pendientes con entrega en el rango:",
-        "description": "Qué producir para los pedidos (encargos) pendientes con entrega en el rango: lo pedido de cada producto con receta, menos el stock de la sucursal y lo ya planificado; y los insumos que hacen falta para eso. /",
+        "description": "Qué producir para los pedidos (encargos) pendientes con entrega en el rango: lo pedido de cada producto con receta, menos el stock de la sucursal y lo ya planificado; y los insumos que hacen falta para eso.",
         "security": [
           {
             "bearer": []
@@ -13447,7 +13447,7 @@
         ],
         "operationId": "produccion_lote_post",
         "summary": "Crea de una vez las órdenes sugeridas para los pedidos.",
-        "description": "Crea de una vez las órdenes sugeridas para los pedidos. */",
+        "description": "Crea de una vez las órdenes sugeridas para los pedidos.",
         "security": [
           {
             "bearer": []
@@ -13494,7 +13494,7 @@
         ],
         "operationId": "produccion_merma_post",
         "summary": "Mermas:",
-        "description": "Mermas: producto vencido, roto o que no se vendió en el día; sale del stock con su costo. */",
+        "description": "Mermas: producto vencido, roto o que no se vendió en el día; sale del stock con su costo.",
         "security": [
           {
             "bearer": []
@@ -13584,7 +13584,7 @@
         ],
         "operationId": "restaurante_plano_get",
         "summary": "Plano de la sucursal:",
-        "description": "Plano de la sucursal: salones con sus mesas y la cuenta abierta de cada una; cuentas de mostrador. */",
+        "description": "Plano de la sucursal: salones con sus mesas y la cuenta abierta de cada una; cuentas de mostrador.",
         "security": [
           {
             "bearer": []
@@ -13631,7 +13631,7 @@
         ],
         "operationId": "restaurante_carta_get",
         "summary": "Carta:",
-        "description": "Carta: productos activos con el precio de la sucursal, por categoría (sin los de venta bajo receta). */",
+        "description": "Carta: productos activos con el precio de la sucursal, por categoría (sin los de venta bajo receta).",
         "security": [
           {
             "bearer": []
@@ -13884,7 +13884,7 @@
         ],
         "operationId": "restaurante_listar_get",
         "summary": "Cuentas abiertas de una sucursal (el PDV las lista para cobrar).",
-        "description": "Cuentas abiertas de una sucursal (el PDV las lista para cobrar). */",
+        "description": "Cuentas abiertas de una sucursal (el PDV las lista para cobrar).",
         "security": [
           {
             "bearer": []
@@ -13929,7 +13929,7 @@
         ],
         "operationId": "restaurante_abrir_post",
         "summary": "Abre la cuenta de una mesa libre o una de mostrador (para llevar).",
-        "description": "Abre la cuenta de una mesa libre o una de mostrador (para llevar). */",
+        "description": "Abre la cuenta de una mesa libre o una de mostrador (para llevar).",
         "security": [
           {
             "bearer": []
@@ -14074,7 +14074,7 @@
         ],
         "operationId": "restaurante_agregar_post",
         "summary": "Agrega productos a la cuenta, con el precio vigente de la sucursal.",
-        "description": "Agrega productos a la cuenta, con el precio vigente de la sucursal. Quedan por enviar a cocina. */",
+        "description": "Agrega productos a la cuenta, con el precio vigente de la sucursal. Quedan por enviar a cocina.",
         "security": [
           {
             "bearer": []
@@ -14130,7 +14130,7 @@
         ],
         "operationId": "restaurante_quitar_delete",
         "summary": "Quita un ítem todavía no enviado a cocina.",
-        "description": "Quita un ítem todavía no enviado a cocina. */",
+        "description": "Quita un ítem todavía no enviado a cocina.",
         "security": [
           {
             "bearer": []
@@ -14184,7 +14184,7 @@
         ],
         "operationId": "restaurante_anularItem_post",
         "summary": "Anula un ítem ya enviado (devuelto, error de carga):",
-        "description": "Anula un ítem ya enviado (devuelto, error de carga): requiere permiso y motivo. */",
+        "description": "Anula un ítem ya enviado (devuelto, error de carga): requiere permiso y motivo.",
         "security": [
           {
             "bearer": []
@@ -14249,7 +14249,7 @@
         ],
         "operationId": "restaurante_dividir_post",
         "summary": "Separa parte de un ítem (por ejemplo, 1 de 3 cervezas) para cobrarla aparte.",
-        "description": "Separa parte de un ítem (por ejemplo, 1 de 3 cervezas) para cobrarla aparte. */",
+        "description": "Separa parte de un ítem (por ejemplo, 1 de 3 cervezas) para cobrarla aparte.",
         "security": [
           {
             "bearer": []
@@ -14314,7 +14314,7 @@
         ],
         "operationId": "restaurante_enviar_post",
         "summary": "Envía a cocina y bar lo pendiente, como una comanda.",
-        "description": "Envía a cocina y bar lo pendiente, como una comanda. Lo que no tiene estación queda listo para servir. */",
+        "description": "Envía a cocina y bar lo pendiente, como una comanda. Lo que no tiene estación queda listo para servir.",
         "security": [
           {
             "bearer": []
@@ -14360,7 +14360,7 @@
         ],
         "operationId": "restaurante_servido_post",
         "summary": "El mozo sirvió lo que estaba listo.",
-        "description": "El mozo sirvió lo que estaba listo. */",
+        "description": "El mozo sirvió lo que estaba listo.",
         "security": [
           {
             "bearer": []
@@ -14417,7 +14417,7 @@
         ],
         "operationId": "restaurante_mover_post",
         "summary": "Pasa la cuenta a otra mesa libre de la misma sucursal.",
-        "description": "Pasa la cuenta a otra mesa libre de la misma sucursal. */",
+        "description": "Pasa la cuenta a otra mesa libre de la misma sucursal.",
         "security": [
           {
             "bearer": []
@@ -14474,7 +14474,7 @@
         ],
         "operationId": "restaurante_anular_post",
         "summary": "Cierra sin cobrar:",
-        "description": "Cierra sin cobrar: una cuenta vacía (la mesa se libera) o, con permiso de anulación y motivo, una con productos enviados. Lo ya cobrado no se toca: si hay cobros, se anulan las ventas. /",
+        "description": "Cierra sin cobrar: una cuenta vacía (la mesa se libera) o, con permiso de anulación y motivo, una con productos enviados. Lo ya cobrado no se toca: si hay cobros, se anulan las ventas.",
         "security": [
           {
             "bearer": []
@@ -14531,7 +14531,7 @@
         ],
         "operationId": "restaurante_pantalla_get",
         "summary": "Comandas de una estación:",
-        "description": "Comandas de una estación: lo pendiente y en preparación, y lo listo de los últimos 15 minutos. */",
+        "description": "Comandas de una estación: lo pendiente y en preparación, y lo listo de los últimos 15 minutos.",
         "security": [
           {
             "bearer": []
@@ -14578,7 +14578,7 @@
         ],
         "operationId": "restaurante_estado_post",
         "summary": "Cambia el estado de ítems de la estación:",
-        "description": "Cambia el estado de ítems de la estación: en preparación, listo, o vuelve a pendiente. */",
+        "description": "Cambia el estado de ítems de la estación: en preparación, listo, o vuelve a pendiente.",
         "security": [
           {
             "bearer": []
@@ -14625,7 +14625,7 @@
         ],
         "operationId": "rrhh_listar_get",
         "summary": "Planilla de asistencia de un rango (hasta 62 días):",
-        "description": "Planilla de asistencia de un rango (hasta 62 días): funcionarios vigentes, novedades y vacaciones gozadas. */",
+        "description": "Planilla de asistencia de un rango (hasta 62 días): funcionarios vigentes, novedades y vacaciones gozadas.",
         "security": [
           {
             "bearer": []
@@ -14670,7 +14670,7 @@
         ],
         "operationId": "rrhh_crear_post",
         "summary": "Registra la novedad de un día o de cada día de un rango (por ejemplo, un reposo).",
-        "description": "Registra la novedad de un día o de cada día de un rango (por ejemplo, un reposo). */",
+        "description": "Registra la novedad de un día o de cada día de un rango (por ejemplo, un reposo).",
         "security": [
           {
             "bearer": []
@@ -14716,7 +14716,7 @@
         ],
         "operationId": "rrhh_lote_post",
         "summary": "Registra varias novedades (las propuestas por el reloj); las que no se pueden registrar se informan.",
-        "description": "Registra varias novedades (las propuestas por el reloj); las que no se pueden registrar se informan. */",
+        "description": "Registra varias novedades (las propuestas por el reloj); las que no se pueden registrar se informan.",
         "security": [
           {
             "bearer": []
@@ -14808,7 +14808,7 @@
         ],
         "operationId": "rrhh_resumen_get",
         "summary": "Saldo de cada funcionario vigente.",
-        "description": "Saldo de cada funcionario vigente. */",
+        "description": "Saldo de cada funcionario vigente.",
         "security": [
           {
             "bearer": []
@@ -14890,7 +14890,7 @@
         ],
         "operationId": "rrhh_goce_post",
         "summary": "Goce de vacaciones:",
-        "description": "Goce de vacaciones: días hábiles tomados, dentro del saldo. */",
+        "description": "Goce de vacaciones: días hábiles tomados, dentro del saldo.",
         "security": [
           {
             "bearer": []
@@ -14936,7 +14936,7 @@
         ],
         "operationId": "rrhh_ajuste_post",
         "summary": "Ajuste del saldo:",
-        "description": "Ajuste del saldo: saldo inicial al empezar a usar el sistema, días ya gozados antes, períodos acordados. */",
+        "description": "Ajuste del saldo: saldo inicial al empezar a usar el sistema, días ya gozados antes, períodos acordados.",
         "security": [
           {
             "bearer": []
@@ -15038,7 +15038,7 @@
         ],
         "operationId": "rrhh_importar_post",
         "summary": "Importa el archivo del reloj.",
-        "description": "Importa el archivo del reloj. Cada línea se asigna al funcionario cuyo código del reloj (o cédula) aparece antes de la fecha; las marcaciones repetidas se ignoran, así el mismo archivo se puede importar de nuevo. /",
+        "description": "Importa el archivo del reloj. Cada línea se asigna al funcionario cuyo código del reloj (o cédula) aparece antes de la fecha; las marcaciones repetidas se ignoran, así el mismo archivo se puede importar de nuevo.",
         "security": [
           {
             "bearer": []
@@ -15085,7 +15085,7 @@
         ],
         "operationId": "rrhh_crear_post",
         "summary": "Marcación cargada a mano (olvido del funcionario, reloj fuera de servicio).",
-        "description": "Marcación cargada a mano (olvido del funcionario, reloj fuera de servicio). */",
+        "description": "Marcación cargada a mano (olvido del funcionario, reloj fuera de servicio).",
         "security": [
           {
             "bearer": []
@@ -15176,7 +15176,7 @@
         ],
         "operationId": "rrhh_propuestas_get",
         "summary": "Compara las marcaciones con el horario de cada funcionario y propone novedades:",
-        "description": "Compara las marcaciones con el horario de cada funcionario y propone novedades: ausencia si un día laborable no tiene marcaciones, llegada tardía pasados 10 minutos de tolerancia, y horas extra por cada media hora cumplida después de la salida (al 100 % los domingos). No registra nada: la empresa revisa y confirma, porque el reloj no sabe de feriados ni de permisos. /",
+        "description": "Compara las marcaciones con el horario de cada funcionario y propone novedades: ausencia si un día laborable no tiene marcaciones, llegada tardía pasados 10 minutos de tolerancia, y horas extra por cada media hora cumplida después de la salida (al 100 % los domingos). No registra nada: la empresa revisa y confirma, porque el reloj no sabe de feriados ni de permisos.",
         "security": [
           {
             "bearer": []
@@ -15410,7 +15410,7 @@
         ],
         "operationId": "rrhh_baja_post",
         "summary": "Baja:",
-        "description": "Baja: el legajo no se borra; queda con fecha y motivo de egreso. */",
+        "description": "Baja: el legajo no se borra; queda con fecha y motivo de egreso.",
         "security": [
           {
             "bearer": []
@@ -15633,7 +15633,7 @@
         ],
         "operationId": "rrhh_crear_post",
         "summary": "Genera la planilla en borrador con los funcionarios del período.",
-        "description": "Genera la planilla en borrador con los funcionarios del período. */",
+        "description": "Genera la planilla en borrador con los funcionarios del período.",
         "security": [
           {
             "bearer": []
@@ -15724,7 +15724,7 @@
         ],
         "operationId": "rrhh_aplicarNovedades_post",
         "summary": "Vuelve a tomar los días y las horas extra de las novedades de asistencia (planilla mensual en borrador).",
-        "description": "Vuelve a tomar los días y las horas extra de las novedades de asistencia (planilla mensual en borrador). */",
+        "description": "Vuelve a tomar los días y las horas extra de las novedades de asistencia (planilla mensual en borrador).",
         "security": [
           {
             "bearer": []
@@ -15770,7 +15770,7 @@
         ],
         "operationId": "rrhh_crearFinal_post",
         "summary": "Liquidación final (finiquito) de un funcionario.",
-        "description": "Liquidación final (finiquito) de un funcionario. Queda en borrador con los valores calculados; al confirmarla, el legajo queda con su fecha y motivo de egreso. /",
+        "description": "Liquidación final (finiquito) de un funcionario. Queda en borrador con los valores calculados; al confirmarla, el legajo queda con su fecha y motivo de egreso.",
         "security": [
           {
             "bearer": []
@@ -15816,7 +15816,7 @@
         ],
         "operationId": "rrhh_editarFinal_patch",
         "summary": "Ajusta las opciones de una liquidación final en borrador (días, preaviso dado, vacaciones, IPS, otros ingresos, descuent",
-        "description": "Ajusta las opciones de una liquidación final en borrador (días, preaviso dado, vacaciones, IPS, otros ingresos, descuentos). */",
+        "description": "Ajusta las opciones de una liquidación final en borrador (días, preaviso dado, vacaciones, IPS, otros ingresos, descuentos).",
         "security": [
           {
             "bearer": []
@@ -15877,7 +15877,7 @@
         ],
         "operationId": "rrhh_item_patch",
         "summary": "Ajusta la línea de un funcionario en una planilla en borrador (días, horas extra, otros ingresos, descuentos).",
-        "description": "Ajusta la línea de un funcionario en una planilla en borrador (días, horas extra, otros ingresos, descuentos). */",
+        "description": "Ajusta la línea de un funcionario en una planilla en borrador (días, horas extra, otros ingresos, descuentos).",
         "security": [
           {
             "bearer": []
@@ -16039,7 +16039,7 @@
         ],
         "operationId": "rrhh_pagar_post",
         "summary": "Pago del neto:",
-        "description": "Pago del neto: transferencia desde una cuenta bancaria o efectivo de la caja abierta del usuario. */",
+        "description": "Pago del neto: transferencia desde una cuenta bancaria o efectivo de la caja abierta del usuario.",
         "security": [
           {
             "bearer": []
@@ -16095,7 +16095,7 @@
         ],
         "operationId": "rrhh_anular_post",
         "summary": "Un borrador se descarta; una planilla confirmada y sin pagar se anula (su asiento se revierte).",
-        "description": "Un borrador se descarta; una planilla confirmada y sin pagar se anula (su asiento se revierte). */",
+        "description": "Un borrador se descarta; una planilla confirmada y sin pagar se anula (su asiento se revierte).",
         "security": [
           {
             "bearer": []
@@ -16454,7 +16454,7 @@
         ],
         "operationId": "sifen_geografia_get",
         "summary": "Departamentos, distritos y ciudades según la codificación de la DNIT.",
-        "description": "Departamentos, distritos y ciudades según la codificación de la DNIT. */",
+        "description": "Departamentos, distritos y ciudades según la codificación de la DNIT.",
         "security": [
           {
             "bearer": []
@@ -16592,7 +16592,7 @@
         ],
         "operationId": "sifen_ruc_get",
         "summary": "Consulta un RUC en la DNIT (servicio de SIFEN, con el certificado de la empresa) para cargar clientes.",
-        "description": "Consulta un RUC en la DNIT (servicio de SIFEN, con el certificado de la empresa) para cargar clientes. */",
+        "description": "Consulta un RUC en la DNIT (servicio de SIFEN, con el certificado de la empresa) para cargar clientes.",
         "security": [
           {
             "bearer": []
@@ -16637,7 +16637,7 @@
         ],
         "operationId": "sifen_kude_get",
         "summary": "KuDE en hoja A4 (PDF), armado desde el XML firmado.",
-        "description": "KuDE en hoja A4 (PDF), armado desde el XML firmado. */",
+        "description": "KuDE en hoja A4 (PDF), armado desde el XML firmado.",
         "security": [
           {
             "bearer": []
@@ -16686,7 +16686,7 @@
         ],
         "operationId": "sifen_xml_get",
         "summary": "El XML firmado tal como se envió a SIFEN.",
-        "description": "El XML firmado tal como se envió a SIFEN. */",
+        "description": "El XML firmado tal como se envió a SIFEN.",
         "security": [
           {
             "bearer": []
@@ -16735,7 +16735,7 @@
         ],
         "operationId": "sifen_correo_post",
         "summary": "Envía el KuDE (PDF) y el XML por correo.",
-        "description": "Envía el KuDE (PDF) y el XML por correo. Sin dirección, usa el correo del cliente. */",
+        "description": "Envía el KuDE (PDF) y el XML por correo. Sin dirección, usa el correo del cliente.",
         "security": [
           {
             "bearer": []
@@ -16792,7 +16792,7 @@
         ],
         "operationId": "sifen_reenviar_post",
         "summary": "Vuelve a poner en cola un documento pendiente o rechazado (mismo XML, mismo CDC).",
-        "description": "Vuelve a poner en cola un documento pendiente o rechazado (mismo XML, mismo CDC). */",
+        "description": "Vuelve a poner en cola un documento pendiente o rechazado (mismo XML, mismo CDC).",
         "security": [
           {
             "bearer": []
@@ -16838,7 +16838,7 @@
         ],
         "operationId": "sifen_regenerar_post",
         "summary": "Corrige un documento rechazado:",
-        "description": "Corrige un documento rechazado: lo vuelve a generar con los datos actuales (por ejemplo, el RUC del cliente corregido) manteniendo número, código de seguridad y CDC, como permite la DNIT, y lo pone en cola. /",
+        "description": "Corrige un documento rechazado: lo vuelve a generar con los datos actuales (por ejemplo, el RUC del cliente corregido) manteniendo número, código de seguridad y CDC, como permite la DNIT, y lo pone en cola.",
         "security": [
           {
             "bearer": []
@@ -16884,7 +16884,7 @@
         ],
         "operationId": "sifen_inutilizar_post",
         "summary": "Inutiliza ante SIFEN el número de un documento rechazado que no se va a corregir.",
-        "description": "Inutiliza ante SIFEN el número de un documento rechazado que no se va a corregir. */",
+        "description": "Inutiliza ante SIFEN el número de un documento rechazado que no se va a corregir.",
         "security": [
           {
             "bearer": []
@@ -16941,7 +16941,7 @@
         ],
         "operationId": "sifen_procesar_post",
         "summary": "Procesa ya la cola de la empresa (enviar pendientes y consultar lotes), sin esperar al ciclo.",
-        "description": "Procesa ya la cola de la empresa (enviar pendientes y consultar lotes), sin esperar al ciclo. */",
+        "description": "Procesa ya la cola de la empresa (enviar pendientes y consultar lotes), sin esperar al ciclo.",
         "security": [
           {
             "bearer": []
@@ -17151,7 +17151,7 @@
         ],
         "operationId": "sucursales_desactivar_delete",
         "summary": "No se borran sucursales (tienen historia):",
-        "description": "No se borran sucursales (tienen historia): se desactivan. */",
+        "description": "No se borran sucursales (tienen historia): se desactivan.",
         "security": [
           {
             "bearer": []
@@ -17371,7 +17371,7 @@
         ],
         "operationId": "usuarios_desactivar_delete",
         "summary": "No se borran usuarios (firman operaciones):",
-        "description": "No se borran usuarios (firman operaciones): se desactivan y se cierran sus sesiones. */",
+        "description": "No se borran usuarios (firman operaciones): se desactivan y se cierran sus sesiones.",
         "security": [
           {
             "bearer": []
@@ -17417,7 +17417,7 @@
         ],
         "operationId": "usuarios_permisos_put",
         "summary": "Reemplaza las concesiones y restricciones individuales del usuario.",
-        "description": "Reemplaza las concesiones y restricciones individuales del usuario. */",
+        "description": "Reemplaza las concesiones y restricciones individuales del usuario.",
         "security": [
           {
             "bearer": []
@@ -17473,7 +17473,7 @@
         ],
         "operationId": "usuarios_reenviarInvitacion_post",
         "summary": "Reenvía la invitación a quien todavía no creó su contraseña.",
-        "description": "Reenvía la invitación a quien todavía no creó su contraseña. */",
+        "description": "Reenvía la invitación a quien todavía no creó su contraseña.",
         "security": [
           {
             "bearer": []

@@ -60,6 +60,7 @@ function primerArgumento(args) {
 
 const limpiarDoc = (d) =>
   d
+    .trim()
     .replace(/^\/\*\*|\*\/$/g, '')
     .split('\n')
     .map((l) => l.replace(/^\s*\*\s?/, '').trim())
