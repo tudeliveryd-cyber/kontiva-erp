@@ -42,7 +42,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'venta.*', 'descuento.aprobar', 'devolucion.*', 'presupuesto.*', 'pedido.*',
       'cliente.*', 'credito_cliente.*', 'caja.*', 'arqueo.*',
       'proveedor.ver', 'orden_compra.*', 'recepcion.*',
-      'cuenta_cobrar.*', 'informe_ventas.*', 'informe_ganancias.ver', 'documento_fiscal.*', 'entrega.*', 'asistencia.*', 'receta.*', 'salon.*', 'cocina.*',
+      'cuenta_cobrar.*', 'informe_ventas.*', 'informe_ganancias.ver', 'documento_fiscal.*', 'entrega.*', 'asistencia.*', 'receta.*', 'salon.*', 'cocina.*', 'produccion.*',
     ],
   },
   {
@@ -54,7 +54,7 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
       'sucursal.ver', 'producto.ver', 'precio.ver', 'stock.ver', 'stock.editar', 'conteo.ver', 'conteo.crear',
       'venta.ver', 'venta.crear', 'venta.cancelar', 'venta.imprimir', 'descuento.aprobar',
       'devolucion.*', 'cliente.ver', 'cliente.crear', 'caja.*', 'arqueo.*', 'documento_fiscal.ver', 'documento_fiscal.imprimir',
-      'credito_cliente.ver', 'credito_cliente.aprobar', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear', 'asistencia.ver', 'asistencia.editar', 'receta.ver', 'salon.ver', 'salon.crear', 'salon.cancelar', 'cocina.ver',
+      'credito_cliente.ver', 'credito_cliente.aprobar', 'cuenta_cobrar.ver', 'cuenta_cobrar.crear', 'asistencia.ver', 'asistencia.editar', 'receta.ver', 'salon.ver', 'salon.crear', 'salon.cancelar', 'cocina.ver', 'produccion.ver', 'produccion.crear',
     ],
   },
   {
@@ -73,6 +73,13 @@ export const PLANTILLAS_PERFIL: readonly PlantillaPerfil[] = [
     descripcion: 'Mesas y comandas de su sucursal; no cobra.',
     alcance: 'sucursal',
     permisos: ['producto.ver', 'precio.ver', 'salon.ver', 'salon.crear'],
+  },
+  {
+    clave: 'produccion',
+    nombre: 'Producción',
+    descripcion: 'Recetas, órdenes de producción y mermas; ve el stock de su sucursal.',
+    alcance: 'sucursal',
+    permisos: ['producto.ver', 'stock.ver', 'produccion.ver', 'produccion.crear'],
   },
   {
     clave: 'cocina',

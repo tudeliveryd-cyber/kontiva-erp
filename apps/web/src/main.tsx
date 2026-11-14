@@ -40,6 +40,7 @@ import { Contabilidad } from './paginas/Contabilidad';
 import { Funcionarios } from './paginas/Funcionarios';
 import { Sueldos } from './paginas/Sueldos';
 import { Asistencia } from './paginas/Asistencia';
+import { Produccion } from './paginas/Produccion';
 import { Recetario } from './paginas/Recetario';
 import { Salon } from './paginas/Salon';
 import { Cocina } from './paginas/Cocina';
@@ -86,6 +87,7 @@ function Rutas() {
         {(puede('informe_ventas.ver') || puede('stock.ver') || puede('recepcion.ver')) && <Route path="informes" element={<Informes />} />}
         {puede('salario.ver') && <Route path="sueldos" element={<Sueldos />} />}
         {puede('asistencia.ver') && <Route path="asistencia" element={<Asistencia />} />}
+        {puede('produccion.ver') && <Route path="produccion" element={<Produccion />} />}
         {puede('receta.ver') && <Route path="recetario" element={<Recetario />} />}
         {puede('salon.ver') && <Route path="salon" element={<Salon />} />}
         {puede('cocina.ver') && <Route path="cocina" element={<Cocina />} />}

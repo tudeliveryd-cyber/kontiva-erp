@@ -264,6 +264,10 @@ export interface BaseDatos {
   liquidacion: LiquidacionTabla;
   liquidacion_item: LiquidacionItemTabla;
   novedad: NovedadTabla;
+  receta_produccion: RecetaProduccionTabla;
+  receta_produccion_insumo: RecetaProduccionInsumoTabla;
+  orden_produccion: OrdenProduccionTabla;
+  orden_produccion_insumo: OrdenProduccionInsumoTabla;
   salon: SalonTabla;
   mesa: MesaTabla;
   cuenta_salon: CuentaSalonTabla;
@@ -577,7 +581,7 @@ export interface VentaPagoTabla {
   referencia: string | null;
 }
 
-export type TipoMovimientoStock = 'inicial' | 'ajuste' | 'venta' | 'anulacion_venta' | 'devolucion' | 'compra' | 'anulacion_compra' | 'transferencia_salida' | 'transferencia_entrada' | 'transferencia';
+export type TipoMovimientoStock = 'inicial' | 'ajuste' | 'venta' | 'anulacion_venta' | 'devolucion' | 'compra' | 'anulacion_compra' | 'transferencia_salida' | 'transferencia_entrada' | 'transferencia' | 'produccion_consumo' | 'produccion' | 'anulacion_produccion' | 'merma';
 
 export interface TransferenciaTabla {
   empresa_id: string;
@@ -1275,4 +1279,56 @@ export interface CuentaSalonItemTabla {
   motivo_anulacion: string | null;
   creado_por: string;
   creado_en: Creado;
+}
+export interface RecetaProduccionTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  variante_id: string;
+  rendimiento: Num;
+  minutos: number | null;
+  nota: string | null;
+  activa: Generated<boolean>;
+  creado_por: string;
+  creado_en: Creado;
+  actualizado_en: Actualizado;
+}
+export interface RecetaProduccionInsumoTabla {
+  empresa_id: string;
+  receta_id: string;
+  linea: number;
+  variante_id: string;
+  cantidad: Num;
+}
+export interface OrdenProduccionTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: ColumnType<string, number | string, never>;
+  deposito_id: string;
+  receta_id: string;
+  variante_id: string;
+  fecha: Fecha;
+  cantidad_planificada: Num;
+  cantidad_producida: ColumnType<string | null, string | null | undefined, string | null>;
+  estado: Generated<'planificada' | 'terminada' | 'anulada'>;
+  costo_total: ColumnType<string | null, string | null | undefined, string | null>;
+  costo_unitario: ColumnType<string | null, string | null | undefined, string | null>;
+  lote_codigo: string | null;
+  lote_vencimiento: FechaNula;
+  nota: string | null;
+  creado_por: string;
+  creado_en: Creado;
+  terminada_por: string | null;
+  terminada_en: Date | null;
+  anulada_por: string | null;
+  anulada_en: Date | null;
+  motivo_anulacion: string | null;
+}
+export interface OrdenProduccionInsumoTabla {
+  empresa_id: string;
+  orden_id: string;
+  linea: number;
+  variante_id: string;
+  cantidad_teorica: Num;
+  cantidad_real: ColumnType<string | null, string | null | undefined, string | null>;
+  costo_unitario: ColumnType<string | null, string | null | undefined, string | null>;
 }

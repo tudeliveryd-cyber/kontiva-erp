@@ -25,6 +25,7 @@ import { FlujoCajaController } from '../src/finanzas/flujo.controller';
 import { ContabilidadController } from '../src/contabilidad/contabilidad.controller';
 import { RecetarioController } from '../src/informes/recetario.controller';
 import { CocinaController, CuentasController, SalonController } from '../src/restaurante/restaurante.controller';
+import { ProduccionController, RecetasProduccionController } from '../src/produccion/produccion.controller';
 import { MarcacionesController, NovedadesController, VacacionesController } from '../src/rrhh/asistencia.controller';
 import { FuncionariosController, LiquidacionesController, RrhhConfiguracionController } from '../src/rrhh/rrhh.controller';
 import { InformesController } from '../src/informes/informes.controller';
@@ -84,6 +85,8 @@ const CONTROLADORES = [
   SalonController,
   CuentasController,
   CocinaController,
+  RecetasProduccionController,
+  ProduccionController,
   VacacionesController,
   InformesController,
 ];
@@ -233,6 +236,11 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     idsDeB['/api/restaurante/mesas'] = msB.body.id;
     const ctB = await http(app).post('/api/restaurante/cuentas').set(hB).send({ mesaId: msB.body.id }).expect(201);
     idsDeB['/api/restaurante/cuentas'] = ctB.body.id;
+    const insB = await http(app).post('/api/productos').set(hB).send({ nombre: 'Harina de B', tasaIva: 10, variantes: [{ precio: 1, costo: 1, codigos: [] }] }).expect(201);
+    const rcB = await http(app).post('/api/produccion/recetas').set(hB).send({ varianteId: vb.varianteId, rendimiento: 10, insumos: [{ varianteId: insB.body.variantes[0].id, cantidad: 1 }] }).expect(201);
+    idsDeB['/api/produccion/recetas'] = rcB.body.id;
+    const opB = await http(app).post('/api/produccion/ordenes').set(hB).send({ varianteId: vb.varianteId, depositoId: vb.depositoId, cantidad: 10, fecha: '2026-11-13' }).expect(201);
+    idsDeB['/api/produccion/ordenes'] = opB.body.id;
   });
   afterAll(() => app.close());
 
@@ -328,6 +336,9 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
           'POST /api/restaurante/cuentas/:id/items/:item/anular': { motivo: 'Intento ajeno' },
           'POST /api/restaurante/cuentas/:id/items/:item/dividir': { cantidad: 1 },
           'POST /api/restaurante/cuentas/:id/mover': { mesaId: '00000000-0000-7000-8000-000000000000' },
+          'PUT /api/produccion/recetas/:id': { varianteId: '00000000-0000-7000-8000-000000000000', rendimiento: 1, insumos: [{ varianteId: '00000000-0000-7000-8000-000000000001', cantidad: 1 }] },
+          'POST /api/produccion/ordenes/:id/terminar': { cantidadProducida: 1 },
+          'POST /api/produccion/ordenes/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/contabilidad/cuentas/:id': { codigo: '1.1.01', nombre: 'Intento ajeno', imputable: true },
           'POST /api/contabilidad/asientos/:id/anular': { motivo: 'Intento ajeno' },
           'PATCH /api/cuentas-bancarias/:id': { banco: 'Banco ajeno', nombre: 'Intento ajeno', fechaSaldoInicial: '2026-11-01' },

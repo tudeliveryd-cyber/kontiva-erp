@@ -16,7 +16,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
-| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia, restaurante |
+| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia, restaurante, panadería y producción |
 
 ### Fase 0 · hecho
 - **Autenticación**: Argon2id, bloqueo progresivo tras 5 intentos, token de acceso de 15 min + renovación rotativa
@@ -258,6 +258,18 @@ Fase 2 completa.
   cada uno; separar una unidad de un ítem), con los precios con que se cargó. La propina entra a la caja aparte de
   la venta. La cuenta se cierra sola al cobrar todo; anular una de esas ventas la reabre.
 - Permisos `salon` y `cocina`; perfiles Mozo y Cocina. En el menú de los rubros restaurante y panadería.
+
+### Fase 5 · hecho (panadería y producción)
+- **Recetas**: qué insumos lleva una tanda y cuánto rinde, con tiempo y procedimiento. Costo por tanda y por unidad
+  con el costo actual de cada insumo, y margen contra el precio de la sucursal (solo con permiso de ver costos).
+- **Órdenes de producción**: se planifican (insumos teóricos = receta × cantidad / rendimiento) y se terminan con lo
+  realmente usado y producido. Al terminar se descuentan los insumos (por lote, primero lo que vence antes), entra
+  lo producido al costo real y se actualiza el costo promedio; con control de lote se crea el lote `OP-N.º` o el
+  indicado. Hoja de producción para imprimir. Anular devuelve los insumos y saca lo producido.
+- **Para pedidos**: de los pedidos pendientes con fecha de entrega, cuánto producir de cada producto con receta
+  (pedido − stock − ya planificado) y qué insumos faltan; las órdenes se planifican con un clic.
+- **Mermas**: sobrante del día, vencido o roto sale del stock con su valor al costo y queda el listado del período.
+- Permiso `produccion`; perfil Producción. En el menú de los rubros panadería, restaurante y supermercado.
 
 ## Estructura
 

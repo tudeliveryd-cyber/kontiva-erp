@@ -79,6 +79,7 @@ export const RECURSOS = {
   receta: { nombre: 'Recetario de farmacia', modulo: 'informes', acciones: ['ver', 'exportar'] },
   salon: { nombre: 'Salón y comandas (restaurante)', modulo: 'ventas', acciones: ['ver', 'crear', 'editar', 'cancelar'] },
   cocina: { nombre: 'Pantalla de cocina y bar', modulo: 'ventas', acciones: ['ver', 'editar'] },
+  produccion: { nombre: 'Producción, recetas y mermas', modulo: 'stock', acciones: ['ver', 'crear', 'editar', 'cancelar'] },
   informe_ganancias: { nombre: 'Informe de ganancias', modulo: 'informes', acciones: ['ver', 'exportar'], confidencial: true },
 
   // Fiscal (Fase 3)

@@ -747,3 +747,46 @@ export const cuentaItemsEntrada = z.object({
     .min(1)
     .max(100),
 });
+
+// ── Producción ───────────────────────────────────────────────────────────────
+
+const cantidadPositiva = z.coerce.number().positive().max(1e9);
+
+export const recetaProduccionEntrada = z
+  .object({
+    varianteId: z.string().uuid('Elija el producto'),
+    rendimiento: cantidadPositiva,
+    minutos: z.coerce.number().int().min(1).max(10080).nullable().optional(),
+    nota: z.string().trim().max(1000).nullable().optional().or(z.literal('').transform(() => null)),
+    activa: z.boolean().default(true),
+    insumos: z.array(z.object({ varianteId: z.string().uuid(), cantidad: cantidadPositiva })).min(1, 'Agregue al menos un insumo').max(100),
+  })
+  .refine((r) => !r.insumos.some((i) => i.varianteId === r.varianteId), { message: 'El producto no puede ser insumo de sí mismo', path: ['insumos'] })
+  .refine((r) => new Set(r.insumos.map((i) => i.varianteId)).size === r.insumos.length, { message: 'Hay insumos repetidos', path: ['insumos'] });
+
+export const ordenProduccionEntrada = z.object({
+  varianteId: z.string().uuid('Elija el producto'),
+  depositoId: z.string().uuid('Elija el depósito'),
+  cantidad: cantidadPositiva,
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  nota: z.string().trim().max(500).nullable().optional().or(z.literal('').transform(() => null)),
+});
+
+export const terminarProduccionEntrada = z.object({
+  cantidadProducida: cantidadPositiva,
+  /** Cantidad real usada de cada insumo (si difiere de la teórica). */
+  insumos: z.array(z.object({ linea: z.number().int().positive(), cantidadReal: z.coerce.number().min(0).max(1e9) })).max(100).optional(),
+  lote: z
+    .object({
+      codigo: z.string().trim().max(40).nullable().optional().or(z.literal('').transform(() => null)),
+      vencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().or(z.literal('').transform(() => null)),
+    })
+    .nullable()
+    .optional(),
+});
+
+export const mermaEntrada = z.object({
+  depositoId: z.string().uuid('Elija el depósito'),
+  motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
+  items: z.array(z.object({ varianteId: z.string().uuid(), cantidad: cantidadPositiva, loteId: z.string().uuid().optional() })).min(1).max(500),
+});
