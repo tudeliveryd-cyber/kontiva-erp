@@ -3,12 +3,14 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { describirBalanza } from './balanza';
 import { describir } from './impresora';
 import { crearServidor, VERSION, type ConfigAgente } from './servidor';
 
 /**
  * KONTIVA ERP · agente local del PDV.
- * Se instala en la computadora de la caja; la web del PDV le envía los tickets y la orden de abrir el cajón.
+ * Se instala en la computadora de la caja; la web del PDV le envía los tickets y la orden de abrir el cajón,
+ * y le pide el peso de la balanza (opcional: "balanza" en la configuración, ver balanza.ts).
  * La primera vez crea la configuración con una clave nueva, que se carga en el PDV (Impresora).
  */
 function rutaConfig(): string {
@@ -40,6 +42,8 @@ servidor.listen(config.puerto, '127.0.0.1', () => {
   console.log(`KONTIVA ERP · agente local ${VERSION}`);
   console.log(`Escuchando en http://127.0.0.1:${config.puerto}`);
   console.log(`Impresora: ${describir(config.impresora)} · ${config.ancho} columnas`);
+  const balanza = describirBalanza(config.balanza);
+  if (balanza) console.log(`${balanza} · ${config.balanza?.tipo === 'prueba' ? 'peso fijo' : `protocolo ${config.balanza?.protocolo ?? 'pedido'}`}`);
   console.log(`Configuración: ${ruta}`);
   console.log(`Clave para el PDV: ${config.token}`);
   if (nueva) console.log('Configuración creada: edite la impresora en el archivo y reinicie el agente.');

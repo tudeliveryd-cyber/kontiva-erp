@@ -1,8 +1,8 @@
 {
   "name": "@kontiva/agente",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "KONTIVA ERP · agente local del PDV: impresora térmica (ESC/POS) y cajón de dinero",
+  "description": "KONTIVA ERP · agente local del PDV: impresora térmica (ESC/POS), cajón de dinero y balanza",
   "type": "commonjs",
   "main": "dist/main.js",
   "bin": {

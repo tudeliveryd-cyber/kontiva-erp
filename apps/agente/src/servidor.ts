@@ -1,10 +1,11 @@
 import type { DocumentoTicket } from '@kontiva/shared';
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { describirBalanza, ErrorBalanza, LectorBalanza, type ConfigBalanza } from './balanza';
 import { pulsoCajon, renderizar } from './escpos';
 import { describir, enviar, type ConfigImpresora } from './impresora';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 export interface ConfigAgente {
   puerto: number;
@@ -15,6 +16,8 @@ export interface ConfigAgente {
   impresora: ConfigImpresora;
   /** Columnas del papel: 48 para 80 mm, 32 para 58 mm. */
   ancho: number;
+  /** Balanza conectada a esta computadora (opcional). */
+  balanza?: ConfigBalanza;
 }
 
 const LIMITE = 256 * 1024;
@@ -54,7 +57,8 @@ function documentoValido(d: unknown): d is DocumentoTicket {
  * Responde la verificación de "red privada" de Chrome para que una página https pueda usarlo.
  */
 export function crearServidor(config: ConfigAgente): Server {
-  return createServer((req: IncomingMessage, res: ServerResponse) => {
+  const balanza = config.balanza ? new LectorBalanza(config.balanza) : null;
+  const srv = createServer((req: IncomingMessage, res: ServerResponse) => {
     const origen = req.headers.origin;
     const permitido = !origen || !config.origenes.length || config.origenes.includes(origen);
     const responder = (estado: number, cuerpo: unknown) => {
@@ -84,7 +88,15 @@ export function crearServidor(config: ConfigAgente): Server {
 
     void (async () => {
       try {
-        if (req.method === 'GET' && ruta === '/estado') return responder(200, { version: VERSION, impresora: describir(config.impresora), ancho: config.ancho });
+        if (req.method === 'GET' && ruta === '/estado') return responder(200, { version: VERSION, impresora: describir(config.impresora), ancho: config.ancho, balanza: describirBalanza(config.balanza) });
+        if (req.method === 'GET' && ruta === '/peso') {
+          if (!balanza) return responder(409, { codigo: 'SIN_BALANZA', mensaje: 'Este agente no tiene una balanza configurada' });
+          try {
+            return responder(200, await balanza.leer());
+          } catch (e) {
+            return responder(e instanceof ErrorBalanza ? 422 : 502, { codigo: 'BALANZA', mensaje: (e as Error).message });
+          }
+        }
         if (req.method === 'POST' && ruta === '/imprimir') {
           const cuerpo = (await leerCuerpo(req)) as { documento?: unknown };
           if (!documentoValido(cuerpo.documento)) return responder(400, { codigo: 'DOCUMENTO', mensaje: 'Documento de ticket inválido' });
@@ -122,4 +134,6 @@ export function crearServidor(config: ConfigAgente): Server {
       }
     })();
   });
+  srv.on('close', () => balanza?.cerrar());
+  return srv;
 }

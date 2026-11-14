@@ -97,9 +97,10 @@ Producto comercial de **Araújo Tech Sistemas**.
 - **Balanza etiquetadora**: el PDV reconoce las etiquetas EAN-13 que comienzan con 2 (prefijo, PLU de 4 a 6
   dígitos, peso o importe, dígito verificador) y carga el producto con su cantidad, con y sin conexión.
   Se configura en Empresa, con prueba de lectura. El PLU se carga como código de barras del artículo.
-
-### Fase 1 · pendiente
-- Balanza conectada por puerto serie (las etiquetadoras ya funcionan sin el agente).
+- **Balanza de mostrador conectada a la caja** (agente 0.2): por puerto serie (RS-232 o USB-serie) o por red,
+  protocolo de pedido (ENQ: Toledo, Filizola, Urano…) o continuo. Al agregar un producto por kilo el PDV pide
+  el peso; el botón de la balanza en la línea lo vuelve a leer. Avisa peso inestable, negativo o sobrecarga
+  sin cargar la cantidad. Configuración en [apps/agente](apps/agente/README.md).
 
 ### Fase 2 · hecho (compras y cuentas a pagar)
 - **Proveedores** con RUC, contacto y plazo de pago; saldo a pagar por proveedor.

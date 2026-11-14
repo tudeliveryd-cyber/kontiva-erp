@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardCheck, CloudOff, FileText, Grid3x3, Minus, Percent, Pill, Plus, Printer, RefreshCw, Repeat, Scissors, Search, Ticket as IconoVale, Trash2, UserRound, UtensilsCrossed, X } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, CloudOff, FileText, Grid3x3, Minus, Percent, Pill, Plus, Printer, RefreshCw, Repeat, Scale, Scissors, Search, Ticket as IconoVale, Trash2, UserRound, UtensilsCrossed, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { calcularItems, lineaPresentacion, calcularPagos, ErrorCalculo, type ConfigBalanza, type Cotizaciones } from '@kontiva/shared';
@@ -11,7 +11,7 @@ import { api, FalloApi } from '../lib/api';
 import { cantidad as fmtCant, dinero, NOMBRE_MEDIO, NOMBRE_MONEDA, nuevaClave, type Cliente, type Medio, type Moneda, type Venta } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 import { buscarEnCatalogo, encolar, esErrorDeRed, usePdvOffline } from '../lib/offline';
-import { estadoAgente, guardarAgente, imprimirEnAgente, leerAgente, pruebaAgente, ticketDeVenta, ticketProvisorio, type ConfigAgente } from '../lib/impresora';
+import { estadoAgente, guardarAgente, imprimirEnAgente, leerAgente, pesoAgente, pruebaAgente, ticketDeVenta, ticketProvisorio, type ConfigAgente } from '../lib/impresora';
 import { fechaCorta, type DocComercial } from './Pedidos';
 import { nombreCuenta, type Cuenta } from './Salon';
 
@@ -162,7 +162,7 @@ function CabeceraPdv({ c, alImpresora }: { c: ContextoPdv; alImpresora?: () => v
         )}
       </div>
       {alImpresora && (
-        <button className="btn" style={{ height: 30, background: 'transparent', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }} onClick={alImpresora} title="Impresora térmica y cajón">
+        <button className="btn" style={{ height: 30, background: 'transparent', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }} onClick={alImpresora} title="Impresora, cajón y balanza">
           <Printer size={15} /> Impresora
         </button>
       )}
@@ -205,6 +205,31 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     }
     imprimirEnAgente(agente, { ...doc, abrirCajon: conCajon && agente.cajon }).catch((e: Error) => setAviso(`Impresora: ${e.message}`));
   };
+  /** Peso de la balanza del equipo (por el agente) para la última línea de ese producto por kilo. */
+  const [pesando, setPesando] = useState<string | null>(null);
+  const agenteRef = useRef(agente);
+  agenteRef.current = agente;
+  const leerPeso = useCallback(async (varianteId: string) => {
+    const a = agenteRef.current;
+    if (!a?.balanza) return;
+    setPesando(varianteId);
+    try {
+      const p = await pesoAgente(a);
+      if (!p.estable) setAviso('El peso todavía no está estable: espere y lea de nuevo');
+      else if (Number(p.kg) <= 0) setAviso('La balanza marca 0: coloque el producto y lea de nuevo');
+      else {
+        setLineas((ls) => {
+          const i = ls.findLastIndex((l) => l.varianteId === varianteId && !l.presentacionId);
+          return i < 0 ? ls : ls.map((l, j) => (j === i ? { ...l, cantidad: String(Number(p.kg)) } : l));
+        });
+        setAviso(null);
+      }
+    } catch (e) {
+      setAviso(`Balanza: ${(e as Error).message}`);
+    } finally {
+      setPesando(null);
+    }
+  }, []);
   const buscador = useRef<HTMLInputElement>(null);
   const cot: Cotizaciones = useMemo(() => Object.fromEntries(c.cotizaciones.map((x) => [x.moneda, { compra: x.compra, venta: x.venta }])), [c.cotizaciones]);
 
@@ -245,7 +270,8 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     setQ('');
     setResultados(null);
     enfocar();
-  }, [c.permiteStockNegativo]);
+    if (it.unidad === 'kg' && !it.presentacionId && !it.cantidad) void leerPeso(it.varianteId);
+  }, [c.permiteStockNegativo, leerPeso]);
 
   const buscar = async () => {
     const texto = q.trim();
@@ -549,6 +575,11 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                             <button aria-label="Más" onClick={() => cambiarCantidad(i, String(Number(l.cantidad) + 1))}>
                               <Plus size={14} />
                             </button>
+                            {agente?.balanza && l.unidad === 'kg' && !l.presentacionId && (
+                              <button aria-label="Leer balanza" title="Leer balanza" disabled={pesando !== null} onClick={() => void leerPeso(l.varianteId)}>
+                                <Scale size={14} />
+                              </button>
+                            )}
                             {presentacionDe(l) ? <span className="tenue peq">{presentacionDe(l)!.nombre.split(' ')[0]!.toLowerCase()}</span> : l.unidad !== 'unidad' && <span className="tenue peq">{l.unidad}</span>}
                           </div>
                           )}
@@ -1291,7 +1322,18 @@ function ConfigImpresora({ actual, alCerrar, alGuardar }: { actual: ConfigAgente
     try {
       const e = await estadoAgente(f);
       if (imprimirPrueba) await pruebaAgente(f);
-      setEstado({ ok: true, texto: `${e.impresora} · ${e.ancho} columnas${imprimirPrueba ? ' · prueba impresa' : ''}` });
+      setEstado({ ok: true, texto: `${e.impresora} · ${e.ancho} columnas${e.balanza ? ` · ${e.balanza}` : ''}${imprimirPrueba ? ' · prueba impresa' : ''}` });
+    } catch (e) {
+      setEstado({ ok: false, texto: (e as Error).message });
+    } finally {
+      setProbando(false);
+    }
+  };
+  const probarBalanza = async () => {
+    setProbando(true);
+    try {
+      const p = await pesoAgente(f);
+      setEstado({ ok: true, texto: `Peso: ${p.kg.replace('.', ',')} kg${p.estable ? '' : ' (inestable)'}` });
     } catch (e) {
       setEstado({ ok: false, texto: (e as Error).message });
     } finally {
@@ -1300,7 +1342,7 @@ function ConfigImpresora({ actual, alCerrar, alGuardar }: { actual: ConfigAgente
   };
   return (
     <Cajon
-      titulo="Impresora térmica y cajón"
+      titulo="Impresora, cajón y balanza"
       alCerrar={alCerrar}
       pie={
         <>
@@ -1312,15 +1354,17 @@ function ConfigImpresora({ actual, alCerrar, alGuardar }: { actual: ConfigAgente
     >
       <div className="form">
         <p className="tenue peq" style={{ margin: 0 }}>
-          Instale el agente de KONTIVA en esta computadora: imprime directo en la impresora de tickets (ESC/POS, por red o USB) y abre el cajón de dinero. Al iniciarlo muestra la clave que va abajo. Sin agente, se usa la impresión del navegador.
+          Instale el agente de KONTIVA en esta computadora: imprime directo en la impresora de tickets (ESC/POS, por red o USB), abre el cajón de dinero y lee el peso de la balanza. Al iniciarlo muestra la clave que va abajo. Sin agente, se usa la impresión del navegador.
         </p>
         <Campo etiqueta="Dirección del agente" id="ag-u"><input id="ag-u" className="entrada mono" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value.trim() })} /></Campo>
         <Campo etiqueta="Clave del agente" id="ag-t"><input id="ag-t" className="entrada mono" autoComplete="off" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value.trim() })} /></Campo>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={f.automatico} onChange={(e) => setF({ ...f, automatico: e.target.checked })} /> Imprimir el ticket al confirmar cada venta</label>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={f.cajon} onChange={(e) => setF({ ...f, cajon: e.target.checked })} /> Abrir el cajón en las ventas con efectivo</label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={f.balanza ?? false} onChange={(e) => setF({ ...f, balanza: e.target.checked })} /> Leer el peso de la balanza en los productos por kilo</label>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" disabled={probando || f.token.length < 8} onClick={() => void probar(false)}>Probar conexión</button>
           <button className="btn" disabled={probando || f.token.length < 8} onClick={() => void probar(true)}><Printer size={16} /> Imprimir prueba</button>
+          {f.balanza && <button className="btn" disabled={probando || f.token.length < 8} onClick={() => void probarBalanza()}><Scale size={16} /> Probar balanza</button>}
         </div>
         {estado && <Aviso tipo={estado.ok ? 'ok' : 'error'}>{estado.texto}</Aviso>}
       </div>

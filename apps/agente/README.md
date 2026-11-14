@@ -5,7 +5,11 @@ y la orden de abrir el cajón; el agente lo imprime en la impresora térmica con
 (Epson y compatibles: Bematech, Daruma, Elgin, Xprinter, 3nStar…), con tildes y ñ (página PC850),
 el QR del KuDE impreso por la propia impresora, corte de papel y pulso al cajón.
 
-El lector de código de barras no necesita el agente: funciona como teclado.
+También lee el peso de una **balanza** conectada por cable serie (RS-232 o USB-serie) o por red, para los
+productos que se venden por kilo.
+
+El lector de código de barras no necesita el agente: funciona como teclado. Las balanzas que imprimen
+etiquetas tampoco: el PDV lee el código de la etiqueta (Empresa → Balanza).
 
 ## Instalación
 
@@ -44,7 +48,24 @@ Impresora (`impresora.tipo`):
 `ancho`: 48 columnas para papel de 80 mm, 32 para 58 mm. `origenes`: la dirección del ERP; vacío acepta
 cualquiera que tenga la clave.
 
-En el PDV: botón **Impresora** → dirección `http://127.0.0.1:9420` y la clave → *Imprimir prueba* → *Guardar*.
+Balanza (opcional, `balanza`):
+
+```json
+"balanza": { "tipo": "serie", "puerto": "COM3", "baudios": 9600, "protocolo": "pedido", "decimales": 3 }
+```
+
+| campo | uso |
+| --- | --- |
+| `tipo` | `serie` (`puerto`: `COM3` en Windows, `/dev/ttyUSB0` en Linux), `red` (`host`, `puerto`) o `prueba` (`kg` fijo) |
+| `baudios` | velocidad del puerto, la del manual de la balanza (9600 por omisión; 8 bits, sin paridad, 1 bit de parada) |
+| `protocolo` | `pedido`: el agente envía ENQ y la balanza responde (Toledo, Filizola, Urano y la mayoría en modo PDV); `continuo`: la balanza transmite todo el tiempo |
+| `decimales` | si el peso llega sin punto (`01234`), cuántos dígitos son decimales: 3 = gramos |
+
+Si la balanza informa peso inestable, negativo o sobrecarga, el PDV muestra el aviso y no carga la cantidad.
+
+En el PDV: botón **Impresora** → dirección `http://127.0.0.1:9420` y la clave → *Imprimir prueba* → *Guardar*. Con balanza: marcar
+*Leer el peso de la balanza* y *Probar balanza*. Al agregar un producto por kilo, el PDV pide el peso; el botón
+de la balanza en la línea lo vuelve a leer.
 
 ## Seguridad
 

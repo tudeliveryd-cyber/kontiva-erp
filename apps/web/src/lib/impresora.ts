@@ -13,6 +13,8 @@ export interface ConfigAgente {
   automatico: boolean;
   /** Abrir el cajón en las ventas con efectivo. */
   cajon: boolean;
+  /** Pedir el peso a la balanza conectada al agente en los productos por kilo. */
+  balanza?: boolean;
 }
 
 const CLAVE = 'kontiva.agente';
@@ -51,7 +53,9 @@ async function llamar<T>(c: ConfigAgente, ruta: string, cuerpo?: unknown): Promi
   return datos as T;
 }
 
-export const estadoAgente = (c: ConfigAgente) => llamar<{ version: string; impresora: string; ancho: number }>(c, '/estado');
+export const estadoAgente = (c: ConfigAgente) => llamar<{ version: string; impresora: string; ancho: number; balanza?: string | null }>(c, '/estado');
+/** Peso en kilos que marca la balanza (texto con 3 decimales). */
+export const pesoAgente = (c: ConfigAgente) => llamar<{ kg: string; estable: boolean }>(c, '/peso');
 export const pruebaAgente = (c: ConfigAgente) => llamar(c, '/prueba');
 export const imprimirEnAgente = (c: ConfigAgente, documento: DocumentoTicket) => llamar(c, '/imprimir', { documento });
 
