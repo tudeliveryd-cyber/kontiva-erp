@@ -367,7 +367,7 @@ Pruebas: `pnpm test` (recrea la base `kontiva_test` en cada ejecución).
 Pantallas y carga, con la API y la web en marcha:
 
 ```bash
-pnpm --filter @kontiva/api cli empresa:crear --razon "Pruebas" --plan ENTERPRISE --email dueno@prueba.test --nombre "Dueño" --contrasena "Dueno-2026!"
+pnpm --filter @kontiva/api cli empresa:crear --razon "Pruebas" --plan BUSINESS --email dueno@prueba.test --nombre "Dueño" --contrasena "Dueno-2026!"
 pnpm --filter @kontiva/api cli usuario:crear --empresa <id> --email cajero1@prueba.test --nombre "Cajero 1" --perfil cajero --contrasena "Cajero-2026!"
 E2E_EMAIL=dueno@prueba.test E2E_CONTRASENA=Dueno-2026! CHROME_PATH=/usr/bin/google-chrome pnpm e2e:pantallas
 LIMITE_POR_MINUTO=100000 pnpm dev:api   # la carga sale de una sola IP

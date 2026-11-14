@@ -94,7 +94,7 @@ jobs:
       - name: Empresa y cajeros de prueba
         working-directory: apps/api
         run: |
-          node dist/cli.js empresa:crear --razon "Pruebas CI S.A." --plan ENTERPRISE --email dueno@ci.test --nombre "Dueño CI" --contrasena "Dueno-CI-2026!" | tee /tmp/empresa.txt
+          node dist/cli.js empresa:crear --razon "Pruebas CI S.A." --plan BUSINESS --email dueno@ci.test --nombre "Dueño CI" --contrasena "Dueno-CI-2026!" | tee /tmp/empresa.txt
           EMPRESA=$(grep -oE '[0-9a-f]{8}-[0-9a-f-]{27}' /tmp/empresa.txt | head -1)
           for i in 1 2 3 4; do
             node dist/cli.js usuario:crear --empresa "$EMPRESA" --email "cajero$i@ci.test" --nombre "Cajero $i" --perfil cajero --contrasena "Cajero-CI-2026!"
