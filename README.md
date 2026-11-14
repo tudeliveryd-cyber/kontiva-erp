@@ -15,7 +15,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 1 | Operación central: productos, inventario, PDV, caja | Circuito central listo · ver pendientes abajo |
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
-| 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
+| 4 | RRHH, informes, dashboard, app del dueño | Lista |
 | 5 | Verticales por rubro e integraciones | Lista · lotes y vencimientos, farmacia, restaurante, panadería y producción, tienda de ropa, distribuidora y ferretería |
 | Cierre | Exportación de datos, documentación de la API, pruebas de pantallas y de carga | Lista |
 
@@ -47,8 +47,6 @@ Producto comercial de **Araújo Tech Sistemas**.
 
 ### Fase 0 · pendiente menor
 - Interfaz en portugués (hoy solo español).
-- Documentación OpenAPI de la API.
-- Exportación completa de los datos de una empresa (para empresas suspendidas o que se van).
 - Monitoreo y alertas externas (depende del proveedor de hosting elegido).
 
 ### Fase 1 · hecho (circuito central)
@@ -103,7 +101,6 @@ Producto comercial de **Araújo Tech Sistemas**.
 
 ### Fase 1 · pendiente
 - Balanza conectada por puerto serie (las etiquetadoras ya funcionan sin el agente).
-- Pruebas de interfaz automatizadas (Playwright) y de rendimiento (k6).
 
 ### Fase 2 · hecho (compras y cuentas a pagar)
 - **Proveedores** con RUC, contacto y plazo de pago; saldo a pagar por proveedor.
