@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Upload, Trash2 } from 'lucide-react';
+import { Grid3x3, Plus, Search, Upload, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
 import { api } from '../lib/api';
 import { dinero, UNIDADES, type Producto } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { ArmarGrade, TablaGrade, type FilaGrade } from '../componentes/Ropa';
+import { compararTalles } from '@kontiva/shared';
 
 export function Productos() {
   const { puede } = useSesion();
@@ -68,7 +70,7 @@ export function Productos() {
                         <td>
                           <div style={{ fontWeight: 600 }}>{p.nombre}</div>
                           <div className="tenue peq">
-                            {v.length > 1 ? `${v.length} variantes` : p.marca?.nombre ?? ''}
+                            {v.some((x) => x.talle || x.color) ? `${new Set(v.map((x) => x.talle ?? '')).size} talles × ${new Set(v.map((x) => x.color ?? '')).size} colores` : v.length > 1 ? `${v.length} variantes` : p.marca?.nombre ?? ''}
                             {p.tipo === 'servicio' ? 'Servicio' : ''}
                           </div>
                         </td>
@@ -139,6 +141,16 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
     ],
   );
   const [nuevaCategoria, setNuevaCategoria] = useState('');
+  // Grade talle × color (ropa y calzado): reemplaza la lista de variantes por una tabla.
+  const activas = producto?.variantes.filter((v) => v.activa) ?? [];
+  const [grade, setGrade] = useState<FilaGrade[] | null>(
+    activas.some((v) => v.talle || v.color)
+      ? activas
+          .map((v) => ({ id: v.id, talle: v.talle ?? '', color: v.color ?? '', sku: v.sku ?? '', codigos: v.codigos.join(', '), precio: String(Number(v.precio)), costo: v.costo ? String(Number(v.costo)) : '' }))
+          .sort((a, b) => compararTalles(a.talle, b.talle) || a.color.localeCompare(b.color, 'es'))
+      : null,
+  );
+  const [armando, setArmando] = useState(false);
 
   const crearCategoria = useMutation({
     mutationFn: () => api<{ id: string }>('/categorias', { metodo: 'POST', cuerpo: { nombre: nuevaCategoria } }),
@@ -162,7 +174,17 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
         ...(medicamento
           ? { principioActivo: d.principioActivo.trim() || null, concentracion: d.concentracion.trim() || null, forma: d.forma.trim() || null, registroSanitario: d.registroSanitario.trim() || null, condicionVenta: d.condicionVenta }
           : { principioActivo: null, concentracion: null, forma: null, registroSanitario: null, condicionVenta: 'libre' }),
-        variantes: variantes.map((v) => ({
+        variantes: grade
+          ? grade.map((f) => ({
+              ...(f.id ? { id: f.id } : {}),
+              talle: f.talle || null,
+              color: f.color || null,
+              sku: f.sku || null,
+              codigos: f.codigos.split(/[,\s]+/).map((c) => c.trim()).filter(Boolean),
+              precio: Number(f.precio || 0),
+              ...(editarCosto && f.costo !== '' ? { costo: Number(f.costo) } : {}),
+            }))
+          : variantes.map((v) => ({
           ...(v.id ? { id: v.id } : {}),
           nombre: v.nombre || null,
           sku: v.sku || null,
@@ -192,6 +214,7 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
   return (
     <Cajon
       titulo={producto ? producto.nombre : 'Nuevo producto'}
+      ancho={grade || armando ? 900 : undefined}
       alCerrar={alCerrar}
       pie={
         editable && (
@@ -304,6 +327,41 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
         </div>
       )}
 
+      {(grade || armando) && (
+        <div className="seccion-form">
+          <h3>Talles y colores</h3>
+          <div className="form">
+            {armando ? (
+              <>
+                <ArmarGrade
+                  nombre={d.nombre}
+                  actuales={grade ?? []}
+                  verCosto={verCosto && editarCosto}
+                  alArmar={(f) => {
+                    setGrade(f);
+                    setArmando(false);
+                  }}
+                />
+                <button type="button" className="btn chico" style={{ alignSelf: 'flex-start' }} onClick={() => setArmando(false)}>Volver</button>
+              </>
+            ) : (
+              grade && (
+                <>
+                  <TablaGrade filas={grade} editable={editable} editarPrecio={editarPrecio} verCosto={verCosto} editarCosto={editarCosto} alCambiar={setGrade} />
+                  {editable && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="btn chico" onClick={() => setArmando(true)}><Grid3x3 size={14} /> Cambiar talles y colores</button>
+                      {!producto && <button type="button" className="btn chico" onClick={() => setGrade(null)}>Sin grade</button>}
+                    </div>
+                  )}
+                </>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+      {!grade && !armando && (
       <div className="seccion-form">
         <h3>{varias ? 'Variantes' : 'Precio y códigos'}</h3>
         <div className="form">
@@ -352,11 +410,17 @@ function FichaProducto({ producto, alCerrar }: { producto: Producto | null; alCe
           ))}
           {editable && (
             <button type="button" className="btn chico" style={{ alignSelf: 'flex-start' }} onClick={() => setVariantes((vs) => [...vs, { nombre: '', sku: '', codigos: '', precio: vs[0]?.precio ?? '', costo: vs[0]?.costo ?? '', stockMinimo: vs[0]?.stockMinimo ?? '', activa: true }])}>
-              <Plus size={14} /> Agregar variante (talle, color, presentación)
+              <Plus size={14} /> Agregar variante (presentación, sabor)
+            </button>
+          )}
+          {editable && d.tipo === 'producto' && (
+            <button type="button" className="btn chico" style={{ alignSelf: 'flex-start' }} onClick={() => setArmando(true)}>
+              <Grid3x3 size={14} /> Armar grade de talles y colores
             </button>
           )}
         </div>
       </div>
+      )}
     </Cajon>
   );
 }

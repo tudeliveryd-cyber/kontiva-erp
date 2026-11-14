@@ -11,6 +11,7 @@ import { conflicto, invalido, noEncontrado, prohibido } from '../comun/errores';
 import { moverStock, siguienteNumero } from '../comun/stock';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
+import { emitirVale } from './vales.controller';
 import { esperado, obtenerCaja, sesionAbierta } from './cajas.controller';
 import QRCode from 'qrcode';
 import { cargarFe, emitirNotaCredito, numeroComprobante } from '../sifen/emision';
@@ -51,6 +52,7 @@ export async function leerDevolucion(tx: Tx, id: string) {
     .where('n.devolucion_id', '=', id)
     .executeTakeFirst();
   const feConf = nc ? await tx.selectFrom('fe_configuracion').select('timbrado_fecha').executeTakeFirst() : undefined;
+  const vale = d.medio === 'vale' ? await tx.selectFrom('vale').select(['id', 'numero', 'codigo', 'monto', 'saldo', 'vence']).where('devolucion_id', '=', id).executeTakeFirst() : undefined;
   const aplicado = await tx.selectFrom('cobro_aplicacion').select((eb) => eb.fn.sum<string>('monto').as('m')).where('devolucion_id', '=', id).executeTakeFirst();
   return {
     id: d.id,
@@ -83,6 +85,7 @@ export async function leerDevolucion(tx: Tx, id: string) {
     fecha: d.creado_en,
     usuario: d.usuario,
     autorizadoPor: d.autorizado_por,
+    vale: vale ? { id: vale.id, numero: Number(vale.numero), codigo: vale.codigo, monto: vale.monto, saldo: vale.saldo, vence: vale.vence } : null,
     items: items.map((i) => ({ linea: i.linea_venta, descripcion: i.descripcion, cantidad: i.cantidad, total: i.total })),
   };
 }
@@ -132,7 +135,7 @@ export class DevolucionesController {
         autorizadoPor = await this.auth.verificarAutorizacion(ctx, autorizacion, 'devolucion.aprobar');
         if (!autorizadoPor) throw prohibido('La devolución requiere autorización de un supervisor');
       }
-      const venta = await tx.selectFrom('venta').select(['id', 'numero', 'estado', 'sucursal_id', 'comprobante']).where('id', '=', d.ventaId).forUpdate().executeTakeFirst();
+      const venta = await tx.selectFrom('venta').select(['id', 'numero', 'estado', 'sucursal_id', 'comprobante', 'cliente_id']).where('id', '=', d.ventaId).forUpdate().executeTakeFirst();
       if (!venta || !enSucursal(ctx, venta.sucursal_id)) throw noEncontrado('Venta');
       if (venta.estado === 'anulada') throw conflicto('VENTA_ANULADA', 'La venta está anulada: no hay nada que devolver');
 
@@ -217,10 +220,14 @@ export class DevolucionesController {
         await tx.insertInto('cobro_aplicacion').values({ empresa_id: ctx.empresaId, cobro_id: null, devolucion_id: dev.id, cuenta_cobrar_id: cuenta.id, monto: aCuenta.toFixed(2) }).execute();
         await tx.updateTable('cuenta_cobrar').set({ saldo: nuevo.toFixed(2), estado: nuevo.isZero() ? 'cobrada' : 'parcial' }).where('id', '=', cuenta.id).execute();
       }
-      if (reintegro.gt(0)) {
+      let vale: Awaited<ReturnType<typeof emitirVale>> | null = null;
+      if (reintegro.gt(0) && d.medio === 'vale') {
+        // Cambio: no sale dinero; el importe queda como saldo a favor para otra compra.
+        vale = await emitirVale(tx, ctx, { sucursalId: caja.sucursal_id, clienteId: venta.cliente_id, devolucionId: dev.id, monto: reintegro });
+      } else if (reintegro.gt(0)) {
         await tx
           .insertInto('movimiento_caja')
-          .values({ empresa_id: ctx.empresaId, sesion_id: sesion.id, tipo: 'devolucion', medio: d.medio, moneda: 'PYG', monto: reintegro.neg().toFixed(2), venta_id: venta.id, motivo: d.motivo, autorizado_por: autorizadoPor, creado_por: ctx.usuarioId })
+          .values({ empresa_id: ctx.empresaId, sesion_id: sesion.id, tipo: 'devolucion', medio: d.medio as Exclude<typeof d.medio, 'vale'>, moneda: 'PYG', monto: reintegro.neg().toFixed(2), venta_id: venta.id, motivo: d.motivo, autorizado_por: autorizadoPor, creado_por: ctx.usuarioId })
           .execute();
       }
       if (fiscal) {
@@ -235,7 +242,7 @@ export class DevolucionesController {
           lineas: detalle.map((x) => ({ linea: x.linea, cantidad: x.cantidad, total: x.total })),
         });
       }
-      await auditar(tx, { ...ctx, ...o }, { accion: 'devolucion', entidad: 'venta', entidadId: venta.id, autorizadoPor, despues: { numero, venta: Number(venta.numero), total: total.toFixed(0), motivo: d.motivo, notaCredito: !!fiscal } });
+      await auditar(tx, { ...ctx, ...o }, { accion: 'devolucion', entidad: 'venta', entidadId: venta.id, autorizadoPor, despues: { numero, venta: Number(venta.numero), total: total.toFixed(0), motivo: d.motivo, notaCredito: !!fiscal, ...(vale && { vale: vale.numero }) } });
       return (await leerDevolucion(tx, dev.id))!;
     });
   }

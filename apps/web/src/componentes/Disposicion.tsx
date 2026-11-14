@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   FileText,
   Tags,
+  TicketCheck,
   Boxes,
   Package,
   Receipt,
@@ -48,6 +49,7 @@ export function Disposicion() {
   const operacion = [
     { a: '/cajas', icono: Store, texto: 'Cajas y PDV', visible: puede('caja.ver') },
     { a: '/ventas', icono: Receipt, texto: 'Ventas', visible: puede('venta.ver') },
+    { a: '/vales', icono: TicketCheck, texto: 'Vales de cambio', visible: puede('venta.ver') && ['ropa', 'general'].includes(yo?.empresa.rubro ?? '') },
     { a: '/presupuestos', icono: FileText, texto: 'Presupuestos', visible: puede('presupuesto.ver') },
     { a: '/pedidos', icono: ClipboardCheck, texto: 'Pedidos', visible: puede('pedido.ver') },
     { a: '/productos', icono: Package, texto: 'Productos', visible: puede('producto.ver') },

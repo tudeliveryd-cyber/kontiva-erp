@@ -49,7 +49,7 @@ export function Empresa() {
         metodo: "PATCH",
         cuerpo:
           Object.keys(d).length === 1 &&
-          ("permiteStockNegativo" in d || "balanza" in d)
+          ("permiteStockNegativo" in d || "balanza" in d || "valeDias" in d)
             ? d
             : { ...d, email: d.email || null, ruc: d.ruc || undefined },
       }),
@@ -172,6 +172,22 @@ export function Empresa() {
               Permitir vender sin stock (el saldo queda negativo hasta el
               próximo conteo)
             </label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+              <label htmlFor="vale-dias">Los vales de cambio vencen a los</label>
+              <select
+                id="vale-dias"
+                className="entrada"
+                style={{ width: 160 }}
+                disabled={!editable || guardar.isPending}
+                value={q.data.valeDias}
+                onChange={(e) => guardar.mutate({ valeDias: Number(e.target.value) })}
+              >
+                {[30, 60, 90, 180, 365].map((n) => (
+                  <option key={n} value={n}>{n} días</option>
+                ))}
+                <option value={0}>No vencen</option>
+              </select>
+            </div>
           </div>
         </section>
 

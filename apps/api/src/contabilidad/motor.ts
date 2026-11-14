@@ -101,7 +101,7 @@ export async function mapaConceptos(tx: Tx) {
   const filas = await tx.selectFrom('cuenta_concepto').select(['concepto', 'cuenta_id']).execute();
   const m = new Map(filas.map((f) => [f.concepto as ConceptoContable, f.cuenta_id]));
   const todos = (Object.keys(CONCEPTOS_CONTABLES) as ConceptoContable[]).filter((c) => !m.has(c));
-  return { m, faltan: todos.filter((c) => !CONCEPTOS_RRHH.includes(c)), faltanRrhh: todos.filter((c) => CONCEPTOS_RRHH.includes(c)) };
+  return { m, faltan: todos.filter((c) => !CONCEPTOS_RRHH.includes(c) && c !== 'vales'), faltanRrhh: todos.filter((c) => CONCEPTOS_RRHH.includes(c)), faltaVales: todos.includes('vales') };
 }
 
 const TIPOS_ORIGEN = {
@@ -164,11 +164,14 @@ export async function pendientes(tx: Tx, hasta: string) {
  * Idempotente: cada documento genera un asiento (y otro inverso si se anuló).
  */
 export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
-  const { m, faltan, faltanRrhh } = await mapaConceptos(tx);
+  const { m, faltan, faltanRrhh, faltaVales } = await mapaConceptos(tx);
   if (faltan.length) throw conflicto('CONFIGURACION_INCOMPLETA', `Asigne una cuenta a: ${faltan.map((f) => CONCEPTOS_CONTABLES[f]).join(', ')}`);
   if (faltanRrhh.length) {
     const hay = await tx.selectFrom('liquidacion').select('id').where('confirmada_en', 'is not', null).limit(1).executeTakeFirst();
     if (hay) throw conflicto('CONFIGURACION_INCOMPLETA', `Para contabilizar los sueldos, asigne una cuenta a: ${faltanRrhh.map((f) => CONCEPTOS_CONTABLES[f]).join(', ')}`);
+  }
+  if (faltaVales && (await tx.selectFrom('vale').select('id').limit(1).executeTakeFirst())) {
+    throw conflicto('CONFIGURACION_INCOMPLETA', `Para contabilizar los cambios con vale, asigne una cuenta a: ${CONCEPTOS_CONTABLES.vales} (o use "Completar plan sugerido")`);
   }
   const c = (k: ConceptoContable) => m.get(k)!;
   const num = new Numerador();
@@ -213,12 +216,14 @@ export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
       const iva = new Decimal(v.iva10).plus(v.iva5);
       let efectivo = new Decimal(0);
       let otros = new Decimal(0);
+      let vales = new Decimal(0);
       for (const p of pagos.filter((p) => p.venta_id === v.id)) {
         if (p.medio === 'efectivo') efectivo = efectivo.plus(p.monto_pyg);
+        else if (p.medio === 'vale') vales = vales.plus(p.monto_pyg);
         else otros = otros.plus(p.monto_pyg);
       }
       // El vuelto sale del efectivo: lo cobrado de más no es venta.
-      let exceso = efectivo.plus(otros).minus(total.minus(credito));
+      let exceso = efectivo.plus(otros).plus(vales).minus(total.minus(credito));
       if (exceso.gt(0)) {
         const delEfectivo = Decimal.min(exceso, efectivo);
         efectivo = efectivo.minus(delEfectivo);
@@ -241,6 +246,7 @@ export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
           { cuentaId: c('caja'), monto: efectivo },
           { cuentaId: c('valores'), monto: otros },
           { cuentaId: c('deudores'), monto: credito },
+          ...(vales.gt(0) ? [{ cuentaId: c('vales'), monto: vales, detalle: 'Pagado con vale de cambio' }] : []),
           { cuentaId: c('ventas'), monto: total.minus(iva).neg() },
           { cuentaId: c('iva_debito'), monto: iva.neg() },
           { cuentaId: c('costo_ventas'), monto: costo, detalle: 'Costo de lo vendido' },
@@ -314,7 +320,7 @@ export async function contabilizar(tx: Tx, ctx: Ctx, hasta: string) {
         { cuentaId: c('devoluciones_ventas'), monto: total.minus(iva) },
         { cuentaId: c('iva_debito'), monto: iva },
         { cuentaId: c('deudores'), monto: descontado.neg() },
-        { cuentaId: c(d.medio === 'efectivo' ? 'caja' : 'valores'), monto: total.minus(descontado).neg() },
+        { cuentaId: c(d.medio === 'efectivo' ? 'caja' : d.medio === 'vale' ? 'vales' : 'valores'), monto: total.minus(descontado).neg() },
         { cuentaId: c('mercaderias'), monto: costo, detalle: 'Mercadería devuelta al stock' },
         { cuentaId: c('costo_ventas'), monto: costo.neg(), detalle: 'Mercadería devuelta al stock' },
       ],

@@ -217,6 +217,8 @@ export interface BaseDatos {
   marca: MarcaTabla;
   producto: ProductoTabla;
   variante: VarianteTabla;
+  vale: ValeTabla;
+  vale_movimiento: ValeMovimientoTabla;
   codigo_barras: CodigoBarrasTabla;
   lista_precio: ListaPrecioTabla;
   precio: PrecioTabla;
@@ -415,6 +417,8 @@ export interface VarianteTabla {
   producto_id: string;
   nombre: string | null;
   sku: string | null;
+  talle: string | null;
+  color: string | null;
   costo: NumGen;
   stock_minimo: NumGen;
   activa: Generated<boolean>;
@@ -573,7 +577,7 @@ export interface VentaPagoTabla {
   empresa_id: string;
   venta_id: string;
   linea: number;
-  medio: Medio;
+  medio: Medio | 'vale';
   moneda: Moneda;
   monto: Num;
   cotizacion: NumGen;
@@ -616,7 +620,7 @@ export interface DevolucionTabla {
   venta_id: string;
   sesion_caja_id: string;
   deposito_id: string;
-  medio: Medio;
+  medio: Medio | 'vale';
   total: Num;
   motivo: string;
   autorizado_por: string | null;
@@ -1331,4 +1335,31 @@ export interface OrdenProduccionInsumoTabla {
   cantidad_teorica: Num;
   cantidad_real: ColumnType<string | null, string | null | undefined, string | null>;
   costo_unitario: ColumnType<string | null, string | null | undefined, string | null>;
+}
+
+export interface ValeTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  numero: number | string;
+  codigo: string;
+  sucursal_id: string;
+  cliente_id: string | null;
+  devolucion_id: string | null;
+  monto: Num;
+  saldo: Num;
+  vence: string | null;
+  creado_por: string;
+  creado_en: Creado;
+}
+
+export interface ValeMovimientoTabla {
+  empresa_id: string;
+  id: Generated<string>;
+  vale_id: string;
+  tipo: 'emision' | 'uso' | 'reintegro';
+  monto: Num;
+  saldo: Num;
+  venta_id: string | null;
+  creado_por: string;
+  creado_en: Creado;
 }

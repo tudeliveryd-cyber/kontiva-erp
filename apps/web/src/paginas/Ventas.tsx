@@ -9,6 +9,7 @@ import { fechaHora } from '../lib/formato';
 import { dinero, type CajaFila, type Venta } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
 import { abrirKude } from '../componentes/AccionesDocumento';
+import { TicketVale } from '../componentes/Ropa';
 
 interface FilaVenta {
   id: string;
@@ -189,9 +190,9 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
         <div className="tenue peq" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           Devoluciones:
           {venta.devoluciones.map((d) =>
-            venta.comprobante === 'factura' ? (
+            venta.comprobante === 'factura' || d.medio === 'vale' ? (
               <button key={d.id} className="btn" style={{ height: 28, fontSize: 12.5 }} onClick={() => setNota(d.id)}>
-                N.º {d.numero} · {dinero(d.total)} · nota de crédito
+                N.º {d.numero} · {dinero(d.total)} · {venta.comprobante === 'factura' ? 'nota de crédito' : 'vale de cambio'}
               </button>
             ) : (
               <span key={d.id}>N.º {d.numero} ({dinero(d.total)}, {fechaHora(d.fecha)})</span>
@@ -202,11 +203,11 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
       {modo === 'devolver' && (
         <Devolucion
           venta={venta}
-          alTerminar={(r, devId) => {
+          alTerminar={(r, devId, conVale) => {
             qc.setQueryData(['venta', id], r);
             void qc.invalidateQueries({ queryKey: ['ventas'] });
             setModo('ver');
-            if (r.comprobante === 'factura') setNota(devId);
+            if (r.comprobante === 'factura' || conVale) setNota(devId);
           }}
           alCancelar={() => setModo('ver')}
         />
@@ -230,12 +231,12 @@ function FichaVenta({ id, alCerrar }: { id: string; alCerrar: () => void }) {
   );
 }
 
-function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTerminar: (v: Venta, devolucionId: string) => void; alCancelar: () => void }) {
-  const { puede } = useSesion();
+function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTerminar: (v: Venta, devolucionId: string, conVale: boolean) => void; alCancelar: () => void }) {
+  const { puede, yo } = useSesion();
   const cajas = useQuery({ queryKey: ['cajas'], queryFn: () => api<CajaFila[]>('/cajas') });
   const propias = cajas.data?.filter((c) => c.sesion?.propia) ?? [];
   const [cant, setCant] = useState<Record<number, string>>({});
-  const [medio, setMedio] = useState<'efectivo' | 'tarjeta' | 'transferencia' | 'otro'>('efectivo');
+  const [medio, setMedio] = useState<'efectivo' | 'tarjeta' | 'transferencia' | 'otro' | 'vale'>(yo?.empresa.rubro === 'ropa' ? 'vale' : 'efectivo');
   const [motivo, setMotivo] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [pidiendo, setPidiendo] = useState(false);
@@ -249,7 +250,7 @@ function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTermina
       const dev = await api<{ id: string }>('/devoluciones', { metodo: 'POST', cuerpo: { ventaId: venta.id, cajaId: propias[0]!.id, medio, motivo, items }, encabezados: token ? { 'X-Autorizacion': token } : undefined });
       return { venta: await api<Venta>(`/ventas/${venta.id}`), devId: dev.id };
     },
-    onSuccess: (r) => alTerminar(r.venta, r.devId),
+    onSuccess: (r) => alTerminar(r.venta, r.devId, medio === 'vale'),
   });
   if (pidiendo) {
     return <DialogoAutorizacion permiso="devolucion.aprobar" titulo="Autorizar devolución" alAutorizar={(t) => { setToken(t); setPidiendo(false); }} alCerrar={() => setPidiendo(false)} />;
@@ -281,6 +282,7 @@ function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTermina
           <div className="fila-campos">
             <Campo etiqueta="Se reintegra en" id="dm">
               <select id="dm" className="entrada" value={medio} onChange={(e) => setMedio(e.target.value as typeof medio)}>
+                <option value="vale">Vale de cambio (no sale dinero; el cliente lleva otra cosa)</option>
                 <option value="efectivo">Efectivo (sale de {propias[0]!.nombre})</option>
                 <option value="tarjeta">Reverso en tarjeta</option>
                 <option value="transferencia">Transferencia</option>
@@ -291,7 +293,7 @@ function Devolucion({ venta, alTerminar, alCancelar }: { venta: Venta; alTermina
               <input id="dmo" className="entrada" placeholder="Producto fallado, cambio de talle…" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
             </Campo>
           </div>
-          <p style={{ margin: 0 }}>A reintegrar: <b>{dinero(Math.round(estimado))}</b> <span className="tenue peq">(proporcional al precio cobrado, con descuentos)</span></p>
+          <p style={{ margin: 0 }}>{medio === 'vale' ? 'Vale por' : 'A reintegrar'}: <b>{dinero(Math.round(estimado))}</b> <span className="tenue peq">(proporcional al precio cobrado, con descuentos)</span></p>
           {!puede('devolucion.crear') && !token && <Aviso tipo="info">La devolución requiere la autorización de un supervisor.</Aviso>}
           <div style={{ display: 'flex', gap: 8 }}>
             {!puede('devolucion.crear') && !token ? (
@@ -317,9 +319,22 @@ function VerNotaCredito({ devolucionId, venta, empresa, alVolver }: { devolucion
           <TicketNotaCredito dev={d.data} venta={venta} empresa={empresa} />
         </div>
       ) : (
-        <Aviso tipo="info">Esta devolución no tiene nota de crédito electrónica.</Aviso>
+        !d.data.vale && <Aviso tipo="info">Esta devolución no tiene nota de crédito electrónica.</Aviso>
+      )}
+      {d.data.vale && (
+        <>
+          <Aviso tipo="ok">Vale de cambio N.º {d.data.vale.numero} por {dinero(d.data.vale.monto)}{Number(d.data.vale.saldo) < Number(d.data.vale.monto) ? ` (saldo ${dinero(d.data.vale.saldo)})` : ''}. Entréguelo al cliente.</Aviso>
+          <div style={{ border: '1px solid var(--linea)', borderRadius: 8 }}>
+            <TicketVale vale={{ ...d.data.vale, creadoEn: d.data.fecha, venta: venta.numero, cliente: venta.cliente?.nombre ?? null }} empresa={empresa} />
+          </div>
+        </>
       )}
       <div style={{ display: 'flex', gap: 8 }}>
+        {d.data.vale && !d.data.notaCredito && (
+          <button className="btn" onClick={() => window.print()}>
+            <Printer size={16} /> Imprimir vale
+          </button>
+        )}
         {d.data.notaCredito && (
           <button className="btn" onClick={() => window.print()}>
             <Printer size={16} /> Imprimir nota de crédito

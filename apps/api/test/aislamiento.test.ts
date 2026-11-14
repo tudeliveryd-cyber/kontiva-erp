@@ -31,6 +31,7 @@ import { FuncionariosController, LiquidacionesController, RrhhConfiguracionContr
 import { InformesController } from '../src/informes/informes.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from '../src/compras/compras.controller';
 import { DevolucionesController } from '../src/operacion/devoluciones.controller';
+import { ValesController } from '../src/operacion/vales.controller';
 import { TransferenciasController } from '../src/operacion/transferencias.controller';
 import { prepararVenta } from './ayudas';
 import { crearEmpresa, crearUsuario, http, iniciarApp, login, type EmpresaPrueba } from './ayudas';
@@ -64,6 +65,7 @@ const CONTROLADORES = [
   VentasController,
   TransferenciasController,
   DevolucionesController,
+  ValesController,
   FacturacionController,
   ProveedoresController,
   OrdenesCompraController,
@@ -175,8 +177,9 @@ describe('Cobertura de seguridad generada desde los decoradores', () => {
     const destino = deps.body.find((d: { sucursal: { id: string } }) => d.sucursal.id === suc2.body.id).id;
     const tr = await http(app).post('/api/transferencias').set(hB).send({ origenId: vb.depositoId, destinoId: destino, items: [{ varianteId: vb.varianteId, cantidad: 1 }] }).expect(201);
     idsDeB['/api/transferencias'] = tr.body.id;
-    const dv = await http(app).post('/api/devoluciones').set(hB).send({ ventaId: vb.ventaId, cajaId: vb.cajaId, motivo: 'Prueba B', items: [{ linea: 1, cantidad: 1 }] }).expect(201);
+    const dv = await http(app).post('/api/devoluciones').set(hB).send({ ventaId: vb.ventaId, cajaId: vb.cajaId, medio: 'vale', motivo: 'Prueba B', items: [{ linea: 1, cantidad: 1 }] }).expect(201);
     idsDeB['/api/devoluciones'] = dv.body.id;
+    idsDeB['/api/vales'] = dv.body.vale.id;
     const lp = await http(app).post('/api/listas-precio').set(hB).send({ nombre: 'Mayorista B' }).expect(201);
     idsDeB['/api/listas-precio'] = lp.body.id;
     const pr = await http(app).post('/api/presupuestos').set(hB).send({ sucursalId: b.sucursalId, items: [{ varianteId: vb.varianteId, cantidad: 1 }] }).expect(201);

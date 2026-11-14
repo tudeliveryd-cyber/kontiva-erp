@@ -24,6 +24,7 @@ import { InformesController } from './informes/informes.controller';
 import { ComprasController, CuentasPagarController, OrdenesCompraController, PagosProveedorController, ProveedoresController } from './compras/compras.controller';
 import { EmisorSifen } from './sifen/emisor.service';
 import { DevolucionesController } from './operacion/devoluciones.controller';
+import { ValesController } from './operacion/vales.controller';
 import { TransferenciasController } from './operacion/transferencias.controller';
 import { AuthController, CuentaController } from './auth/auth.controller';
 import { AuthGuard } from './auth/auth.guard';
@@ -71,6 +72,7 @@ import { UsuariosController } from './usuarios/usuarios.controller';
     ListasPrecioController,
     PresupuestosController,
     PedidosController,
+    ValesController,
     FacturacionController,
     ProveedoresController,
     OrdenesCompraController,

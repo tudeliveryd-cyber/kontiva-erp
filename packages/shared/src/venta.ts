@@ -21,7 +21,7 @@ export interface ItemCalculo {
 }
 
 export interface PagoCalculo {
-  medio: Medio;
+  medio: Medio | 'vale';
   moneda: Moneda;
   monto: Decimal.Value; // en su moneda
 }

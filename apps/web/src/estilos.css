@@ -438,3 +438,25 @@ table.asistencia td.tot { padding: 0 10px; font-variant-numeric: tabular-nums; f
 .plano { overflow-x: auto; }
 .mesa .total { font-size: 13px; font-weight: 600; white-space: nowrap; }
 .mesa .detalle { font-size: 11.5px; color: var(--t2); display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+
+/* Ropa: grade talle × color y vales de cambio */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { min-width: 44px; height: 32px; padding: 0 10px; border: 1px solid var(--linea); border-radius: 16px; background: var(--blanco); color: var(--t2); font: inherit; font-weight: 600; cursor: pointer; }
+.chip.activo { background: var(--p7); border-color: var(--p7); color: #fff; }
+.tabla-grade { overflow-x: auto; border: 1px solid var(--linea); border-radius: var(--radio); }
+.tabla-grade td { padding: 6px 10px; }
+.entrada.chica { height: 32px; padding: 0 8px; font-size: 13px; }
+.matriz-grade { overflow-x: auto; border: 1px solid var(--linea); border-radius: var(--radio); }
+.matriz-grade table { border-collapse: collapse; width: 100%; }
+.matriz-grade th, .matriz-grade td { padding: 8px 10px; border-bottom: 1px solid var(--linea2); }
+.matriz-grade th.centro, .matriz-grade td.centro { text-align: center; }
+.matriz-grade tbody th { text-align: left; font-weight: 600; white-space: nowrap; }
+.matriz-grade tr.total td, .matriz-grade tr.total th { background: #fafafb; font-weight: 700; }
+.matriz-grade .celda { width: 100%; min-width: 56px; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid var(--linea); border-radius: var(--radio); background: var(--blanco); font: inherit; cursor: pointer; }
+.matriz-grade .celda:hover { border-color: var(--p5); background: var(--p1); }
+.matriz-grade .celda b { font-size: 16px; }
+.matriz-grade .celda .sin-stock { color: var(--bad); }
+.matriz-grade .celda small { font-size: 11px; }
+.vales-cobro { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--linea); border-radius: var(--radio); }
+.fila-vale { display: flex; align-items: center; gap: 8px; color: var(--t); }
+.fila-vale svg { color: var(--p5); }

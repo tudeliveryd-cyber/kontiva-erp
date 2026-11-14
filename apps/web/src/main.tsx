@@ -42,6 +42,7 @@ import { Sueldos } from './paginas/Sueldos';
 import { Asistencia } from './paginas/Asistencia';
 import { Produccion } from './paginas/Produccion';
 import { Recetario } from './paginas/Recetario';
+import { Vales } from './paginas/Vales';
 import { Salon } from './paginas/Salon';
 import { Cocina } from './paginas/Cocina';
 
@@ -88,6 +89,7 @@ function Rutas() {
         {puede('salario.ver') && <Route path="sueldos" element={<Sueldos />} />}
         {puede('asistencia.ver') && <Route path="asistencia" element={<Asistencia />} />}
         {puede('produccion.ver') && <Route path="produccion" element={<Produccion />} />}
+        {puede('venta.ver') && <Route path="vales" element={<Vales />} />}
         {puede('receta.ver') && <Route path="recetario" element={<Recetario />} />}
         {puede('salon.ver') && <Route path="salon" element={<Salon />} />}
         {puede('cocina.ver') && <Route path="cocina" element={<Cocina />} />}

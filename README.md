@@ -16,7 +16,7 @@ Producto comercial de **Araújo Tech Sistemas**.
 | 2 | Compras y finanzas | Lista |
 | 3 | Facturación electrónica SIFEN | Factura y nota de crédito listas (ambiente de prueba) · ver abajo |
 | 4 | RRHH, informes, dashboard, app del dueño | Lista · ver pendientes abajo |
-| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia, restaurante, panadería y producción |
+| 5 | Verticales por rubro e integraciones | En curso · lotes y vencimientos, farmacia, restaurante, panadería y producción, tienda de ropa |
 
 ### Fase 0 · hecho
 - **Autenticación**: Argon2id, bloqueo progresivo tras 5 intentos, token de acceso de 15 min + renovación rotativa
@@ -270,6 +270,21 @@ Fase 2 completa.
   (pedido − stock − ya planificado) y qué insumos faltan; las órdenes se planifican con un clic.
 - **Mermas**: sobrante del día, vencido o roto sale del stock con su valor al costo y queda el listado del período.
 - Permiso `produccion`; perfil Producción. En el menú de los rubros panadería, restaurante y supermercado.
+
+### Fase 5 · hecho (tienda de ropa)
+- **Grade talle × color**: en la ficha del producto se elige la curva (letras, internacional, números, calzado,
+  infantil) o se escriben talles, y los colores; se arman todas las variantes con SKU sugerido, precio y costo.
+  Las celdas existentes se conservan; las que se quitan dejan de venderse sin perder su historia.
+- **Stock en grade**: colores × talles con totales, por depósito o la suma de todos.
+- **Caja**: buscar "remera" muestra el producto una vez y abre la grade con el stock de cada talle y color;
+  el código de barras de la etiqueta agrega la celda directo.
+- **Cambio sin devolver dinero** ("Cambio de mercadería", F9): se busca la venta por su número, se elige lo que
+  devuelve el cliente y queda un **vale de cambio** (no sale dinero de la caja; con factura se emite la nota de
+  crédito). El vale se usa en esa misma venta o se imprime con su código para otra compra; también se emite
+  desde la devolución en Ventas.
+- **Vales**: se pagan en el cobro con el código (sin vuelto; lo que sobra queda en el vale), anular la venta
+  repone el saldo, vencen a los días que defina la empresa. Listado con saldo vigente y el historial de cada uno.
+  En la factura electrónica el pago figura como vale; en contabilidad es un pasivo ("Vales de cambio a canjear").
 
 ## Estructura
 

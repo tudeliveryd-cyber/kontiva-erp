@@ -24,6 +24,7 @@ export const PLAN_SUGERIDO: { codigo: string; nombre: string; imputable: boolean
   { codigo: '2.1.03', nombre: 'Sueldos a pagar', imputable: true, concepto: 'sueldos_pagar' },
   { codigo: '2.1.04', nombre: 'Préstamos bancarios', imputable: true },
   { codigo: '2.1.05', nombre: 'IPS a pagar', imputable: true, concepto: 'ips_pagar' },
+  { codigo: '2.1.06', nombre: 'Vales de cambio a canjear', imputable: true, concepto: 'vales' },
   { codigo: '3', nombre: 'Patrimonio neto', imputable: false },
   { codigo: '3.1', nombre: 'Capital', imputable: false },
   { codigo: '3.1.01', nombre: 'Capital social', imputable: true },

@@ -1,12 +1,14 @@
 /** Tipos y formatos de la operación (catálogo, stock, cajas, ventas). */
 
 export type Moneda = 'PYG' | 'USD' | 'BRL';
-export type Medio = 'efectivo' | 'tarjeta' | 'transferencia' | 'otro';
+export type Medio = 'efectivo' | 'tarjeta' | 'transferencia' | 'otro' | 'vale';
 
 export interface Variante {
   id?: string;
   nombre: string | null;
   sku: string | null;
+  talle?: string | null;
+  color?: string | null;
   activa: boolean;
   precio: string;
   costo?: string;
@@ -43,6 +45,9 @@ export interface Deposito {
 
 export interface FilaStock {
   varianteId: string;
+  productoId?: string;
+  /** La variante es una celda de una grade talle × color. */
+  grade?: boolean;
   descripcion: string;
   sku: string | null;
   unidad: string;
@@ -130,7 +135,7 @@ export interface Venta {
   vuelto: { moneda: Moneda; monto: string }[];
   items: { linea: number; descripcion: string; cantidad: string; precioUnitario: string; descuento: string; total: string; tasaIva: number; cantidadDevuelta: string; condicionVenta?: 'receta' | 'receta_archivada' | null; lotes?: { codigo: string; vencimiento: string | null; cantidad: string }[] }[];
   receta?: { medico: string; matricula: string; paciente: string; pacienteDocumento: string | null; fecha: string; numero: string | null; retenida: boolean } | null;
-  devoluciones: { id: string; numero: number; total: string; fecha: string }[];
+  devoluciones: { id: string; numero: number; total: string; medio?: string; fecha: string }[];
   pagos: { medio: Medio; moneda: Moneda; monto: string; cotizacion: string; montoPyg: string; referencia: string | null }[];
   anulacion: { fecha: string; por: string; motivo: string; autorizadaPor: string | null } | null;
 }
@@ -146,7 +151,7 @@ export const dinero = (v: string | number, moneda: Moneda = 'PYG') => `${SIMBOLO
 export const numero = (v: string | number, decimales = 0) => new Intl.NumberFormat('es-PY', { maximumFractionDigits: decimales }).format(Number(v));
 export const cantidad = (v: string | number) => new Intl.NumberFormat('es-PY', { maximumFractionDigits: 3 }).format(Number(v));
 
-export const NOMBRE_MEDIO: Record<Medio, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otro' };
+export const NOMBRE_MEDIO: Record<Medio, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otro', vale: 'Vale de cambio' };
 export const NOMBRE_MONEDA: Record<Moneda, string> = { PYG: 'Guaraníes', USD: 'Dólares', BRL: 'Reales' };
 export const UNIDADES: Record<string, string> = {
   unidad: 'Unidad', kg: 'Kilogramo', g: 'Gramo', litro: 'Litro', ml: 'Mililitro', metro: 'Metro', m2: 'Metro cuadrado', m3: 'Metro cúbico', caja: 'Caja', paquete: 'Paquete',

@@ -68,7 +68,7 @@ export function useTablero(p: Periodo, sucursalId?: string, refresco?: number) {
   });
 }
 
-const MEDIOS: Record<string, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otros medios', credito: 'A crédito' };
+const MEDIOS: Record<string, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otros medios', vale: 'Vales de cambio', credito: 'A crédito' };
 const fmt = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 const corto = (v: number) => (v >= 1e9 ? `${(v / 1e9).toFixed(1).replace('.', ',')} mil M` : v >= 1e6 ? `${(v / 1e6).toFixed(1).replace('.', ',')} M` : v >= 1e3 ? `${Math.round(v / 1e3)} mil` : fmt.format(v));
 

@@ -39,6 +39,8 @@ export const autorizarEntrada = z.object({
 
 export const empresaEditar = z.object({
   permiteStockNegativo: z.boolean().optional(),
+  /** Días de validez de los vales de cambio (0 = no vencen). */
+  valeDias: z.coerce.number().int().min(0).max(3650).optional(),
   balanza: configBalanza.optional(),
   razonSocial: z.string().trim().min(2).max(200).optional(),
   nombreFantasia: z.string().trim().max(200).nullable().optional(),
@@ -111,6 +113,9 @@ export const varianteEntrada = z.object({
   id: uuid.optional(),
   nombre: textoOpcional(80),
   sku: textoOpcional(60),
+  /** Grade de ropa y calzado: talle y color (el nombre se arma solo si no se indica). */
+  talle: textoOpcional(20),
+  color: textoOpcional(40),
   codigos: z.array(codigoBarras).max(20).default([]),
   precio: dinero,
   costo: dinero.optional(),
@@ -260,11 +265,12 @@ export const ventaEntrada = z.object({
   pagos: z
     .array(
       z.object({
-        medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro']),
+        /** Vale: saldo a favor de un cambio; la referencia es el código del vale. */
+        medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro', 'vale']),
         moneda: z.enum(['PYG', 'USD', 'BRL']),
         monto: z.coerce.number().positive().max(1e13),
         referencia: textoOpcional(80),
-      }),
+      }).refine((p) => p.medio !== 'vale' || (p.moneda === 'PYG' && !!p.referencia), 'El vale se paga en guaraníes con su código'),
     )
     .max(10),
   vueltoMoneda: z.enum(['PYG', 'USD', 'BRL']).default('PYG'),
@@ -316,7 +322,8 @@ export const devolucionEntrada = z.object({
   ventaId: uuid,
   /** Caja abierta del usuario: de ahí sale el dinero y al depósito de esa caja vuelve la mercadería. */
   cajaId: uuid,
-  medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro']).default('efectivo'),
+  /** Vale: no sale dinero; queda un vale de cambio con el importe para usar en otra compra. */
+  medio: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro', 'vale']).default('efectivo'),
   motivo: z.string().trim().min(3, 'Indique el motivo').max(300),
   items: z.array(z.object({ linea: z.number().int().positive(), cantidad: z.coerce.number().positive().max(1e9) })).min(1, 'Elija qué se devuelve').max(500),
 });
@@ -568,6 +575,7 @@ export const CONCEPTOS_CONTABLES = {
   sueldos_pagar: 'Sueldos a pagar',
   ips_pagar: 'IPS a pagar',
   anticipos_personal: 'Anticipos y descuentos al personal',
+  vales: 'Vales de cambio a canjear (saldo a favor de clientes)',
 } as const;
 export type ConceptoContable = keyof typeof CONCEPTOS_CONTABLES;
 

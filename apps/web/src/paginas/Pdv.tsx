@@ -1,9 +1,10 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardCheck, CloudOff, FileText, Minus, Percent, Pill, Plus, Printer, RefreshCw, Scissors, Search, Trash2, UserRound, UtensilsCrossed, X } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, CloudOff, FileText, Grid3x3, Minus, Percent, Pill, Plus, Printer, RefreshCw, Repeat, Scissors, Search, Ticket as IconoVale, Trash2, UserRound, UtensilsCrossed, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { calcularItems, calcularPagos, ErrorCalculo, type ConfigBalanza, type Cotizaciones } from '@kontiva/shared';
 import { DialogoAutorizacion } from '../componentes/Autorizacion';
+import { AplicarVale, DialogoCambio, ElegirGrade, type ValeConsulta } from '../componentes/Ropa';
 import { Ticket, TicketProvisorio } from '../componentes/Ticket';
 import { Aviso, Cajon, Campo, Cargando, ErrorApi, Vacio } from '../componentes/ui';
 import { api, FalloApi } from '../lib/api';
@@ -30,6 +31,11 @@ interface ContextoPdv {
 
 interface ItemBusqueda {
   varianteId: string;
+  /** Grade: producto, talle y color; `grade` marca el resultado agrupado que abre la grade. */
+  productoId?: string;
+  talle?: string | null;
+  color?: string | null;
+  grade?: number;
   descripcion: string;
   sku: string | null;
   unidad: string;
@@ -43,6 +49,28 @@ interface ItemBusqueda {
   principioActivo?: string | null;
   concentracion?: string | null;
   condicionVenta?: 'libre' | 'receta' | 'receta_archivada';
+}
+
+/** Las variantes de una grade (talle × color) se muestran como un solo resultado que abre la grade. */
+function agruparGrade(items: ItemBusqueda[]): ItemBusqueda[] {
+  const vistos = new Map<string, ItemBusqueda>();
+  const r: ItemBusqueda[] = [];
+  for (const it of items) {
+    if (!it.productoId || !(it.talle || it.color)) {
+      r.push(it);
+      continue;
+    }
+    const g = vistos.get(it.productoId);
+    if (g) {
+      g.grade = (g.grade ?? 1) + 1;
+      continue;
+    }
+    const agrupado = { ...it, descripcion: it.descripcion.split(' · ')[0]!, sku: null, stock: null, grade: 1 };
+    vistos.set(it.productoId, agrupado);
+    r.push(agrupado);
+  }
+  // Un producto con una sola celda encontrada se agrega directo.
+  return r.map((x) => (x.grade === 1 ? items.find((i) => i.varianteId === x.varianteId)! : x));
 }
 
 export interface RecetaVenta { medico: string; matricula: string; paciente: string; pacienteDocumento: string; fecha: string; numero: string; retenida: boolean }
@@ -144,7 +172,9 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   const [listaCliente, setListaCliente] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [nota, setNota] = useState<string | null>(null);
-  const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | 'pedidos' | 'receta' | 'equivalentes' | 'mesas' | null>(null);
+  const [dialogo, setDialogo] = useState<'cobro' | 'cliente' | 'descuento' | 'autorizar' | 'pedidos' | 'receta' | 'equivalentes' | 'mesas' | 'grade' | 'cambio' | null>(null);
+  const [gradeDe, setGradeDe] = useState<string | null>(null);
+  const [valesCambio, setValesCambio] = useState<ValeConsulta[]>([]);
   const [cuentaCobro, setCuentaCobro] = useState<CobroCuenta | null>(null);
   const { puede: puedeUsuario } = useSesion();
   const gastronomia = ['restaurante', 'panaderia'].includes(yo?.empresa.rubro ?? '') && puedeUsuario('salon.ver');
@@ -227,12 +257,22 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
         setQ('');
       } else if (r.porCodigo && r.items.length === 1) agregar(r.items[0]!);
       else {
-        setResultados(r.items);
+        setResultados(agruparGrade(r.items));
         setSelRes(0);
       }
     } catch (e) {
       setAviso(e instanceof FalloApi ? e.mensaje : 'Error de conexión');
     }
+  };
+
+  /** Un resultado agrupado de grade abre la grade del producto para elegir talle y color. */
+  const elegir = (it: ItemBusqueda) => {
+    if (it.grade && it.productoId) {
+      setGradeDe(it.productoId);
+      setResultados(null);
+      setQ('');
+      setDialogo('grade');
+    } else agregar(it);
   };
 
   /** Al elegir o quitar el cliente, el carrito pasa a los precios de su lista (el servidor cobra lo mismo). */
@@ -275,6 +315,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
     setAviso(null);
     setReceta(null);
     setEquivDe(null);
+    setValesCambio([]);
     enfocar();
   };
   /** Con medicamentos bajo receta, primero los datos de la receta. */
@@ -303,6 +344,9 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
       } else if (e.key === 'F7' && gastronomia) {
         e.preventDefault();
         setDialogo('mesas');
+      } else if (e.key === 'F9' && !gastronomia) {
+        e.preventDefault();
+        setDialogo('cambio');
       } else if (e.key === 'F8' && sel !== null) {
         e.preventDefault();
         setDialogo(c.puede.descuento || autorizacion ? 'descuento' : 'autorizar');
@@ -392,7 +436,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
                   }
                   if (e.key === 'Enter' && resultados[selRes]) {
                     e.preventDefault();
-                    agregar(resultados[selRes]!);
+                    elegir(resultados[selRes]!);
                     return;
                   }
                 }
@@ -405,9 +449,10 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
             {resultados && (
               <div className="pdv-resultados" role="listbox">
                 {resultados.map((r, i) => (
-                  <button key={r.varianteId} className={i === selRes ? 'sel' : ''} onClick={() => agregar(r)} role="option" aria-selected={i === selRes}>
+                  <button key={r.varianteId} className={i === selRes ? 'sel' : ''} onClick={() => elegir(r)} role="option" aria-selected={i === selRes}>
                     <span style={{ flex: 1 }}>
                       <b style={{ fontWeight: 600 }}>{r.descripcion}</b>
+                      {r.grade && <span className="insignia i-p" style={{ marginLeft: 6 }}><Grid3x3 size={12} /> Elegir talle y color</span>}
                       {r.sku && <span className="tenue peq"> · {r.sku}</span>}
                       <InsigniaReceta condicion={r.condicionVenta} />
                       {r.principioActivo && <span className="tenue peq" style={{ display: 'block' }}>{r.principioActivo}{r.concentracion ? ` ${r.concentracion}` : ''}</span>}
@@ -542,6 +587,11 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
               <UtensilsCrossed size={16} /> {cuentaCobro ? cuentaCobro.nombre : 'Cobrar mesa'} <span className="tecla">F7</span>
             </button>
           )}
+          {!gastronomia && (
+            <button className="btn" onClick={() => setDialogo('cambio')}>
+              <Repeat size={16} /> {valesCambio.length ? `Vale ${dinero(valesCambio.reduce((a, v) => a + Number(v.saldo), 0))} a favor` : 'Cambio de mercadería'} <span className="tecla">F9</span>
+            </button>
+          )}
           {cuentaCobro && cuentaCobro.propina > 0 && <Aviso tipo="info">Propina {dinero(cuentaCobro.propina)}: se cobra aparte, en efectivo, y entra a la caja para el personal.</Aviso>}
           {autorizacion && <Aviso tipo="info">Descuento autorizado por {autorizacion.nombre}</Aviso>}
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -551,7 +601,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
               </button>
             )}
             <div className="tenue peq">
-              {yo?.usuario.nombre} · Supr: quitar línea · F2 cobrar · F4 cliente · F6 pedido{gastronomia ? " · F7 mesa" : ""} · F8 descuento
+              {yo?.usuario.nombre} · Supr: quitar línea · F2 cobrar · F4 cliente · F6 pedido{gastronomia ? " · F7 mesa" : " · F9 cambio"} · F8 descuento
             </div>
             <button className="btn chico" onClick={() => navigate('/ventas')}>
               Ventas de la caja
@@ -572,6 +622,7 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
           autorizacion={autorizacion?.token}
           receta={lineas.some(conReceta) ? receta : null}
           cuenta={cuentaCobro}
+          vales={valesCambio}
           alCerrar={() => {
             setDialogo(null);
             enfocar();
@@ -588,6 +639,38 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
             if (agente?.automatico) imprimir(ticketProvisorio(p, c.empresa, c.caja.nombre, c.sucursal.nombre, yo?.usuario.nombre), p.pagos.some((x) => x.medio === 'efectivo'));
             off.setEnLinea(false);
             void off.refrescarCola();
+          }}
+        />
+      )}
+      {dialogo === 'grade' && gradeDe && (
+        <ElegirGrade
+          cajaId={c.caja.id}
+          productoId={gradeDe}
+          clienteId={cliente?.id ?? null}
+          alElegir={(it) => {
+            setDialogo(null);
+            agregar(it);
+          }}
+          alCerrar={() => {
+            setDialogo(null);
+            enfocar();
+          }}
+        />
+      )}
+      {dialogo === 'cambio' && (
+        <DialogoCambio
+          cajaId={c.caja.id}
+          empresa={c.empresa}
+          alImprimir={(doc) => imprimir(doc, false)}
+          alUsar={(v) => {
+            setValesCambio((vs) => [...vs.filter((x) => x.codigo !== v.codigo), v]);
+            setDialogo(null);
+            setNota(`Vale N.º ${v.numero} por ${dinero(v.saldo)}: cargue lo que lleva el cliente y se descuenta al cobrar.`);
+            enfocar();
+          }}
+          alCerrar={() => {
+            setDialogo(null);
+            enfocar();
           }}
         />
       )}
@@ -777,8 +860,13 @@ function PuntoDeVenta({ c }: { c: ContextoPdv }) {
   );
 }
 
-function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; receta: RecetaVenta | null; cuenta: CobroCuenta | null; alCerrar: () => void; alVender: (v: Venta) => void; catalogoGuardado: boolean; alVenderSinConexion: (p: VentaProvisoria) => void }) {
-  const [pagos, setPagos] = useState<PagoUI[]>([{ medio: 'efectivo', moneda: 'PYG', monto: String(props.total) }]);
+function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas: Linea[]; clienteId: string | null; cliente?: Cliente | null; pedidoId: string | null; autorizacion?: string; receta: RecetaVenta | null; cuenta: CobroCuenta | null; vales: ValeConsulta[]; alCerrar: () => void; alVender: (v: Venta) => void; catalogoGuardado: boolean; alVenderSinConexion: (p: VentaProvisoria) => void }) {
+  // Vales de cambio: se usa de cada uno hasta cubrir lo que falta (sin vuelto).
+  const [vales, setVales] = useState<ValeConsulta[]>(props.vales);
+  const [pagos, setPagos] = useState<PagoUI[]>(() => {
+    const cubierto = Math.min(props.vales.reduce((a, v) => a + Number(v.saldo), 0), props.total);
+    return [{ medio: 'efectivo', moneda: 'PYG', monto: props.total - cubierto > 0 ? String(props.total - cubierto) : '' }];
+  });
   // Venta a crédito (cuenta corriente del cliente).
   const [credito, setCredito] = useState('');
   const [tokenCredito, setTokenCredito] = useState<string | null>(null);
@@ -791,15 +879,34 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
   const [clave] = useState(nuevaClave);
   const monedas: Moneda[] = ['PYG', ...props.c.cotizaciones.map((q) => q.moneda)];
 
+  const pagosVale = useMemo(() => {
+    let resta = aCobrar;
+    return vales
+      .map((v) => {
+        const monto = Math.max(Math.min(Number(v.saldo), resta), 0);
+        resta -= monto;
+        return { vale: v, monto };
+      })
+      .filter((x) => x.monto > 0);
+  }, [vales, aCobrar]);
+  const cubiertoVales = pagosVale.reduce((a, x) => a + x.monto, 0);
+  const cambiarVales = (nuevos: ValeConsulta[]) => {
+    setVales(nuevos);
+    let resta = aCobrar;
+    for (const v of nuevos) resta -= Math.min(Number(v.saldo), Math.max(resta, 0));
+    // Con un solo pago en efectivo, se ajusta a lo que queda por cobrar.
+    setPagos((ps) => (ps.length === 1 && ps[0]!.medio === 'efectivo' && ps[0]!.moneda === 'PYG' ? [{ ...ps[0]!, monto: resta > 0 ? String(resta) : '' }] : ps));
+  };
+
   const resultado = useMemo(() => {
     try {
       const validos = pagos.filter((p) => Number(p.monto) > 0);
-      if (!validos.length && aCobrar > 0) return { error: 'Ingrese el monto recibido' };
-      return { r: calcularPagos(aCobrar, validos, props.cot, vueltoMoneda) };
+      if (!validos.length && aCobrar - cubiertoVales > 0) return { error: 'Ingrese el monto recibido' };
+      return { r: calcularPagos(aCobrar, [...pagosVale.map((x) => ({ medio: 'vale' as const, moneda: 'PYG' as const, monto: x.monto })), ...validos], props.cot, vueltoMoneda) };
     } catch (e) {
       return { error: e instanceof ErrorCalculo ? e.message : 'Revise los montos' };
     }
-  }, [pagos, vueltoMoneda, aCobrar, props.cot]);
+  }, [pagos, vueltoMoneda, aCobrar, props.cot, pagosVale, cubiertoVales]);
 
   const cuerpoVenta = () => ({
     claveIdempotencia: clave,
@@ -808,7 +915,10 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
     clienteId: props.clienteId,
     ...(props.pedidoId && { pedidoId: props.pedidoId }),
     items: props.lineas.map((l) => ({ varianteId: l.varianteId, cantidad: Number(l.cantidad), ...(l.descuento > 0 ? { descuento: l.descuento } : {}) })),
-    pagos: pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio: p.medio, moneda: p.moneda, monto: Number(p.monto) })),
+    pagos: [
+      ...pagosVale.map((x) => ({ medio: 'vale' as const, moneda: 'PYG' as const, monto: x.monto, referencia: x.vale.codigo })),
+      ...pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio: p.medio, moneda: p.moneda, monto: Number(p.monto) })),
+    ],
     vueltoMoneda,
     ...(props.receta && { receta: { ...props.receta, pacienteDocumento: props.receta.pacienteDocumento || null, numero: props.receta.numero || null } }),
     ...(props.cuenta && { cuentaId: props.cuenta.id, cuentaItems: props.cuenta.items, ...(props.cuenta.propina > 0 && { propina: { monto: props.cuenta.propina, medio: 'efectivo' } }) }),
@@ -817,7 +927,7 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
    * Sin conexión se puede vender al contado, sin pedido y sin descuentos que pidan PIN (el PIN lo valida el servidor).
    * Los precios van en la venta: el servidor los respeta solo si cambiaron después.
    */
-  const sinConexionPermitida = props.catalogoGuardado && montoCredito === 0 && !props.pedidoId && !props.cuenta && (props.c.puede.descuento || props.lineas.every((l) => l.descuento === 0));
+  const sinConexionPermitida = props.catalogoGuardado && montoCredito === 0 && !vales.length && !props.pedidoId && !props.cuenta && (props.c.puede.descuento || props.lineas.every((l) => l.descuento === 0));
   const guardarSinConexion = async () => {
     const creadaEn = new Date().toISOString();
     const clave_ = `kontiva.sc.${props.c.caja.id}`;
@@ -930,6 +1040,25 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
             </button>
           </div>
         )}
+        <div className="vales-cobro">
+          {pagosVale.length > 0 && (
+            <div className="form" style={{ gap: 6 }}>
+              {vales.map((v) => {
+                const usa = pagosVale.find((x) => x.vale.codigo === v.codigo)?.monto ?? 0;
+                return (
+                  <div key={v.codigo} className="fila-vale">
+                    <IconoVale size={16} />
+                    <span style={{ flex: 1 }}>Vale N.º {v.numero}{v.cliente ? ` · ${v.cliente.nombre}` : ''} <span className="tenue peq">saldo {dinero(v.saldo)}</span></span>
+                    <b className="num">{dinero(usa)}</b>
+                    <button type="button" className="enlace" aria-label="Quitar vale" onClick={() => cambiarVales(vales.filter((x) => x.codigo !== v.codigo))}><Trash2 size={15} /></button>
+                  </div>
+                );
+              })}
+              {pagosVale.some((x) => x.monto < Number(x.vale.saldo)) && <p className="tenue peq" style={{ margin: 0 }}>Lo que no se usa queda en el vale para otra compra.</p>}
+            </div>
+          )}
+          {cubiertoVales < aCobrar && <AplicarVale yaAplicados={vales.map((v) => v.codigo)} alAplicar={(v) => cambiarVales([...vales, v])} />}
+        </div>
         {pagos.map((p, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <Campo etiqueta="Medio" id={`m${i}`}>
@@ -963,7 +1092,7 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
           </div>
         ))}
         <div className="pagos-rapidos">
-          {[50000, 100000].filter((b) => aCobrar > 0 && b >= aCobrar).slice(0, 2).map((b) => (
+          {[50000, 100000].filter((b) => aCobrar - cubiertoVales > 0 && b >= aCobrar - cubiertoVales).slice(0, 2).map((b) => (
             <button type="button" key={b} className="btn chico" onClick={() => setPagos([{ medio: 'efectivo', moneda: 'PYG', monto: String(b) }])}>
               Recibe {dinero(b)}
             </button>
@@ -995,6 +1124,12 @@ function Cobro(props: { c: ContextoPdv; cot: Cotizaciones; total: number; lineas
               <b className="num">{dinero(montoCredito)}</b>
               <span>A cobrar ahora</span>
               <b className="num">{dinero(aCobrar)}</b>
+            </>
+          )}
+          {cubiertoVales > 0 && (
+            <>
+              <span>Con vale</span>
+              <b className="num">{dinero(cubiertoVales)}</b>
             </>
           )}
           {resultado.r ? (

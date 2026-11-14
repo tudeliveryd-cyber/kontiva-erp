@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, History, Layers, Plus, Search } from 'lucide-react';
+import { CalendarClock, Grid3x3, History, Layers, Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Aviso, Cajon, Campo, Cargando, Encabezado, ErrorApi, Vacio } from '../componentes/ui';
@@ -7,8 +7,9 @@ import { api } from '../lib/api';
 import { fechaHora } from '../lib/formato';
 import { cantidad, dinero, type Deposito, type FilaStock } from '../lib/operacion';
 import { useSesion } from '../lib/sesion';
+import { StockEnGrade } from '../componentes/Ropa';
 
-const TIPOS: Record<string, string> = { inicial: 'Stock inicial', ajuste: 'Ajuste', venta: 'Venta', anulacion_venta: 'Venta anulada', devolucion: 'Devolución', compra: 'Compra', anulacion_compra: 'Compra anulada', transferencia: 'Transferencia', transferencia_salida: 'Transferencia (salida)', transferencia_entrada: 'Transferencia (entrada)' };
+const TIPOS: Record<string, string> = { inicial: 'Stock inicial', ajuste: 'Ajuste', venta: 'Venta', anulacion_venta: 'Venta anulada', devolucion: 'Devolución', compra: 'Compra', anulacion_compra: 'Compra anulada', transferencia: 'Transferencia', transferencia_salida: 'Transferencia (salida)', transferencia_entrada: 'Transferencia (entrada)', produccion: 'Producción', produccion_consumo: 'Insumo de producción', anulacion_produccion: 'Producción anulada', merma: 'Merma' };
 
 export function Stock() {
   const { puede } = useSesion();
@@ -27,6 +28,7 @@ export function Stock() {
   const pestana = params.get('tab') === 'vencimientos' ? 'vencimientos' : 'stock';
   const setPestana = (p: 'stock' | 'vencimientos') => setParams(p === 'stock' ? {} : { tab: p });
   const [lotes, setLotes] = useState<FilaStock | null>(null);
+  const [grade, setGrade] = useState<string | null>(null);
   const dep = depositoId || depositos.data?.[0]?.id || '';
   const filas = useQuery({
     queryKey: ['stock', dep, q, soloBajo],
@@ -139,6 +141,11 @@ export function Stock() {
                         </td>
                       )}
                       <td className="der" style={{ whiteSpace: 'nowrap' }}>
+                        {f.grade && f.productoId && (
+                          <button className="enlace" aria-label="Stock por talle y color" title="Stock por talle y color" style={{ marginRight: 10 }} onClick={() => setGrade(f.productoId!)}>
+                            <Grid3x3 size={16} />
+                          </button>
+                        )}
                         {f.controlaLote && (
                           <button className="enlace" aria-label="Lotes" title="Lotes" style={{ marginRight: 10 }} onClick={() => setLotes(f)}>
                             <Layers size={16} />
@@ -159,6 +166,7 @@ export function Stock() {
         )}
       </div>
       {historial && <Movimientos fila={historial} depositoId={dep} alCerrar={() => setHistorial(null)} />}
+      {grade && <StockEnGrade productoId={grade} alCerrar={() => setGrade(null)} />}
       {lotes && <Lotes fila={lotes} depositoId={dep} deposito={depositos.data?.find((d) => d.id === dep)} alCerrar={() => setLotes(null)} />}
     </>
   );

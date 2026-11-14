@@ -196,6 +196,7 @@ export interface EmpresaDatos {
   email: string | null;
   direccion: string | null;
   permiteStockNegativo: boolean;
+  valeDias: number;
   balanza: ConfigBalanza;
   plan: { codigo: string; limites: { usuarios: number | null; sucursales: number | null; cajas: number | null }; uso: { usuarios: number; sucursales: number } };
 }

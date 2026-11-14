@@ -8,3 +8,4 @@ export * from './rrhh';
 export * from './ticket';
 export * from './balanza';
 export * from './reloj';
+export * from './grade';

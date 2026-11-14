@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
-import { ajusteStockEntrada } from '@kontiva/shared';
+import { ajusteStockEntrada, compararTalles } from '@kontiva/shared';
 import Decimal from 'decimal.js';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -42,6 +42,38 @@ export class StockController {
     });
   }
 
+  /** Grade de un producto: stock de cada talle × color en cada depósito al que el usuario tiene acceso. */
+  @Requiere('stock', 'ver')
+  @Get('stock/grade')
+  grade(@Contexto() ctx: Ctx, @Query() query: unknown) {
+    const f = validar(z.object({ productoId: z.string().uuid() }), query);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const p = await tx.selectFrom('producto').select(['id', 'nombre']).where('id', '=', f.productoId).executeTakeFirst();
+      if (!p) throw noEncontrado('Producto');
+      const deps = (
+        await tx.selectFrom('deposito as d').innerJoin('sucursal as s', 's.id', 'd.sucursal_id').select(['d.id', 'd.nombre', 'd.sucursal_id', 's.nombre as sucursal']).where('d.activo', '=', true).orderBy('s.codigo').orderBy('d.nombre').execute()
+      ).filter((d) => enSucursal(ctx, d.sucursal_id));
+      const variantes = await tx.selectFrom('variante').select(['id', 'nombre', 'sku', 'talle', 'color']).where('producto_id', '=', p.id).where('activa', '=', true).execute();
+      const stock = variantes.length && deps.length
+        ? await tx.selectFrom('stock').select(['variante_id', 'deposito_id', 'cantidad']).where('variante_id', 'in', variantes.map((v) => v.id)).where('deposito_id', 'in', deps.map((d) => d.id)).execute()
+        : [];
+      return {
+        producto: { id: p.id, nombre: p.nombre },
+        talles: [...new Set(variantes.map((v) => v.talle ?? ''))].sort(compararTalles),
+        colores: [...new Set(variantes.map((v) => v.color ?? ''))].sort((a, b) => a.localeCompare(b, 'es')),
+        depositos: deps.map((d) => ({ id: d.id, nombre: d.nombre, sucursal: d.sucursal })),
+        celdas: variantes.map((v) => ({
+          varianteId: v.id,
+          nombre: v.nombre,
+          sku: v.sku,
+          talle: v.talle ?? '',
+          color: v.color ?? '',
+          stock: Object.fromEntries(deps.map((d) => [d.id, stock.find((s) => s.variante_id === v.id && s.deposito_id === d.id)?.cantidad ?? '0.0000'])),
+        })),
+      };
+    });
+  }
+
   /** Stock de un depósito: todas las variantes que controlan stock, con su saldo (0 si nunca se movió). */
   @Requiere('stock', 'ver')
   @Get('stock')
@@ -62,7 +94,7 @@ export class StockController {
         .selectFrom('variante as v')
         .innerJoin('producto as p', 'p.id', 'v.producto_id')
         .leftJoin('stock as s', (j) => j.onRef('s.variante_id', '=', 'v.id').on('s.deposito_id', '=', f.depositoId))
-        .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 's.cantidad', 'v.costo', 'p.controla_lote'])
+        .select(['v.id', 'p.id as producto_id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'v.talle', 'v.color', 'p.unidad', 's.cantidad', 'v.costo', 'p.controla_lote'])
         .where('p.controla_stock', '=', true)
         .where('p.activo', '=', true)
         .where('v.activa', '=', true);
@@ -72,11 +104,13 @@ export class StockController {
       const verCosto = tiene(ctx, 'costo_producto.ver');
       return filas.map((r) => ({
         varianteId: r.id,
+        productoId: r.producto_id,
         descripcion: r.variante ? `${r.producto} · ${r.variante}` : r.producto,
         sku: r.sku,
         unidad: r.unidad,
         cantidad: r.cantidad ?? '0.0000',
         controlaLote: r.controla_lote,
+        grade: !!(r.talle || r.color),
         ...(verCosto ? { costo: r.costo } : {}),
       }));
     });

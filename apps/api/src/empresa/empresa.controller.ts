@@ -35,6 +35,7 @@ async function leerEmpresa(tx: Tx) {
     zonaHoraria: e.zona_horaria,
     creadoEn: e.creado_en,
     permiteStockNegativo: (e.configuracion as { permiteStockNegativo?: boolean }).permiteStockNegativo === true,
+    valeDias: (e.configuracion as { valeDias?: number }).valeDias ?? 180,
     balanza: { ...BALANZA_PREDETERMINADA, ...((e.configuracion as { balanza?: Partial<ConfigBalanza> }).balanza ?? {}) },
     plan: {
       codigo: e.plan_codigo,
@@ -69,9 +70,10 @@ export class EmpresaController {
           ...(d.telefono !== undefined && { telefono: d.telefono || null }),
           ...(d.direccion !== undefined && { direccion: d.direccion || null }),
           ...(d.email !== undefined && { email: d.email || null }),
-          ...((d.permiteStockNegativo !== undefined || d.balanza !== undefined) && {
+          ...((d.permiteStockNegativo !== undefined || d.balanza !== undefined || d.valeDias !== undefined) && {
             configuracion: sql`configuracion || ${JSON.stringify({
               ...(d.permiteStockNegativo !== undefined && { permiteStockNegativo: d.permiteStockNegativo }),
+              ...(d.valeDias !== undefined && { valeDias: d.valeDias }),
               ...(d.balanza !== undefined && { balanza: d.balanza }),
             })}::jsonb`,
           }),

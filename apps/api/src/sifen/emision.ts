@@ -87,7 +87,7 @@ export function receptor(cliente: { nombre: string; documento: string | null; te
   return { ...base, contribuyente: false, razonSocial: 'Sin Nombre', tipoOperacion: 2, documentoTipo: 5, documentoNumero: '0' };
 }
 
-const MEDIOS: Record<string, number> = { efectivo: 1, tarjeta: 3, transferencia: 5, otro: 99 };
+const MEDIOS: Record<string, number> = { efectivo: 1, tarjeta: 3, transferencia: 5, vale: 9, otro: 99 };
 
 interface ItemDe {
   codigo: string;

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { nombreSimple, productoEntrada, type ProductoEntrada } from '@kontiva/shared';
+import { nombreGrade, nombreSimple, productoEntrada, type ProductoEntrada } from '@kontiva/shared';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { booleanoQuery } from '@kontiva/shared';
@@ -29,7 +29,7 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
   const variantes = await tx
     .selectFrom('variante as v')
     .leftJoin('precio as pr', (j) => j.onRef('pr.variante_id', '=', 'v.id').on('pr.lista_id', '=', lista).on('pr.sucursal_id', 'is', null))
-    .select(['v.id', 'v.nombre', 'v.sku', 'v.costo', 'v.stock_minimo', 'v.activa', 'pr.precio'])
+    .select(['v.id', 'v.nombre', 'v.sku', 'v.talle', 'v.color', 'v.costo', 'v.stock_minimo', 'v.activa', 'pr.precio'])
     .where('v.producto_id', '=', id)
     .orderBy('v.creado_en')
     .orderBy('v.id')
@@ -61,6 +61,8 @@ export async function leerProducto(tx: Tx, ctx: Ctx, id: string) {
       id: v.id,
       nombre: v.nombre,
       sku: v.sku,
+      talle: v.talle,
+      color: v.color,
       activa: v.activa,
       precio: v.precio ?? '0.00',
       stockMinimo: v.stock_minimo,
@@ -191,12 +193,22 @@ export class ProductosController {
     const puedePrecio = nuevo || tiene(ctx, 'precio.editar');
     const todosCodigos = d.variantes.flatMap((v) => v.codigos);
     if (new Set(todosCodigos).size !== todosCodigos.length) throw invalido('Hay códigos de barras repetidos');
-    const recibidas = new Set<string>();
     // Los códigos del producto se reescriben completos (permite mover un código entre variantes).
     if (antes?.variantes.length) await tx.deleteFrom('codigo_barras').where('variante_id', 'in', antes.variantes.map((v) => v.id)).execute();
+    // Grade: cada talle × color una sola vez entre las variantes activas.
+    const grade = d.variantes.filter((v) => v.activa && (v.talle || v.color)).map((v) => `${(v.talle ?? '').toLowerCase()}|${(v.color ?? '').toLowerCase()}`);
+    if (new Set(grade).size !== grade.length) throw invalido('Hay talles y colores repetidos en la grade');
+    // Las variantes que ya no vienen se desactivan antes (tienen historia de ventas y stock; liberan su talle y color).
+    const vienen = new Set(d.variantes.map((v) => v.id).filter(Boolean));
+    for (const v of antes?.variantes ?? []) {
+      if (!vienen.has(v.id)) await tx.updateTable('variante').set({ activa: false }).where('id', '=', v.id).execute();
+    }
 
     for (const v of d.variantes) {
       let varianteId = v.id;
+      const talle = v.talle || null;
+      const color = v.color || null;
+      const nombre = v.nombre || nombreGrade(talle, color);
       const previa = v.id ? antes?.variantes.find((x) => x.id === v.id) : undefined;
       if (v.id && !previa) throw invalido('Variante inexistente en este producto');
       if (!puedeCosto && previa && v.costo !== undefined && 'costo' in previa && String(v.costo.toFixed(2)) !== previa.costo) {
@@ -208,19 +220,18 @@ export class ProductosController {
       if (varianteId) {
         await tx
           .updateTable('variante')
-          .set({ nombre: v.nombre ?? null, sku: v.sku ?? null, activa: v.activa, ...(v.stockMinimo !== undefined ? { stock_minimo: v.stockMinimo } : {}), ...(puedeCosto && v.costo !== undefined ? { costo: v.costo } : {}) })
+          .set({ nombre, sku: v.sku || null, talle, color, activa: v.activa, ...(v.stockMinimo !== undefined ? { stock_minimo: v.stockMinimo } : {}), ...(puedeCosto && v.costo !== undefined ? { costo: v.costo } : {}) })
           .where('id', '=', varianteId)
           .execute();
       } else {
         varianteId = (
           await tx
             .insertInto('variante')
-            .values({ empresa_id: ctx.empresaId, producto_id: productoId, nombre: v.nombre ?? null, sku: v.sku ?? null, activa: v.activa, stock_minimo: v.stockMinimo ?? 0, costo: puedeCosto ? (v.costo ?? 0) : 0 })
+            .values({ empresa_id: ctx.empresaId, producto_id: productoId, nombre, sku: v.sku || null, talle, color, activa: v.activa, stock_minimo: v.stockMinimo ?? 0, costo: puedeCosto ? (v.costo ?? 0) : 0 })
             .returning('id')
             .executeTakeFirstOrThrow()
         ).id;
       }
-      recibidas.add(varianteId);
 
       // Un código ya usado por otro producto → 409.
       if (v.codigos.length) {
@@ -236,10 +247,6 @@ export class ProductosController {
           ON CONFLICT (empresa_id, lista_id, variante_id, coalesce(sucursal_id, '00000000-0000-0000-0000-000000000000'))
           DO UPDATE SET precio = EXCLUDED.precio, actualizado_en = now() WHERE precio.precio IS DISTINCT FROM EXCLUDED.precio`.execute(tx);
       }
-    }
-    // Las variantes que ya no vienen se desactivan (tienen historia de ventas y stock).
-    for (const v of antes?.variantes ?? []) {
-      if (!recibidas.has(v.id)) await tx.updateTable('variante').set({ activa: false }).where('id', '=', v.id).execute();
     }
   }
 }

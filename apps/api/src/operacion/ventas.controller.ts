@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { anularVentaEntrada, BALANZA_PREDETERMINADA, calcularItems, leerEtiquetaBalanza, type ConfigBalanza, calcularPagos, ErrorCalculo, ventaEntrada, type Cotizaciones } from '@kontiva/shared';
+import { anularVentaEntrada, BALANZA_PREDETERMINADA, compararTalles, calcularItems, leerEtiquetaBalanza, type ConfigBalanza, calcularPagos, ErrorCalculo, ventaEntrada, type Cotizaciones } from '@kontiva/shared';
 import Decimal from 'decimal.js';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { Contexto, OrigenPeticion, tiene, type Ctx, type Origen } from '../comun
 import { Requiere } from '../comun/decoradores';
 import { moverLotes } from '../comun/lotes';
 import { cerrarSiPagada } from '../restaurante/restaurante.controller';
+import { reintegrarVales, usarVales } from './vales.controller';
 import { conflicto, ErrorNegocio, invalido, noEncontrado, prohibido } from '../comun/errores';
 import { validar } from '../comun/validar';
 import { Db, type Tx } from '../db/database';
@@ -63,7 +64,7 @@ export async function leerVenta(tx: Tx, id: string) {
     .executeTakeFirst();
   const feConf = de ? await tx.selectFrom('fe_configuracion').select('timbrado_fecha').executeTakeFirst() : undefined;
   const qrImagen = de ? `data:image/svg+xml;base64,${Buffer.from(await QRCode.toString(de.qr_url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })).toString('base64')}` : null;
-  const devoluciones = await tx.selectFrom('devolucion').select(['id', 'numero', 'total', 'creado_en']).where('venta_id', '=', id).orderBy('numero').execute();
+  const devoluciones = await tx.selectFrom('devolucion').select(['id', 'numero', 'total', 'medio', 'creado_en']).where('venta_id', '=', id).orderBy('numero').execute();
   const vuelto = await tx
     .selectFrom('movimiento_caja')
     .select(['moneda', 'monto'])
@@ -112,7 +113,7 @@ export async function leerVenta(tx: Tx, id: string) {
     receta: receta
       ? { medico: receta.medico, matricula: receta.matricula, paciente: receta.paciente, pacienteDocumento: receta.paciente_documento, fecha: receta.fecha, numero: receta.numero, retenida: receta.retenida }
       : null,
-    devoluciones: devoluciones.map((d) => ({ id: d.id, numero: Number(d.numero), total: d.total, fecha: d.creado_en })),
+    devoluciones: devoluciones.map((d) => ({ id: d.id, numero: Number(d.numero), total: d.total, medio: d.medio, fecha: d.creado_en })),
     pagos: pagos.map((p) => ({ medio: p.medio, moneda: p.moneda, monto: p.monto, cotizacion: p.cotizacion, montoPyg: p.monto_pyg, referencia: p.referencia })),
     autorizadoPor: v.autorizado_por,
     anulacion: v.anulada_en ? { fecha: v.anulada_en, por: v.anulada_por_nombre, motivo: v.motivo_anulacion, autorizadaPor: v.anulacion_autorizada_por } : null,
@@ -209,7 +210,7 @@ export class PdvController {
           .selectFrom('variante as v')
           .innerJoin('producto as p', 'p.id', 'v.producto_id')
           .leftJoin('stock as s', (j) => j.onRef('s.variante_id', '=', 'v.id').on('s.deposito_id', '=', caja.deposito_id))
-          .select(['v.id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad', 'p.principio_activo', 'p.concentracion', 'p.condicion_venta'])
+          .select(['v.id', 'p.id as producto_id', 'p.nombre as producto', 'v.nombre as variante', 'v.sku', 'v.talle', 'v.color', 'p.unidad', 'p.tasa_iva', 'p.controla_stock', 's.cantidad', 'p.principio_activo', 'p.concentracion', 'p.condicion_venta'])
           .where('p.activo', '=', true)
           .where('v.activa', '=', true);
 
@@ -242,6 +243,9 @@ export class PdvController {
         items: filas.map((r) => ({
           cantidad: porCodigo ? cantidadEtiqueta(r.id) : undefined,
           varianteId: r.id,
+          productoId: r.producto_id,
+          talle: r.talle,
+          color: r.color,
           descripcion: r.variante ? `${r.producto} · ${r.variante}` : r.producto,
           sku: r.sku,
           unidad: r.unidad,
@@ -252,6 +256,73 @@ export class PdvController {
           principioActivo: r.principio_activo,
           concentracion: r.concentracion,
           condicionVenta: r.condicion_venta,
+        })),
+      };
+    });
+  }
+
+  /**
+   * Cambio desde la caja: ventas confirmadas de la sucursal de la caja con ese número (una por caja),
+   * con lo que todavía se puede devolver. El cajero puede cambiar lo vendido por otro.
+   */
+  @Requiere('venta', 'crear')
+  @Get('venta-cambio')
+  ventaCambio(@Contexto() ctx: Ctx, @Query() query: unknown) {
+    const f = validar(z.object({ cajaId: z.string().uuid(), numero: z.coerce.number().int().positive().max(1e12) }), query);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const caja = await obtenerCaja(tx, ctx, f.cajaId);
+      const ids = await tx
+        .selectFrom('venta')
+        .select('id')
+        .where('sucursal_id', '=', caja.sucursal_id)
+        .where('numero', '=', String(f.numero))
+        .where('estado', '=', 'confirmada')
+        .orderBy('creado_en', 'desc')
+        .limit(10)
+        .execute();
+      const ventas = await Promise.all(ids.map((r) => leerVenta(tx, r.id)));
+      return ventas.filter((v) => v && v.items.some((i) => Number(i.cantidad) > Number(i.cantidadDevuelta)));
+    });
+  }
+
+  /** Grade de un producto (talle × color) con precio y stock del depósito de la caja, para elegir la variante. */
+  @Requiere('venta', 'crear')
+  @Get('grade')
+  grade(@Contexto() ctx: Ctx, @Query() query: unknown) {
+    const f = validar(z.object({ cajaId: z.string().uuid(), productoId: z.string().uuid(), clienteId: z.string().uuid().optional() }), query);
+    return this.db.enEmpresa(ctx.empresaId, async (tx) => {
+      const caja = await obtenerCaja(tx, ctx, f.cajaId);
+      const p = await tx.selectFrom('producto').select(['id', 'nombre', 'unidad', 'tasa_iva', 'controla_stock']).where('id', '=', f.productoId).where('activo', '=', true).executeTakeFirst();
+      if (!p) throw noEncontrado('Producto');
+      const filas = await tx
+        .selectFrom('variante as v')
+        .leftJoin('stock as s', (j) => j.onRef('s.variante_id', '=', 'v.id').on('s.deposito_id', '=', caja.deposito_id))
+        .select(['v.id', 'v.nombre', 'v.sku', 'v.talle', 'v.color', 's.cantidad'])
+        .where('v.producto_id', '=', p.id)
+        .where('v.activa', '=', true)
+        .execute();
+      const precios = await preciosVigentes(tx, filas.map((r) => r.id), caja.sucursal_id, await listaDeCliente(tx, f.clienteId));
+      const talles = [...new Set(filas.map((r) => r.talle ?? ''))].sort(compararTalles);
+      const colores = [...new Set(filas.map((r) => r.color ?? ''))].sort((a, b) => a.localeCompare(b, 'es'));
+      return {
+        producto: { id: p.id, nombre: p.nombre },
+        talles,
+        colores,
+        items: filas.map((r) => ({
+          varianteId: r.id,
+          productoId: p.id,
+          descripcion: r.nombre ? `${p.nombre} · ${r.nombre}` : p.nombre,
+          sku: r.sku,
+          talle: r.talle ?? '',
+          color: r.color ?? '',
+          unidad: p.unidad,
+          tasaIva: Number(p.tasa_iva) as 0 | 5 | 10,
+          precio: precios.get(r.id) ?? '0.00',
+          controlaStock: p.controla_stock,
+          stock: p.controla_stock ? (r.cantidad ?? '0.0000') : null,
+          principioActivo: null,
+          concentracion: null,
+          condicionVenta: 'libre' as const,
         })),
       };
     });
@@ -646,8 +717,11 @@ export class VentasController {
           !permiteStockNeg && !registradaOffline,
         );
 
+        // Vales de cambio: se descuenta su saldo; no entran a la caja.
+        const usosVale = pagos.detalle.flatMap((p, i) => (p.medio === 'vale' ? [{ codigo: d.pagos[i]!.referencia!.trim().toUpperCase(), monto: p.montoPyg }] : []));
+        if (usosVale.length) await usarVales(tx, ctx, venta.id, usosVale);
         const movCaja = [
-          ...pagos.detalle.map((p) => ({ tipo: 'venta' as const, medio: p.medio, moneda: p.moneda, monto: p.monto })),
+          ...pagos.detalle.flatMap((p) => (p.medio === 'vale' ? [] : [{ tipo: 'venta' as const, medio: p.medio, moneda: p.moneda, monto: p.monto }])),
           ...pagos.vuelto.map((v) => ({ tipo: 'vuelto' as const, medio: 'efectivo' as const, moneda: v.moneda, monto: v.monto.neg() })),
         ];
         if (movCaja.length)
@@ -856,6 +930,7 @@ export class VentasController {
         if (!new Decimal(cc.saldo).eq(cc.monto)) throw conflicto('VENTA_CON_COBROS', 'La venta a crédito ya tiene cobros: anule primero los cobros');
         await tx.updateTable('cuenta_cobrar').set({ estado: 'anulada', saldo: '0' }).where('id', '=', cc.id).execute();
       }
+      await reintegrarVales(tx, ctx, id);
       if (movs.length)
         await tx
         .insertInto('movimiento_caja')

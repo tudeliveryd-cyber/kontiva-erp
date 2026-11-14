@@ -121,6 +121,8 @@ export interface DevolucionNc {
   fecha: string;
   usuario: string;
   items: { linea: number; descripcion: string; cantidad: string; total: string }[];
+  medio?: string;
+  vale?: { id: string; numero: number; codigo: string; monto: string; saldo: string; vence: string | null } | null;
   notaCredito: {
     cdc: string;
     numero: string;
